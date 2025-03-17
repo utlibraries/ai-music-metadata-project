@@ -1,6 +1,6 @@
 # AI Music Metadata Project
 ## Overview
-This project automates the extraction and analysis of metadata from CD images. It processes images of compact discs, generates metadata using OpenAI's GPT-4o-mini model, searches for matches and cross-references this information with OCLC WorldCat records. The final output is a comprehensive Excel file with verified metadata and OCLC record matches.
+This project automates the extraction and analysis of metadata from CD images. It processes images of compact discs, generates metadata using OpenAI's GPT-4o-mini model, searches for matches and cross-references this information with OCLC WorldCat records. The final output is an Excel file with LLM-generated metadata and OCLC record matches.
 
 ## Features
 - **Image Description**: Open AI's GPT-4o-mini extracts metadata fields such as title, artist, publisher, tracks, physical description, etc. from CD images
