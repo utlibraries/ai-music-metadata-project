@@ -1,0 +1,52 @@
+# Python essentials
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+myenv/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# macOS specific
+.DS_Store
+**/.DS_Store
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Project-specific directories
+500-cd-scans/
+code-OLD/
+on-demand-processing-vinyl/
+genius-scans-*/
+genius-scans-1024-test-set/
+test-set-*-records-OLD/
+testing-output/
+vinyl-scans-*/
+
+# Project-specific files
+*.docx
+move-jpeg-files.sh
