@@ -34,8 +34,8 @@ To run this project, you will need to set up the following environment variables
 - `ai-music-step-1-cd.py`: Extracts metadata from CD images using GPT-4o-mini
 - `ai-music-step-2-cd.py`: Queries OCLC API with the extracted metadata
 - `ai-music-step-3-cd.py`: Uses GPT-4o-mini to analyze OCLC results and assign confidence scores
-- `ai-music-step-4-cd.py`: Verifies track listings to validate the matches
-- `test-oclc-query.py`: This is a script to test OCLC queries directly in the terminal - can be helpful for testing querying strategies
+- `ai-music-step-4-cd.py`: Verifies track listings and publication year to validate the matches
+- `query-testing-oclc.py`: This is a script to test OCLC queries directly in the terminal - can be helpful for testing querying strategies
 
 The project processes CD images stored as pairs of JPEG files. Each CD is represented by two images: one for the front cover and one for the back cover. A third image may be used if necessary.  The image groups follow a specific naming convention:
 
@@ -56,10 +56,11 @@ The final Excel file contains the following columns:
 - **OCLC Query**: Queries generated from the metadata
 - **OCLC API Results**: Results retrieved from the OCLC API
 - **LLM-Assessed Correct OCLC #**: The most likely correct OCLC number
-- **Confidence Score**: A confidence score (0-100%) for the assessment
-- **Explanation**: A detailed explanation for the assessment
+- **LLM Confidence Score**: A confidence score (0-100%) for the assessment
+- **LLM Explanation**: A detailed explanation for the assessment
 - **Other Potential Matches**: Alternative OCLC numbers that might be matches
-- **Track Verification Results**: Analysis of track listing similarity
+- **Track Verification Results**: Analysis of track listing similarity between metadata and OCLC record
+- **Year Verification Results**: Analysis of publication year similarity between metadata and OCLC record
 
 ## Contact
 For any questions, please reach out to:
