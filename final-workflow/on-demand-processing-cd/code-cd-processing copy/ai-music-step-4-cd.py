@@ -292,76 +292,9 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
     
     return similarity * 100
 
-def extract_and_normalize_year(text, is_oclc=False):
-    """Extract and normalize publication year to YYYY format."""
-    if not text:
-        return None
-    
-    # Look for publication date in structured format
-    if is_oclc:
-        date_patterns = [
-            r'publicationDate:\s*[©℗]?(\d{4})',
-            r'machineReadableDate:\s*(\d{4})',
-            r'publicationDate:\s*[©℗]?(\d{4})[^\d]',
-            r'Dates:[^p]*publicationDate:\s*[©℗]?(\d{4})',
-            r'Date:[^p]*publicationDate:\s*[©℗]?(\d{4})',
-            r'publicationDate:\s*[©℗]?c?(\d{4})',
-            r'publication(?:Date)?:\s*[©℗]?c?(\d{4})'
-        ]
-    else:
-        date_patterns = [
-            r'publicationDate:\s*(\d{4})',
-            r'Dates:[^p]*publicationDate:\s*(\d{4})',
-            r'Date:[^p]*publicationDate:\s*(\d{4})',
-            r'publication(?:Date)?:\s*(\d{4})'
-        ]
-    
-    for pattern in date_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            year = match.group(1)
-            if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
-                return year
-    
-    # Look for copyright or phonogram year markers
-    year_markers = [r'[©℗](\d{4})', r'[©℗](?:\s*)(\d{4})', r'copyright\s+(\d{4})', r'phonogram\s+(\d{4})']
-    for marker in year_markers:
-        matches = re.findall(marker, text, re.IGNORECASE)
-        if matches:
-            for year in matches:
-                if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
-                    return year
-    
-    # Look for standalone 4-digit years
-    year_pattern = r'(?<!\d)(\d{4})(?!\d)'
-    matches = re.findall(year_pattern, text)
-    valid_years = [y for y in matches if 1900 <= int(y) <= datetime.now().year]
-    if valid_years:
-        # Return the most frequently occurring year
-        from collections import Counter
-        return Counter(valid_years).most_common(1)[0][0]
-    
-    return None
-
-def compare_publication_years(metadata_year, oclc_year):
-    """
-    Compare publication years and return a tuple (match_status, details)
-    match_status is True if years match or if either year is missing
-    match_status is False only if both years are present and don't match
-    """
-    # If either year is missing, don't count it against the match
-    if metadata_year is None or oclc_year is None:
-        return (True, f"Incomplete year data: metadata_year={metadata_year}, oclc_year={oclc_year}")
-    
-    # Normalize years to strings and compare
-    if metadata_year == oclc_year:
-        return (True, f"Years match: {metadata_year} == {oclc_year}")
-    else:
-        return (False, f"Years do not match: {metadata_year} != {oclc_year}")
-
 def main():
     # Specify the folder prefix based on your output location
-    base_dir_prefix = "final-workflow/on-demand-processing-cd/cd-output-folders/results-"
+    base_dir_prefix = "final-workflow/on-demand-processing-cd/cd-output-folders/results-cd-5-"
     
     # Find the latest results folder using the prefix
     results_folder = find_latest_results_folder(base_dir_prefix)
@@ -393,18 +326,13 @@ def main():
     OCLC_NUMBER_COLUMN = 'H'
     CONFIDENCE_SCORE_COLUMN = 'I'
     EXPLANATION_COLUMN = 'J'
-    VERIFICATION_COLUMN = 'L'  # Column for track verification results
-    YEAR_VERIFICATION_COLUMN = 'M'  # New column for year verification results
+    VERIFICATION_COLUMN = 'L'  # New column for track verification results
     
     sheet[f'{VERIFICATION_COLUMN}1'] = 'Track Verification Results'
-    sheet[f'{YEAR_VERIFICATION_COLUMN}1'] = 'Year Verification Results'
-    
     sheet.column_dimensions[VERIFICATION_COLUMN].width = 40
-    sheet.column_dimensions[YEAR_VERIFICATION_COLUMN].width = 40
     
     records_processed = 0
-    records_adjusted_tracks = 0
-    records_adjusted_years = 0
+    records_adjusted = 0
     records_skipped = 0
     
     print(f"Starting verification for records with confidence ≥ 85% that mention tracks...")
@@ -442,37 +370,55 @@ def main():
             print(f"Metadata tracks ({len(metadata_tracks)}): {metadata_tracks}")
             print(f"OCLC tracks ({len(oclc_tracks)}): {oclc_tracks}")
             
-            # Extract and compare publication years
-            metadata_year = extract_and_normalize_year(metadata, is_oclc=False)
-            oclc_year = extract_and_normalize_year(oclc_results, is_oclc=True)
-            
-            print(f"Extracted years - Metadata: {metadata_year}, OCLC: {oclc_year}")
-            
-            year_match, year_details = compare_publication_years(metadata_year, oclc_year)
-            
-            if not metadata_year and not oclc_year:
-                match_status = "N/A - No years to compare"
-            elif not metadata_year or not oclc_year:
-                match_status = "Considered match - Incomplete data"
-            else:
-                match_status = "Yes" if year_match else "No"
-                
-            year_verification_result = f"Metadata year: {metadata_year if metadata_year else 'Not found'}\nOCLC year: {oclc_year if oclc_year else 'Not found'}\nMatch: {match_status}"
-            
-            # Skip track similarity check if no tracks found
-            track_similarity = 0
             if len(metadata_tracks) == 0 or len(oclc_tracks) == 0:
                 print(f"Skipping similarity check: {'No metadata tracks' if len(metadata_tracks) == 0 else 'No OCLC tracks'}")
                 verification_result = f"Metadata tracks: {len(metadata_tracks)}\nOCLC tracks: {len(oclc_tracks)}\nSkipped: insufficient track data"
                 sheet[f'{VERIFICATION_COLUMN}{row}'].value = verification_result
                 sheet[f'{VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
-            else:
-                track_similarity = calculate_track_similarity(metadata_tracks, oclc_tracks)
-                print(f"Track similarity: {track_similarity:.2f}%")
+                continue
                 
-                matching_tracks = 0
+            track_similarity = calculate_track_similarity(metadata_tracks, oclc_tracks)
+            print(f"Track similarity: {track_similarity:.2f}%")
+            
+            matching_tracks = 0
+            for i, meta_track in enumerate(metadata_tracks):
+                best_match = 0
+                for oclc_track in oclc_tracks:
+                    norm_meta = normalize_track(meta_track)
+                    norm_oclc = normalize_track(oclc_track)
+                    
+                    meta_words = set(norm_meta.split())
+                    oclc_words = set(norm_oclc.split())
+                    common_words = meta_words.intersection(oclc_words)
+                    
+                    shorter_length = min(len(meta_words), len(oclc_words))
+                    if shorter_length > 0 and len(common_words) >= max(1, int(shorter_length * 0.6)):
+                        word_similarity = len(common_words) / shorter_length
+                        similarity = max(0.8, word_similarity)
+                    elif (norm_meta in norm_oclc) or (norm_oclc in norm_meta):
+                        similarity = max(0.85, SequenceMatcher(None, norm_meta, norm_oclc).ratio())
+                    else:
+                        similarity = SequenceMatcher(None, norm_meta, norm_oclc).ratio()
+                    
+                    if similarity > best_match:
+                        best_match = similarity
+                
+                if best_match >= 0.8:
+                    matching_tracks += 1
+            
+            verification_result = f"Metadata tracks: {len(metadata_tracks)}\nOCLC tracks: {len(oclc_tracks)}\nMatching tracks: {matching_tracks}/{len(metadata_tracks)}\nSimilarity: {track_similarity:.2f}%"
+            
+            if track_similarity < 80 and len(metadata_tracks) > 0 and len(oclc_tracks) > 0:
+                old_confidence = confidence_score
+                new_confidence = 80
+                sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value = new_confidence
+                
+                note = f"\n\n[AUTOMATIC REVIEW: Confidence reduced due to track listing mismatch. Track similarity is only {track_similarity:.2f}%, below 80% threshold. Please verify manually.]"
+                note += "\n\nTrack comparison:"
                 for i, meta_track in enumerate(metadata_tracks):
                     best_match = 0
+                    best_match_track = "No match"
+                    
                     for oclc_track in oclc_tracks:
                         norm_meta = normalize_track(meta_track)
                         norm_oclc = normalize_track(oclc_track)
@@ -492,126 +438,24 @@ def main():
                         
                         if similarity > best_match:
                             best_match = similarity
+                            best_match_track = oclc_track
                     
-                    if best_match >= 0.8:
-                        matching_tracks += 1
-                
-                verification_result = f"Metadata tracks: {len(metadata_tracks)}\nOCLC tracks: {len(oclc_tracks)}\nMatching tracks: {matching_tracks}/{len(metadata_tracks)}\nSimilarity: {track_similarity:.2f}%"
-                sheet[f'{VERIFICATION_COLUMN}{row}'].value = verification_result
-                sheet[f'{VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
-            
-            sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = year_verification_result
-            sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
-            
-            # Determine if confidence needs to be adjusted based on both track and year verification
-            adjust_confidence = False
-            adjustment_reasons = []
-            
-            # Check track similarity
-            if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 80:
-                adjust_confidence = True
-                adjustment_reasons.append(f"track listing mismatch (similarity {track_similarity:.2f}%, below 80% threshold)")
-            
-            # Check year match - only adjust if both years are present and don't match
-            if metadata_year and oclc_year and not year_match:
-                adjust_confidence = True
-                adjustment_reasons.append(f"publication year mismatch (metadata: {metadata_year}, OCLC: {oclc_year})")
-            elif not metadata_year or not oclc_year:
-                print(f"Not penalizing for missing year data: metadata_year={metadata_year}, oclc_year={oclc_year}")
-            
-            # Apply confidence adjustment if needed
-            if adjust_confidence:
-                old_confidence = confidence_score
-                new_confidence = 80
-                sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value = new_confidence
-                
-                note = f"\n\n[AUTOMATIC REVIEW: Confidence reduced due to: {'; '.join(adjustment_reasons)}. Please verify manually.]"
-                
-                # Add track comparison details if needed
-                if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 80:
-                    note += "\n\nTrack comparison:"
-                    for i, meta_track in enumerate(metadata_tracks):
-                        best_match = 0
-                        best_match_track = "No match"
-                        
-                        for oclc_track in oclc_tracks:
-                            norm_meta = normalize_track(meta_track)
-                            norm_oclc = normalize_track(oclc_track)
-                            
-                            meta_words = set(norm_meta.split())
-                            oclc_words = set(norm_oclc.split())
-                            common_words = meta_words.intersection(oclc_words)
-                            
-                            shorter_length = min(len(meta_words), len(oclc_words))
-                            if shorter_length > 0 and len(common_words) >= max(1, int(shorter_length * 0.6)):
-                                word_similarity = len(common_words) / shorter_length
-                                similarity = max(0.8, word_similarity)
-                            elif (norm_meta in norm_oclc) or (norm_oclc in norm_meta):
-                                similarity = max(0.85, SequenceMatcher(None, norm_meta, norm_oclc).ratio())
-                            else:
-                                similarity = SequenceMatcher(None, norm_meta, norm_oclc).ratio()
-                            
-                            if similarity > best_match:
-                                best_match = similarity
-                                best_match_track = oclc_track
-                        
-                        match_status = "✓" if best_match >= 0.8 else "✗"
-                        note += f"\n{i+1}. {meta_track} {match_status} {best_match_track} ({best_match:.2f})"
-                
-                # Add year comparison details - only for actual mismatches
-                if metadata_year and oclc_year and not year_match:
-                    note += f"\n\nYear comparison: Metadata year {metadata_year} ≠ OCLC year {oclc_year}"
+                    match_status = "✓" if best_match >= 0.8 else "✗"
+                    note += f"\n{i+1}. {meta_track} {match_status} {best_match_track} ({best_match:.2f})"
                 
                 sheet[f'{EXPLANATION_COLUMN}{row}'].value = explanation + note
-                
-                if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 80:
-                    records_adjusted_tracks += 1
-                
-                if metadata_year and oclc_year and not year_match:
-                    records_adjusted_years += 1
-                
-                # Update verification result with action taken
-                actions = []
-                verification_result = sheet[f'{VERIFICATION_COLUMN}{row}'].value
-                year_verification_result = sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value
-                
-                if track_similarity < 80 and len(metadata_tracks) > 0 and len(oclc_tracks) > 0:
-                    actions.append("track mismatch")
-                
-                # Only count year mismatch when both years exist but don't match
-                if metadata_year and oclc_year and not year_match:
-                    actions.append("year mismatch")
-                
-                if actions:
-                    action_text = f"\nAction: Reduced confidence from {old_confidence}% to {new_confidence}% due to {' and '.join(actions)}"
-                    if verification_result:
-                        sheet[f'{VERIFICATION_COLUMN}{row}'].value = verification_result + action_text
-                    else:
-                        sheet[f'{VERIFICATION_COLUMN}{row}'].value = action_text
-                    
-                    sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = year_verification_result + action_text
+                verification_result += f"\nAction: Reduced confidence from {old_confidence}% to {new_confidence}%"
+                records_adjusted += 1
             else:
-                if sheet[f'{VERIFICATION_COLUMN}{row}'].value:
-                    sheet[f'{VERIFICATION_COLUMN}{row}'].value += "\nAction: None (similarity is acceptable)"
+                verification_result += "\nAction: None (similarity is acceptable)"
                 
-                # For year verification, provide appropriate message based on year data
-                year_action = "\nAction: "
-                if not metadata_year and not oclc_year:
-                    year_action += "None (no year data to compare)"
-                elif not metadata_year or not oclc_year:
-                    year_action += "None (incomplete year data, not penalized)"
-                else:
-                    year_action += "None (years match)"
-                
-                if sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value:
-                    sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value += year_action
+            sheet[f'{VERIFICATION_COLUMN}{row}'].value = verification_result
+            sheet[f'{VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
             
         except Exception as e:
             print(f"Error processing row {row}: {e}")
             sheet[f'{VERIFICATION_COLUMN}{row}'].value = f"Error: {str(e)}"
             sheet[f'{VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
-            sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = f"Error: {str(e)}"
-            sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
     
     current_date = datetime.now().strftime("%Y-%m-%d")
     output_file = f"ai-music-step-4-cd-5-{current_date}.xlsx"
@@ -621,8 +465,7 @@ def main():
     print(f"\nResults saved to {full_output_path}")
     print(f"Summary:")
     print(f"  - Processed: {records_processed} records with confidence ≥ 85% and track listings mentioned")
-    print(f"  - Adjusted for tracks: {records_adjusted_tracks} records due to low track similarity (< 80% match)")
-    print(f"  - Adjusted for years: {records_adjusted_years} records due to publication year mismatch (only when both years present and don't match)")
+    print(f"  - Adjusted: {records_adjusted} records due to low track similarity (< 80% match)")
     print(f"  - Skipped: {sheet.max_row - 1 - records_processed} records (low confidence or no track listings)")
 
 if __name__ == "__main__":

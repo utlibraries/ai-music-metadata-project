@@ -31,7 +31,7 @@ Publishers:
   - Place: [Place of publication if available]
   - Numbers: [Catalog numbers, UPC (from the original CD packaging, not from the university barcode sticker), ISRC codes]
 Dates:
-  - publicationDate: [Publication Year only - if shown]
+  - publicationDate: [Publication Year if shown]
   - recordingDate: [Recording Date if shown]
   - recordingLocation: [Recording studio/location if shown]
 Language:

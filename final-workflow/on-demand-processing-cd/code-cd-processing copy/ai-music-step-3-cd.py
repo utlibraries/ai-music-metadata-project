@@ -22,7 +22,7 @@ def find_latest_results_folder(prefix):
 client = OpenAI(api_key=os.getenv('OPENAI_HMRC_API_KEY'))
 
 # Specify the folder prefix (adjust if needed)
-base_dir_prefix = "final-workflow/on-demand-processing-cd/cd-output-folders/results-"
+base_dir_prefix = "final-workflow/on-demand-processing-cd/cd-output-folders/results-cd-5-"
 
 # Find the latest results folder using the prefix.
 results_folder = find_latest_results_folder(base_dir_prefix)
