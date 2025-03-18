@@ -7,13 +7,6 @@ from datetime import datetime
 import re
 
 def find_latest_results_folder(prefix):
-    """
-    Find the latest folder that starts with the given prefix.
-    For example, if prefix is 
-    "final-workflow/on-demand-processing-cd/cd-output-folders/results-cd-5-",
-    this function will search in "final-workflow/on-demand-processing-cd/cd-output-folders"
-    for folders starting with that prefix and return the one with the most recent modification time.
-    """
     base_dir = os.path.dirname(prefix)
     folder_prefix = os.path.basename(prefix)
     pattern = os.path.join(base_dir, folder_prefix + "*")

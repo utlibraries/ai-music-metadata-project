@@ -11,12 +11,6 @@ import re
 api_calls = {'count': 0, 'reset_time': time.time()}
 
 def find_latest_results_folder(prefix):
-    """
-    Find the latest folder that starts with the given prefix.
-    For example, if prefix is "final-workflow/on-demand-processing-cd/cd-output-folders/results-",
-    this function will search in "final-workflow/on-demand-processing-cd/cd-output-folders"
-    for folders starting with "results-" and return the most recently modified one.
-    """
     # Get the parent directory of the prefix (e.g., "final-workflow/on-demand-processing-cd/cd-output-folders")
     base_dir = os.path.dirname(prefix)
     pattern = os.path.join(base_dir, "results-*")
