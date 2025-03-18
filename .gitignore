@@ -40,12 +40,14 @@ Temporary Items
 # Project-specific directories
 500-cd-scans/
 code-OLD/
-on-demand-processing-vinyl/
+final-workflow/on-demand-processing-vinyl/
 genius-scans-*/
 genius-scans-1024-test-set/
 test-set-*-records-OLD/
 testing-output/
 vinyl-scans-*/
+final-workflow/on-demand-processing-cd/cd-output-folders/*
+final-workflow/on-demand-processing-cd/cd-output-folders/.gitkeep
 
 # Project-specific files
 *.docx
