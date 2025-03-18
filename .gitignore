@@ -50,3 +50,4 @@ vinyl-scans-*/
 # Project-specific files
 *.docx
 move-jpeg-files.sh
+*.xlsx
