@@ -146,6 +146,38 @@ def format_record(record):
         if creators:
             output.append(f"Creator(s): {', '.join(creators)}")
     
+    # Add Format information
+    if "format" in record:
+        format_info = record["format"]
+        if "generalFormat" in format_info:
+            output.append(f"Format: {format_info.get('generalFormat', 'N/A')}")
+        if "specificFormat" in format_info:
+            output.append(f"Specific Format: {format_info.get('specificFormat', 'N/A')}")
+    
+    # Add Publication Date
+    if "date" in record and "publicationDate" in record["date"]:
+        output.append(f"Publication Date: {record['date']['publicationDate']}")
+    
+    # Add Publisher Name
+    if "publishers" in record and record["publishers"]:
+        publisher_names = []
+        for publisher in record["publishers"]:
+            if "publisherName" in publisher and "text" in publisher["publisherName"]:
+                publisher_name = publisher["publisherName"]["text"]
+                publisher_place = publisher.get("publicationPlace", "")
+                if publisher_place:
+                    publisher_names.append(f"{publisher_name} ({publisher_place})")
+                else:
+                    publisher_names.append(publisher_name)
+        if publisher_names:
+            output.append(f"Publisher(s): {', '.join(publisher_names)}")
+    
+    # Add Contents
+    if "description" in record and "contents" in record["description"] and record["description"]["contents"]:
+        for content_item in record["description"]["contents"]:
+            if "contentNote" in content_item and "text" in content_item["contentNote"]:
+                output.append(f"Contents: {content_item['contentNote']['text']}")
+    
     # Add holdings information
     if "holdingsInfo" in record:
         holdings_info = record["holdingsInfo"]
