@@ -212,7 +212,7 @@ OCLC Results: {oclc_results}
             print(f"Error processing row {row}: {e}")
 
 current_date = datetime.now().strftime("%Y-%m-%d")
-output_file = f"ai-music-step-3-cd-5-{current_date}.xlsx"
+output_file = f"ai-music-step-3-{current_date}.xlsx"
 full_output_path = os.path.join(results_folder, output_file)
     
 wb.save(full_output_path)

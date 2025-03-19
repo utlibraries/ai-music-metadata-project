@@ -614,7 +614,7 @@ def main():
             sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
     
     current_date = datetime.now().strftime("%Y-%m-%d")
-    output_file = f"ai-music-step-4-cd-5-{current_date}.xlsx"
+    output_file = f"ai-music-step-4-{current_date}.xlsx"
     full_output_path = os.path.join(results_folder, output_file)
     
     wb.save(full_output_path)
