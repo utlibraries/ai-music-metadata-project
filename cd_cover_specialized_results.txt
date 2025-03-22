@@ -1,0 +1,92 @@
+METHOD: color_isolation
+------------------------------------------------------------
+———— gem sas eae Ragas eis Temas a EU
+O'MAHONEY'S FROLICS Fone Dos mana 4
+GALICIA ST 2 te Le ACL On: Wp
+: CODLUIN MEDLEY Ua ee ee me be bea Best aa esrems
+' HERE'S A HEALTH TO THE COMPANY _ a |
+| PLANXTY BROWN: THE WILLIAM DAVIS'S ba o= |
+BOFFYFLOW AND SAKE -. - ——
+THE STRATAWAY CHILD ou. : . a |
+i - THEIRON MAN 8 neon. a |
+THE WEXFORD CAROL —— |
+GAFTAIBAILE BUI . - 7 a
+| MILLENMIUM CELTIC SUITE ~~ see!
+| ceo
+| THE CHIEFTAINS I
+
+METHOD: pil_contrast
+------------------------------------------------------------
+| Gewianmemen dieu
+| See eS rr— C=C
+| MERESANEACTITOTHECOMPANY 0 (cmamemn||
+| coo |S Sell
+I F  _GIEIWEXFORD) CARON OT
+| GeaNoneine  m (clei
+Hee tl PUCCENNIOH CEETICISUITE, (clone) i RENE
+i Dicom mosvtiehe\Celiccouncries) ee So if
+HE Grodicedbyrasiy Meisner acnenea: Buanliaeison ee
+To aan se geese exes RCA Cormeen on BG cia oro ECT Bie |
+eee eae _
+
+METHOD: advanced_isolation
+------------------------------------------------------------
+a eee oo Foner
+ie vom CIA ce ae oo 2
+52 ee GALIC Smee Siversionst sient Tee Psi ena ee ch
+bal Seenspornenn yeas MBANV CES S00 oe (ek
+AA URL gee a ren feeder el ERG ata S| ih
+pe eee. FTONTHEICOMPA Ee 1
+Ae Fink gison es SME WY, | WEDS oe = i
+fee eee ROGEV-BROWNETH Mio 'Garolan oe he ——— :
+lees 5] PLE ARSCTYABI s/by Turlough’) Carclan? ee ee eS i
+eee “LADY. WRIXON Piece Pysturl SrisOnyE eee a. Qe = iii
+Se Ee EADY: FOWIAND SPICE Ce) ea): oo
+poe = BOER LOW AND ISH . ee a So ae a eae . : a 5
+es eee OO - = i
+pee AE STR ishimediey, eae Bae reeteneny Sis ec a iN =|
+; a HEIRONIMAN Scoctis ee Ree |: =a |
+ee | THE WexPORDeK ve ee oe 2. = = |
+eee we ii aeGhristmasicarol] “A es ee en es See ee Sone ac eae
+re abuses LGriffithieme eer Ete A onic teeta cor aee nH ecg Eee Ne
+Nek SS with! Nanci penile ii Brena ees Sane tices Pia qe eer eal PONTE
+ee 2 eee
+zy 2 es ine Seen soe oe Re a oe oS
+Pe Gee curiae Sas EW ene ede 8 a
+ STHEICHIE Se pany Florpsichord?e \Mancin\Eay ee eae ee geal
+[Seine UALS aa Tiompan; 2 SWocalses a ces pete Lone oS -
+Ree eee pea Bell Harp; SEVEN TST? = Bodhran; Vocal! no |
+ee yy Keane! riddieleit Se See Cileannripes Tin Mae oe Se ee — i
+Dees grpte Eaenoean ITP Pos dd Moloney; Uileann NES Ses eee Se = a |
+oe ae Sone ness oe S oo :
+es eS addy; Molon ioe eos or A
+Ihe ee diiced|by Bade Yate te eae P ack ee ee oS o a
+‘ Pua ees Sek cae ro See vee eee Se mel
+;  . See oo oo - =
+Ml eseres Sree oe some Nee tae courtesy of; MG. ae eee : : oe S A
+eS Cee eas Serie ‘BMG Pe URS RUS 7s Al
+oo oe Se
+bee ELTHKGN OR STE BMG Musk sianulact ey SS SORES ee z)
+Hee Iperenc tse Re eoeere sete aie a — ee
+ee SS
+
+METHOD: tessdata_config
+------------------------------------------------------------
+Es BE GRACIAS OWL ELLY 3100) i
+| [2] PUANXTY BROWN; THE WILLIAM 45)
+D crommewereence
+| THE STRAYAWAY, CHILD Sip jc 453)
+
+THE IRON MAN Scocushimedley 336)
+| HME WE XPORDICAROUE 32 |
+| GGArTALBANLE BUI 4
+| Se |
+‘Sein|Keane|— Fiddle)-) Kevin Gonneff/— Bodhran: Vocals
+Matt: Molloys— Flute) Paddy Moloney — Uilleann Pipes, Tin Whistle)
+Produced|by | Paddy, Moloney/« Engineer. Brian) Masterson) |
+Se |
+
+METHOD: track_listing_specialized
+------------------------------------------------------------
+
+

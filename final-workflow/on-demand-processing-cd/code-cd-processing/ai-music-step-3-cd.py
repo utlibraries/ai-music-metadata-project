@@ -142,7 +142,7 @@ f'''Analyze the following OCLC results based on the given metadata and determine
 **Important Instructions**:
 1. Confidence Score: 0% indicates no confidence, and 100% indicates high confidence that we have found the correct OCLC number. At or below 80%, the record will be checked by a cataloger. 
 2. ***Key Fields in order of importance***:
-   - UPC/Product Code (exact match is HIGHEST priority if available in both metadata and OCLC record)
+   - UPC/Product Code (a match is HIGHEST priority if available in both metadata and OCLC record - if not available in one or the other, skip this field.  Occasionally, the UPC is partially obscured in the metadata - if some of the numbers in a UPC are incorrect but other fields are matching, it is still a match)
    - Title 
    - Artist/Performer
    - Contributors (some matching - not all need to match)
@@ -152,8 +152,9 @@ f'''Analyze the following OCLC results based on the given metadata and determine
    - Year (this is a key field only if present in the metadata, AND not marked as being a sticker date)
 3. ***Notes on Matching Special Cases***:
    - Titles in non-Latin scripts that match in meaning or transliteration should also be considered equivalent.
-   - Date: If marked as a 'sticker date', this is the date of acquisition, while the date in the OCLC record is the copyright date.
+   - If a field is marked as partially obscured, lessen the importance of that field in the matching process.
    - Different releases in different regions (e.g., Japanese release vs. US release) should be treated as different records even if title and content match.
+4. When information is not visible in the metadata, do not use that field in your consideration of a match. 
 5. If there is no likely match, write "No matching records found" and set the confidence score as 0.
 
 Format for Response:

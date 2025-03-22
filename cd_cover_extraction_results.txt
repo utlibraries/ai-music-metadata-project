@@ -1,0 +1,1327 @@
+METHOD: grayscale_standard
+------------------------------------------------------------
+MO;MAHONEY?S/FROLIGS Double|jig
+[IGALICIA\Music!from\Galicia
+[3] COOLIN|MEDLEY/Two versionsiof the Irishjalr
+with)string Orchestra
+GIHERES/A\HEALTH)TO.THE COMPANY,
+DrinkingiSong
+(S| PEANXTiY/ BROWN; THE WILLIAM DAVIS'S;
+LCADY,WRIXON |Pieces\by Turlough|O!Garolan
+[cd |BOFFYFUOW,AND)SPIKE!(Morrison)
+WW Ywith\VaniMorrison
+THE/STRAYAWAY.CHILD Siipjjiz
+THE IRON MAN Scottishimediey,
+[) THE\WEXFORD|CAROL
+Christmas‘carol|from| County) Wexford
+with) NanciiGriffith
+(OGAFTAIBAILE/BUI irish air
+
+on] MILLENNIUM! CELTICISUITE|(Moloney)
+Composed |to\celebrate|Dublin's|I!000)years;/includesimusic
+fromimost of the\Gelticcountries
+
+THE CHIEFTAINS
+
+DerekiBelli= Harp; Tiompan}\ Harpsichord)» Martin\Fay/— Fiddle
+Sedn\Keane'— Fiddle) e) Kevin Conneff/— Bodhran,.Vocals)\
+iMatt: Molloy — Flute) ©) Paddy, Moloney/— Uilleann'Pipes, Tin Whistle)
+
+Produced |by/Paddy, Moloney; Engineer; Brian Masterson}
+
+(Att Director; J Ny Stelmach
+ichard
+
+METHOD: grayscale_whitelist
+------------------------------------------------------------
+MO;MAHONEY:SFROLIGSDouble)jig
+(IGALICIAMusicifromGalicia
+(3)COOLINIMEDLEY,TwoversionsioftheIrishjalr
+with)stringOrchestra
+GIHERESAHEALTH)TO.THECOMPANY,
+DrinkingiSong
+(S)iPEANXTiY,BROWN;THEWILLIAMDAVIS'S;
+LCADY,WRIXONPiecesibyTurloughOGarolan
+((BOFFYFUOW,AND)SPIKE(Morrison)
+Xwith)VaniMorrison
+THESTRAYAWAY.CHILDSiipjjiz
+THEIRONMAN(Scottishimediey,
+()THEWEXFORDCAROL
+
+Christmas'carolfromCounty)Wexford
+with)NanciiGriffich
+(GAFTAIBAILEBUItrishair
+
+on MILLENNIUM CELTICISUITE(Moloney)
+ComposedtocelebrateDublin'sI'000)years;includesimusic
+fromimost.oftheGelticcountries
+
+THECHIEFTAINS
+DerekiBelliHarp;,Tiompan)Harpsichord).)MartinFay)Fiddle
+SednKeane'Fiddle)e)KeviniConneffiBodhran,.Vocals))
+iMatt: Molloy Flute))Paddy,Moloney;Uilleann'Pipes,:TinWhistle)
+
+ProducedbyPaddy,Moloney;Engineer;BrianMasterson)
+
+(Att Director; J Ny Stelmach
+ichard
+
+METHOD: grayscale_psm_6
+------------------------------------------------------------
+| MO;MAHONEY?S/FROLIGS Double|jig : 3100 compeley |
+i [2IIGALIGIA\ Music from Galicia 4335) ols
+| [3] COOLIN|MEDLEY/Two versionsiof the Irishjalr 4:54) CULT)
+with)string Orchestra
+GIHERES/A\HEALTH)TO.THE COMPANY, 3100 o
+DrinkingiSong y—
+——
+| (S| PEANXTiY/ BROWN; THE WILLIAM DAVIS'S; 4:45 ———
+LCADY,WRIXON |Pieces\by Turlough|O!Garolan a=
+[cd |BOFFYFUOW,AND)SPIKE!(Morrison) 249) =
+WP Xwith\VaniMorrison ——
+THE'STRAYAWAY/CHILD slipjjig 453) —
+THE|IRONIMAN Scottish mediey, 3138 =
+| [) THE\WEXFORD|CAROL 3721 =>
+| Christmas‘carol|from\County) Wexford 2s
+| with) NanciiGriffith = -
+IE GAFTAI BAILE BUI irish air 410 sien
+TIMILLENNIUMICELTICISUIME (Moloney) AB) 46:44
+| ‘Gomposed|to\celebrate| Dublin's|I!000)years;\includes music ASCAP,
+i from\mostiofithe!Geltic/countries:
+THECHIEFTAINS : oe
+DerekiBelli= Harp; Tiompan}\ Harpsichord)» Martin\Fay/— Fiddle : :
+|) )Sean\Keane'— Fiddle} °) Kevin Conneffi— Bodhran, Vocals é 4
+(Matt: Molloy/— Flute’*) Paddy; Moloney/— Villeann Pipes, Tin) Whistle} é |
+| Produced by Paddy, Moloney, Engineer, Brian) Masterson! Soe ae Seat
+Nes Art Director:))JiStelmach 2 eet
+Wes \Photos: Richard Haughton : ‘i ‘ E .
+| : 7 THK(S) © Regtered = Mareals) Regcrada(s) RCA Corporation, except BMG CasscsJogoTMOMG Mune) mentarsener (|p
+Uf, ©i1989/ Bh isle ]19891 Bec Pasi Manofacrired and Dserbuted by BMG Musici New Yorks NIVi~Prinsed in USAC | 7 47858:2.RC |
+
+METHOD: grayscale_psm_11
+------------------------------------------------------------
+sete ces ae adenedamnysannte
+
+~Aars
+
+———————
+
+——<—$—"
+
+maa... 5
+
+[WO;MAHONEY’S FROLIGS Double jig
+
+3:00
+
+compat,
+
+RIIGALICIA Music from Galicia
+
+4335
+
+[COOKIN MEDLEYAtwo versionsiof the Irishialr
+
+435:
+
+OIGITAL'AUDIO)
+
+with)string Orchestra
+
+(4) HERE}S/A\HEALTH) TO: THE COMPANY,
+
+3100
+
+DrinkingiSong
+
+Qo
+
+AiA5)
+
+[5] PLAN XcTiY, BROWN; THE\WILLIAM/DAVIS'S
+
+LCADY,WRIXON |Pieces\by Turlough|O!Garolan
+
+[4] BOFFYFLOW,/AND SPIKE (Morrison)
+
+ZL)
+
+with) Van Morrison
+
+4353)
+
+[2 STHE'STRAYAWAY/CHILD slipjjiz
+
+THE IRON MAN Scottishimediey,
+
+3738
+
+2) THE WEXFORD CAROL
+
+372)
+
+—
+
+Christmas‘carol|from| County) Wexford
+
+with) NanciiGriffich
+
+Total
+
+(GAFTAIBAILE/BUI trisha
+
+4:10
+
+PlayingiTime:
+
+TIMIEVENNIUM(GELTIG|SUIME (Moloney)
+
+73
+
+46:44
+
+Composed |to\celebrate|Dublin's|I!000)years;/includesimusic
+
+ASCAP,
+
+fromimost.of the Gelticicountries
+
+HE CHIEFTAINS
+
+DerekiBelli= Harp; Tiompan}\ Harpsichord)» Martin\Fay/— Fiddle
+
+Sedn\Keane'— Fiddle)e) Kevin Conneff/— Bodhran, Vocals
+
+iMatt: Molloy — Flute) ©) Paddy, Moloney/— Uilleann'Pipes, Tin Whistle)
+
+Produced |by/Paddy, Moloney; Engineer; Brian Masterson}
+
+‘Art Directors J Ny Stelmach
+
+Photos: Ri
+
+jaughton
+
+Nanci Grif
+
+‘of/MCA\ Records
+
+989,
+
+K(s)\®)
+
+tered jarca(s)
+
+1989; BMG:
+
+ICA ‘Corporation, fexcepe BMG Cate BMG Music:
+
+factured and Distributed by BM(
+
+ey
+
+is
+
+ws
+
+eae
+
+METHOD: standard_threshold_standard
+------------------------------------------------------------
+(HE WEXE
+firlstmascaroli{ron
+
+eh Nane|Griftich
+
+METHOD: standard_threshold_whitelist
+------------------------------------------------------------
+p Pieces'b
+
+i IRON:MAN: eC
+HEWEXFEORD.CAROL
+Henas'Carel(POMVCSURET (
+
+ae
+
+iehiNanelGriftich
+
+METHOD: standard_threshold_psm_6
+------------------------------------------------------------
+le 2 O;MAHONEY’S FROLICS Doublelig’ 3:00 ea |;
+ig” B)-COOLIN MEDLEY. sTwowversions of-thelrishair 0-454... Sanaa 19
+Beer 2 Ses weth String Orchestra iy og se ee perro e ||
+p. /Gl HERES A HEALTESTOTHE'COMPANY® =: © ss000~"-" uaa,
+Z2-<\ SSPEANXYBROWN: THE WILLIAMDAVIS'S; = 445°
+Se ere WRI Pieces by Turlough'O!Garolani. “2. aes 4 cman [9
+ese ‘= BORFYELOW AND SPIKE Micka Pe ae SPARE Eas ~ A
+peat, See aie ae ate forrison a eee
+i CITE STRAYAWAY,CHI HILO Sip jig Boe. way
+[5 Se Gl THELWEXFORD.CAROL 2 605 ek oo,
+gD SE RUEWEXECRD CANOES 2 Stay eee SS i
+Resse aca ALBA E BU rae a pa Reseale S|
+| aise shepairs Composed co\celebrate Dublin's)! O0O}years, includes music weak) Ereetaeet os | ONASCAPES
+Hee Sy GOMNGST OL ENS Celticcountries eae e ae yee ara nage SS oe lt
+| Oo) plein ae « Rye ema tea, Sl
+ye OEE oir las rd Oba rd BBG cae ee ec Load es Se CO
+Soe eee a RES Be ee NR SS a cee IT Soe mere
+
+METHOD: standard_threshold_psm_11
+------------------------------------------------------------
+Set aeeeneenytpre—— anna
+
+ae
+
+Rt
+
+ONE
+
+OL!
+
+400)
+
+clea ht
+
+Ry aS
+
+pao
+
+m.Galic
+
+4
+
+#35
+
+lis
+
+meaty
+
+witch's:
+
+gO
+
+abut
+
+ea
+
+ERE:
+
+7
+
+EA
+
+Siay
+
+Tj
+
+Ing Song:
+
+vated
+
+ap
+
+rf
+
+TV/BROWN::
+
+5%
+
+_——j
+
+LA
+
+Md
+
+on
+
+AY
+
+Piece:
+
+bs
+
+$
+
+cxmrcaza fF)
+
+RIXON
+
+ca
+
+ae.
+
+coz [9
+
+OFFVE
+
+pate!
+
+LOW.
+
+“AND SPIKE
+
+one
+
+io. as
+
+~d
+
+on
+
+“{e2)
+
+lst
+
+HE:
+
+STRAYAWAY:
+
+(CHI
+
+ea
+
+SH
+
+OG
+
+IRON: MAN
+
+‘ott
+
+dley.
+
+UA
+
+i k
+
+EXE
+
+ORD:
+
+at
+
+—
+
+\
+
+HE!
+
+AS AZod rh
+
+RO
+
+CAROL
+
+hristmas’carolifi
+
+rom
+
+County)
+
+xford
+
+uh
+
+a:
+
+with! Nanci Griffith:
+
+Silo)
+
+ie
+
+UMICEE
+
+UT
+
+Moloney,
+
+46:44
+
+(3
+
+‘celebrate Dublin
+
+if
+
+incl
+
+Cel
+
+Boxoyor
+
+[Derek Bells Harpyriompan
+
+Kevin: Conneff;
+
+[Macc MolloysseFlutexes paddy: Moloney /=4 Uiieann
+
+Pipes arin Whistle]
+
+ddy, Moloneyje Enginee!
+
+|
+
+Griffith!
+
+‘courtesy of MCA Rec:
+
+opt BMG:
+
+we
+
+[OT1989 BMG t4
+
+(5)
+
+OER
+
+came
+
+istrada(s) Ri
+
+yinoed in U.S:
+
+——
+
+eo
+
+—.
+
+“Amro
+
+‘=.
+
+PbS wa:
+
+FTES
+
+METHOD: otsu_threshold_standard
+------------------------------------------------------------
+[1] O’MAHONEY'’S FROLICS Double jig
+[2] GALICIA Music from Galicia
+[3] COOLIN MEDLEY Two versions of the Irish alr
+with String Orchestra
+[4] HERE’S A HEALTH TO THE COMPANY
+Drinking Song
+(3) PLANXTY BROWN; THE WILLIAM DAVIS'S;
+LADY WRIXON Pieces by Turlough O'Carolan
+[6] BOFFYFLOW AND SPIKE (Morrison)
+* with Van Morrison
+THE STRAYAWAY CHILD Slip jig
+THE IRON MAN Scottish medley
+3} THE WEXFORD CAROL
+Christmas carol from County Wexford
+with Nanci Griffith
+00) GAFTA(BAILE BUI irish ar
+
+00 MILLENNIUM: CELTIC SUITE (Moloney)
+Composed to celebrate Dublin's 1,000 years; includes music
+from most of the Celtic’ countries
+
+THE CHIEFTAINS
+
+Derek Bell’ Harp, Tiompan, Herpsichord. « Martin Fay -— Fiddle
+Sedn Keane — Fiddle * Kevin Conneff.— Bodhran, Vocals.
+‘Matt Molloy — Flite’ + Paddy ‘Moloney '—Uilleann Pipes, Tin Whistle:
+
+Produced by. Paddy Moloney * Engineer: Brian Masterson:
+
+Art Director: iB J Stelmach
+ichard
+
+METHOD: otsu_threshold_whitelist
+------------------------------------------------------------
+1)OMAHONEY'SFROLICSDoublejiz
+(2)GALICIAMusicfromGalicia
+(3)COOLINMEDLEYTwoversionsoftheIrishalr
+withStringOrchestra
+(4)HERE'SAHEALTHTOTHECOMPANY
+DrinkingSong
+(3)PLANXTYBROWN;THEWILLIAMDAVIS'S;
+LADYWRIXONPiecesbyTurloughO'Carolan
+(6)BOFFYFLOWANDSPIKE(Morrison)
+withVanMorrison
+THESTRAYAWAYCHILDSlipjig
+THEIRONMANScottishmedley
+(3THEWEXFORDCAROL
+
+ChristmascarolfromCountyWexford
+with'NanciGriffich
+(elGAFTA(BAILEBUIirishair
+
+00 MILLENNIUM: CELTIC.SUITE(Moloney)
+Composedto-celebrateDublin's1,000years;includesmusic
+frommostoftheCeltic'countries
+
+THE.CHIEFTAINS
+DerekBell'-Horp,Tiompan,Herpsichord.MartinFay-Fiddle
+SednKeaneFiddleKeviriConneff.-Bodhran,Vocals.
+Matt Molloy FlitePaddy:Moloney'UilleannPipes,TinWhistle:
+
+Producedby.PaddyMoloneyEngineer:Brian.Masterson:
+
+Art Director: iB J Stelmach
+ichard
+
+METHOD: otsu_threshold_psm_6
+------------------------------------------------------------
+1 [1] O’MAHONEY'’S FROLICS Double jig ‘ 3:00 comes} :
+; [2] GALICIA Music from Galicia 4350 ais :
+: [3] COOLIN MEDLEY Two versions of the Irish alr 4:54 DiciTAL AUDIO
+with String Orchestra
+[4] HERE’S A HEALTH TO THE COMPANY 3:00 ce
+Drinking Song ———
+—
+. (3) PLANXTY BROWN; THE WILLIAM DAVIS'S; 4:45 ———
+LADY WRIXON Pieces by Turlough O'Carolan QO =
+[6] BOFFYFLOW AND SPIKE (Morrison) 2:49 =
+* with Van Morrison ——
+THE STRAYAWAY CHILD Slip jig 4530 —
+THE IRON MAN Scottish medley 3:38 —
+| 3} THE WEXFORD CAROL 3:2) =
+: Christmas carol from County Wexford _.
+I with Nanci Griffith ss =
+ie GAFTAI BAILE BUI irish air 4:10 paying Time:
+[) MILLENNIUM ‘CELTIC SUITE (Moloney) 7:13 46:44
+| Composed to:celebrate Dublin's 1,000 years; includes music ASCAP
+E from:most of the Celtic countries
+THE CHIEFTAINS : oo
+Derek Bell’ Harp, Tiompan, Herpsichord. « Martin Fay -— Fiddle . <
+_  Sedn:Keane — Fiddle Kevin Conneff.— Bodhran, Vocals . :
+‘Matt Molloy — Flute + Paddy Moloney '— Uilleann Pipes, Tin Whistle: . :
+{ Produced by. Paddy Moloney * Engineer: Brian Masterson: oo: a of
+took Are Diréétor: |; Stelmach : ee
+qe “Photos: Richard Haughton ; . ; . “
+| . __ TMK(G) © Repinered « Mateals) Regatral(s) RCA Corpération, extepe BMG Ctadisloro TM GHG Mave, eee |
+fi, ©1989, MG Must “© '1989..BEG Mie» Manufactured and Diseribuied by. BMG Misi, New Yorks Nes Printed USA. © 00 <-- TESS2RC!3./-
+
+METHOD: otsu_threshold_psm_11
+------------------------------------------------------------
+ees remem x |
+
+Series
+
+as
+
+—————s
+
+noe tniatien...2
+
+[1] O’MAHONEY’S FROLICS Double jig
+
+3:00
+
+Compal.
+
+[2] GALICIA Music from Galicia
+
+4:35
+
+[3] COOLIN MEDLEY To versions of the Irish alr
+
+4:5
+
+DIGITAL AUDIO
+
+with String Orchestra
+
+[4] HERE'S A HEALTH TO THE COMPANY
+
+3:00
+
+Drinking Song
+
+=
+
+4:45
+
+(3) PLANXTY BROWN; THE WILLIAM DAVIS'S
+
+LADY WRIXON Pieces by Turlough O'Carolan
+
+[6] BOFFYFLOW AND SPIKE (Morrison)
+
+2:49
+
+with Van Morrison
+
+4:53
+
+[7] THE STRAYAWAY CHILD Slip jig
+
+THE IRON MAN Scottish medley
+
+3:38
+
+2} THE WEXFORD CAROL
+
+3:21
+
+—a
+
+Christmas carol from County Wexford
+
+with Nanci Griffich
+
+Toral
+
+(el GAFTA( BAILE BUI irish air
+
+4:10
+
+Playing Time:
+
+(1) MILLENNIUM CELTIC SUITE (Moloney)
+
+7:13
+
+46:44
+
+Composed to celebrate Dublin's 1,000 years; includes music
+
+ASCAP
+
+from:most of the Celtic‘countries
+
+THE CHIEFTAINS
+
+Derek Bell’ Harp, Tiompan, Herpsichord. « Martin Fay -— Fiddle
+
+Sein Keane — Fiddle * .Keviri Conneff.— Bodhran, Vocals
+
+‘Matt Molloy — Flite’ + Paddy ‘Moloney '—Uilleann Pipes, Tin Whistle:
+
+Produced by. Paddy Moloney * Engineer: Brian Masterson:
+
+Art Director? iB J Stelmach
+
+‘Photos: Ri
+
+jaughton
+
+Nanel Grif
+
+of MCA Records
+
+989,
+
+K(S) ©.
+
+tered jarcals)
+
+1989, BMG
+
+CA Corporation, avcepet BMG ato BMG Music”
+
+factored and Distributed by, BM
+
+ee,
+
+“Ae nn.
+
+wi
+
+—
+
+METHOD: adaptive_threshold_standard
+------------------------------------------------------------
+ate IN MEL :
+ERES AERC CORTE CO BA
+
+Drinking Sone ameems Ns
+
+TP EANSGTIY, BROWN: TE WILTIARIDAVIS;S}
+RUADYAWRIXON ee
+
+BUilirisaiy
+Gea (CELTIC SOUT RE((Moloney))
+ee ee Debi: 000} yearsifincludesimusics
+
+METHOD: adaptive_threshold_whitelist
+------------------------------------------------------------
+peeSrERCrocetcoue PA
+i BUANXSIN, BROWN; TEWICUIAR DAVIS
+BUADYAWRIXON ee
+
+Gea Cine SOUT RE((Moloney))
+eee Debi: 000)yearsifincludesimusics
+
+METHOD: adaptive_threshold_psm_6
+------------------------------------------------------------
+I Pees a (COOUIN| ME DLE Vatwojversionsiof{thel|:/stia/ dae meraen 4) 54a Sauna |p
+
+Bere ars 4) HERES A\HEALTHiTONT HE\COMPAN Yaeger 00 em cern Eo) i
+Ieee [By REANIGIY/BROW Nia HE|WILLIAM|DAVIS'S: er 44s\memucnan M-ae—
+ae OMTMEISTRAVAWAY,CCNLD SI) (ce tea) eee Shea Oe
+Woes el FEWEXEORD CIN eG es te Ee ooo ce NEES Tb
+We (CAP UNOAMNB OWI mtma ee mr Raia
+| | eeeereaeemrieeg Derek Belle = Harp wliompany harpsichord med tarctinit ay. L/dd |e pao itaas We sacs acre are are es
+Meme eet late (lolly. ieluten A haddy loloney a Uilleanr fips 0 W/Nis Le eee sae eget See ree
+foo sf Risser iy Gey fistomey ogni CEM ESE «0 ep
+
+METHOD: adaptive_threshold_psm_11
+------------------------------------------------------------
+rman
+
+sor
+
+3S [Double
+
+Aehatsteenean
+
+ais
+
+soYey i]
+
+MEDLE Vary
+
+OIGITALYAUDI:
+
+Rwichy
+
+String Orctiestrate
+
+HERESIAHEALTH
+
+R ror ecou BA
+
+ri
+
+inkingisong
+
+===
+
+i RUAN BROWN: Foewittian DAVIS:
+
+WADYJWRIXON|Fiecesbygtorloush OlCsroln
+
+DISEIKE!(iousson fe
+
+A MLARARTATeAO En
+
+By Uae cease
+
+EXEORDIGAROE
+
+v——
+
+Si
+
+nceaay
+
+XTO:
+
+BUilirishair
+
+Gea (CELTIC SUI
+
+MEX(Moloney))
+
+ue aes eisew Dubin &
+
+Tot
+
+OOO}yearssincludesimusicy
+
+Derel Belles rior Womans Harpst
+
+Gah 9 9. Gacadi~cames
+
+oem
+
+Broduced,
+
+Caesar tet hslents © Giga Cuenbeeeecn
+
+[Photos Ric!
+
+lonexc ent,
+
+red
+
+feeercr
+
+1989) BG rtusic
+
+BMG
+
+areas
+
+Semarang on STE
+
+ae her
+
+Lee
+
+“a
+
+46
+
+METHOD: enhanced_colored_standard
+------------------------------------------------------------
+ate IN MEL :
+ERES AERC CORTE CO BA
+
+Drinking Sone ameems Ns
+
+TP EANSGTIY, BROWN: TE WILTIARIDAVIS;S}
+RUADYAWRIXON ee
+
+BUilirisaiy
+Gea (CELTIC SOUT RE((Moloney))
+ee ee Debi: 000} yearsifincludesimusics
+
+METHOD: enhanced_colored_whitelist
+------------------------------------------------------------
+peeSrERCrocetcoue PA
+i BUANXSIN, BROWN; TEWICUIAR DAVIS
+BUADYAWRIXON ee
+
+Gea Cine SOUT RE((Moloney))
+eee Debi: 000)yearsifincludesimusics
+
+METHOD: enhanced_colored_psm_6
+------------------------------------------------------------
+I Pees a (COOUIN| ME DLE Vatwojversionsiof{thel|:/stia/ dae meraen 4) 54a Sauna |p
+
+Bere ars 4) HERES A\HEALTHiTONT HE\COMPAN Yaeger 00 em cern Eo) i
+Ieee [By REANIGIY/BROW Nia HE|WILLIAM|DAVIS'S: er 44s\memucnan M-ae—
+ae OMTMEISTRAVAWAY,CCNLD SI) (ce tea) eee Shea Oe
+Woes el FEWEXEORD CIN eG es te Ee ooo ce NEES Tb
+We (CAP UNOAMNB OWI mtma ee mr Raia
+| | eeeereaeemrieeg Derek Belle = Harp wliompany harpsichord med tarctinit ay. L/dd |e pao itaas We sacs acre are are es
+Meme eet late (lolly. ieluten A haddy loloney a Uilleanr fips 0 W/Nis Le eee sae eget See ree
+foo sf Risser iy Gey fistomey ogni CEM ESE «0 ep
+
+METHOD: enhanced_colored_psm_11
+------------------------------------------------------------
+rman
+
+sor
+
+3S [Double
+
+Aehatsteenean
+
+ais
+
+soYey i]
+
+MEDLE Vary
+
+OIGITALYAUDI:
+
+Rwichy
+
+String Orctiestrate
+
+HERESIAHEALTH
+
+R ror ecou BA
+
+ri
+
+inkingisong
+
+===
+
+i RUAN BROWN: Foewittian DAVIS:
+
+WADYJWRIXON|Fiecesbygtorloush OlCsroln
+
+DISEIKE!(iousson fe
+
+A MLARARTATeAO En
+
+By Uae cease
+
+EXEORDIGAROE
+
+v——
+
+Si
+
+nceaay
+
+XTO:
+
+BUilirishair
+
+Gea (CELTIC SUI
+
+MEX(Moloney))
+
+ue aes eisew Dubin &
+
+Tot
+
+OOO}yearssincludesimusicy
+
+Derel Belles rior Womans Harpst
+
+Gah 9 9. Gacadi~cames
+
+oem
+
+Broduced,
+
+Caesar tet hslents © Giga Cuenbeeeecn
+
+[Photos Ric!
+
+lonexc ent,
+
+red
+
+feeercr
+
+1989) BG rtusic
+
+BMG
+
+areas
+
+Semarang on STE
+
+ae her
+
+Lee
+
+“a
+
+46
+
+METHOD: high_contrast_standard
+------------------------------------------------------------
+
+
+METHOD: high_contrast_whitelist
+------------------------------------------------------------
+
+
+METHOD: high_contrast_psm_6
+------------------------------------------------------------
+i; ~. GEOIMAHONEY’S FROLICS Double ig 55 300° “_Fycompae):
+eg BL COOLIN MEDLEY ‘Two'versions of the Irishal: ors . 4iS4. on... Samecmume 2
+bapa Ss. hiring Orestcas er ee eee ee
+2 ee ares SE de eR E coe ASR ES IS pS Ree tas SE ai ce 5 Si aa acti OT
+: ee ERE'S/A HEALTH:TO'THE COMPANYS PERO Ay
+
+pee ctOrinking Song. le Go eee eS  —_—
+See EADY: WRIXON Pieces by Turlough O'Carolan ese |
+Se Te ROR Ri BE RECS Die ee ET A eee | «|| | RC Ui
+Ph: [ESBOPEYELOW. AND SPIKE (Morrison) «so eo 129 oS re
+; Ep SUTHE IRON MAN Scotsh medley eg em ae Fj |:
+
+IS S29] PME WEXFORD CAROL: co oe eee ope
+Hes cS kk Christmas carol from County Wexford! SIA sea sie. ye
+WRASSE? wrth Nanel Gotcha US se TS ee
+Oa es be RF A RC Ra te iy TER aa Reopen RE eseeeiy BBR CLS EZ Yoga eee Ht
+Bf SUGAR TAL BAILE BUI irish air. > RE an aio a) Beal |
+| bey EA PE a Cg eee a semen Ra
+Ee ear erect anne pee Bec eet
+[l2542- 1 Composed to celebrate’ Dublin's1)000|years, includes music sctiy ie agraien aa ASCAIAIR |
+Hee oes CONG Dor desis i 6s es Os Cee Oa | ROUT, |
+fo oS IMECHIEFTAINS 0. ee ee
+
+iF pe ae ea : ae gen, PEAR SG oe hay ceo pee a TT ee RLS he ar ht oe er mere Una
+
+flies °C Derek Bell Harp, Tlompon’ Horpsichord:«° Martin\Fay2= Fiddle REIS CAE ge ake eae
+gece tes sean Keane — Fiddles eakevin Connellic Bodhran Vocals So ce cx bones: Ren eer :
+: A ste Molloy. fine = Fa sy Nolen? 3 Ulla Pipes Tn ravenna eRe ees |
+Meer ge Art Directors): /iStelmachu seeing cae. me oye see Cnet peer Naor a Mees
+(Eee trees neawutapen ay ar, ee ae een Peer el
+fh eR ape a EA BORE eye See Re ae Seed Se a Mire ats ESE Y ehetas Ip noe PURER
+nica meee a Ak omen eee Re ee meee tag = eee | » AE
+ee 7 Seee © Resiiered | Mac +) Resicrada(s) RCA Corporation, ene spt BEG, Clssies eo 100 Ob ts Mea ay Se ceiae cee Fs
+28 2@ 19897 8M * 1989 BMG Music » Manufactured and Diseributed by BM Mork? fe SANS ees PRC o aT
+Uf secs TUE EMO Masts IS an rok selec a Obed arc Ue eee ere EES, :
+
+METHOD: high_contrast_psm_11
+------------------------------------------------------------
+—~ arn
+
+Me oomemmerenaeee
+
+Ae: + ll dial md merece
+
+3:
+
+00:
+
+MAHONEY’S FROLICS Doub!
+
+ig
+
+GALICIA.M
+
+4:
+
+'
+
+‘ONGITAL
+
+ists
+
+ED
+
+St
+
+eB
+
+rin!
+
+Soni
+
+1 ———
+
+PL ye
+
+45
+
+co
+
+ee
+
+Scho
+
+vy
+
+LA
+
+DY: WRIXON Piece
+
+fox
+
+LN
+
+a5
+
+OFF
+
+W..
+
+IKE
+
+Ww
+
+She
+
+oo
+
+aati
+
+(HE ST.
+
+Bay er
+
+to
+
+—
+
+HE
+
+tes
+
+38
+
+OG
+
+ora
+
+hye
+
+ram atss
+
+eso
+
+—
+
+TH
+
+EXEOR'
+
+See
+
+RO
+
+sy
+
+——————
+
+peas
+
+nc
+
+SE
+
+‘a
+
+e
+
+he
+
+iBAI
+
+(u
+
+iW)
+
+rish
+
+ad
+
+a
+
+fs
+
+a
+
+EG
+
+ENNI
+
+ES
+
+We
+
+eos
+
+Ly
+
+44.
+
+SERRATE, sane! or
+
+ito,
+
+ere
+
+‘S'
+
+ira
+
+oloney,
+
+cel
+
+lebra
+
+te! Dubli
+
+000iy
+
+ludes!music’
+
+Bae |
+
+NaS
+
+countr
+
+SG,
+
+A
+
+gog
+
+8
+
+THE CHIEFTAINS:
+
+eh
+
+Bs)
+
+Set
+
+kK: Bell
+
+We
+
+ichord
+
+Ms
+
+ee
+
+ER
+
+Conneff;
+
+Bodh
+
+te
+
+Vocals
+
+tt
+
+iM
+
+Plate’
+
+Paddy,
+
+loloney,
+
+Ui
+
+ia
+
+a
+
+mie
+
+ee
+
+Rs Produc
+
+loloney.s
+
+pe
+
+asi
+
+ea
+
+eae
+
+peed
+
+Haugh:
+
+aise
+
+B53
+
+ES
+
+appears courtesy,
+
+oe
+
+ICA: Records
+
+Dies
+
+brs
+
+Music,
+
+‘NewYork
+
+iv,
+
+Printed
+
+ar
+
+GS:
+
+mate E
+
+‘paar
+
+=v
+

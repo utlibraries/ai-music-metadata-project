@@ -106,6 +106,7 @@ def extract_metadata_fields(metadata_str):
 
 
 def construct_queries_from_metadata(metadata):
+    """Generate all possible query combinations without limiting to just 5."""
     def safe_get(value):
         if not value or not isinstance(value, str):
             return None
@@ -149,27 +150,31 @@ def construct_queries_from_metadata(metadata):
     second_track = None
     if len(tracks) > 1:
         second_track = safe_get(tracks[1].get('title')) if tracks[1].get('title') else None
+    
+    third_track = None
+    if len(tracks) > 2:
+        third_track = safe_get(tracks[2].get('title')) if tracks[2].get('title') else None
 
     queries = []
 
-    if first_track and second_track:
-        queries.append(f'"{first_track}" "{second_track}"')
-        
     if artist and first_track and second_track:
         queries.append(f'"{artist}" "{first_track}" "{second_track}"')
         
+    if first_track and second_track:
+        queries.append(f'"{first_track}" "{second_track}"')
+        
     if title:
         if all([title, subtitle, artist]):
-            queries.append(f'"{title}" "{subtitle}" "{artist}" CD')
+            queries.append(f'"{title}" "{subtitle}" "{artist}"')
             
         if all([title, first_track, second_track]):
-            queries.append(f'{title} "{first_track}" "{second_track}" CD')
+            queries.append(f'{title} "{first_track}" "{second_track}"')
             
         if all([title, artist, publisher]):
-            queries.append(f'"{title}" "{artist}" {publisher} CD')
+            queries.append(f'"{title}" "{artist}" {publisher}')
 
         if title and artist:
-            queries.append(f'"{title}" "{artist}" CD')
+            queries.append(f'"{title}" "{artist}"')
 
         if all([title, first_track]):
             queries.append(f'"{title}" "{first_track}"')
@@ -178,27 +183,31 @@ def construct_queries_from_metadata(metadata):
             queries.append(f'"{title}" "{subtitle}"')
 
         if title and publisher:
-            queries.append(f'"{title}" {publisher} CD')
+            queries.append(f'"{title}" {publisher}')
 
         if title and product_code:
             queries.append(f'"{title}" {product_code}')
-
-    
         
     if artist and publisher and product_code:
         queries.append(f'"{artist}" {publisher} "{product_code}"')
 
     if artist and publisher and pub_year:
-        queries.append(f'{artist} {publisher} {pub_year} CD')
+        queries.append(f'{artist} {publisher} {pub_year}')
 
     if artist and publisher and first_track:
-        queries.append(f'{artist} {publisher} {first_track} CD')
+        queries.append(f'{artist} {publisher} {first_track}')
+        
+    if artist and third_track:
+        queries.append(f'{artist} {third_track}')
     
     if first_track:
-        queries.append(f'"{first_track}" CD')
+        queries.append(f'"{first_track}"')
+        
+    if third_track:
+        queries.append(f'"{third_track}"')
 
     if artist:
-        queries.append(f'{artist} CD')
+        queries.append(f'{artist}')
 
     if product_code:
         queries.append(f'{product_code}')
@@ -210,7 +219,8 @@ def construct_queries_from_metadata(metadata):
             seen.add(q)
             unique_queries.append(q)
 
-    return unique_queries[:5]
+    # Return ALL unique queries instead of just the first 5
+    return unique_queries
 
 def format_oclc_results(json_response, access_token):
     try:
@@ -402,6 +412,9 @@ def format_oclc_api_response_for_accumulation(data, access_token, seen_oclc_numb
                 if 'subtitles' in record['title']:
                     for subtitle in record['title']['subtitles']:
                         formatted_results.append(f"  - Subtitle: {subtitle.get('text', 'N/A')}")
+                if 'seriesTitles' in record['title']:
+                    for series in record['title']['seriesTitles']:
+                        formatted_results.append(f"  - Series Title: {series.get('seriesTitle', 'N/A')}")
             
             if 'contributor' in record:
                 formatted_results.append("Contributors:")
@@ -573,16 +586,16 @@ def query_oclc_api(metadata, barcode, limit=10):
     seen_oclc_numbers = set()
     accumulated_results = []
     total_records_found = 0
-    max_results_to_show = 10  # Changed from max_results_sets to max_results_to_show (limit to 10 records total)
+    max_results_to_show = 10  # Our target - 10 CD results
 
+    # Try ALL queries - don't stop until we've tried everything
     for idx, query in enumerate(cleaned_queries, 1):
-        # If we already have enough unique records, stop
-        if len(seen_oclc_numbers) >= max_results_to_show:
-            query_log.append(f"\nReached maximum of {max_results_to_show} unique records. Stopping search.")
-            break
-            
         query_log.append(f"\nQuery {idx}: {query}")
         attempted_queries.append(idx)
+        
+        # Note if we already have enough results, but still try the query
+        if len(seen_oclc_numbers) >= max_results_to_show:
+            query_log.append(f"Already have {max_results_to_show} unique records, but trying this query anyway.")
         
         params = {
             "q": query,
@@ -634,10 +647,6 @@ def query_oclc_api(metadata, barcode, limit=10):
                         # Add the new OCLC numbers to our seen set
                         seen_oclc_numbers.update(current_oclc_numbers)
                         query_log.append(f"Added new CD format matches (now have {len(seen_oclc_numbers)} unique records)")
-                        
-                        # Check if we've hit our limit
-                        if len(seen_oclc_numbers) >= max_results_to_show:
-                            query_log.append(f"Reached maximum of {max_results_to_show} unique records. Will stop after processing this batch.")
                     else:
                         query_log.append(f"No new CD format matches found")
                 else:
