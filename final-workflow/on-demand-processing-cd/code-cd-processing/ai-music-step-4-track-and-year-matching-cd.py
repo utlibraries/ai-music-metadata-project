@@ -292,6 +292,179 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
     
     return similarity * 100
 
+def extract_and_normalize_year(text, is_oclc=False):
+    """Extract and normalize publication year to YYYY format."""
+    if not text:
+        return None
+    
+    # Look for publication date in structured format
+    if is_oclc:
+        date_patterns = [
+            r'publicationDate:\s*[©℗]?(\d{4})',
+            r'machineReadableDate:\s*(\d{4})',
+            r'publicationDate:\s*[©℗]?(\d{4})[^\d]',
+            r'Dates:[^p]*publicationDate:\s*[©℗]?(\d{4})',
+            r'Date:[^p]*publicationDate:\s*[©℗]?(\d{4})',
+            r'publicationDate:\s*[©℗]?c?(\d{4})',
+            r'publication(?:Date)?:\s*[©℗]?c?(\d{4})'
+        ]
+    else:
+        date_patterns = [
+            r'publicationDate:\s*(\d{4})',
+            r'Dates:[^p]*publicationDate:\s*(\d{4})',
+            r'Date:[^p]*publicationDate:\s*(\d{4})',
+            r'publication(?:Date)?:\s*(\d{4})'
+        ]
+    
+    for pattern in date_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            year = match.group(1)
+            if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
+                return year
+    
+    # Look for copyright or phonogram year markers
+    year_markers = [r'[©℗](\d{4})', r'[©℗](?:\s*)(\d{4})', r'copyright\s+(\d{4})', r'phonogram\s+(\d{4})']
+    for marker in year_markers:
+        matches = re.findall(marker, text, re.IGNORECASE)
+        if matches:
+            for year in matches:
+                if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
+                    return year
+    
+    # Look for standalone 4-digit years
+    year_pattern = r'(?<!\d)(\d{4})(?!\d)'
+    matches = re.findall(year_pattern, text)
+    valid_years = [y for y in matches if 1900 <= int(y) <= datetime.now().year]
+    if valid_years:
+        # Return the most frequently occurring year
+        from collections import Counter
+        return Counter(valid_years).most_common(1)[0][0]
+    
+    return None
+
+def extract_year_from_oclc_by_number(oclc_results, oclc_number):
+    """Extract publication year from OCLC results for a specific OCLC number."""
+    
+    # First, find the section for this OCLC number
+    oclc_section_pattern = rf"OCLC Number: {oclc_number}.*?(?:(?:Record \d+:|----------------------------------------)|$)"
+    oclc_section = re.search(oclc_section_pattern, oclc_results, re.DOTALL)
+    
+    if oclc_section:
+        section_text = oclc_section.group(0)
+        
+        # Look for publication date in structured format with multiple years
+        multi_year_patterns = [
+            r'publicationDate:\s*\[(\d{4})\],\s*[©℗](\d{4})',
+            r'publicationDate:\s*[©℗]?(\d{4})[^\d]*[©℗](\d{4})',
+            r'Dates:[^p]*publicationDate:\s*\[(\d{4})\],\s*[©℗](\d{4})',
+            r'Date:[^p]*publicationDate:\s*\[(\d{4})\],\s*[©℗](\d{4})'
+        ]
+        
+        for pattern in multi_year_patterns:
+            match = re.search(pattern, section_text, re.IGNORECASE)
+            if match:
+                year1 = match.group(1)
+                year2 = match.group(2)
+                # Return the later year when there are multiple years
+                if year1.isdigit() and year2.isdigit():
+                    return str(max(int(year1), int(year2)))
+        
+        # Handle "pc" or "p c" notation (e.g., pc2004)
+        pc_patterns = [
+            r'publicationDate:\s*p\s*c\s*(\d{4})',
+            r'publicationDate:\s*pc\s*(\d{4})',
+            r'Dates:[^p]*publicationDate:\s*p\s*c\s*(\d{4})',
+            r'Date:[^p]*publicationDate:\s*pc\s*(\d{4})'
+        ]
+        
+        for pattern in pc_patterns:
+            match = re.search(pattern, section_text, re.IGNORECASE)
+            if match:
+                year = match.group(1)
+                if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
+                    return year
+        
+        # Look for specific date patterns in this section (original patterns)
+        date_patterns = [
+            r'publicationDate:\s*[©℗]?(\d{4})',
+            r'machineReadableDate:\s*(\d{4})',
+            r'publicationDate:\s*[©℗]?(\d{4})[^\d]',
+            r'Dates:[^p]*publicationDate:\s*[©℗]?(\d{4})',
+            r'Date:[^p]*publicationDate:\s*[©℗]?(\d{4})',
+            r'publicationDate:\s*[©℗]?c?(\d{4})',
+            r'publication(?:Date)?:\s*[©℗]?c?(\d{4})'
+        ]
+        
+        # Add specific pattern for bracketed years
+        bracketed_patterns = [
+            r'publicationDate:\s*\[(\d{4})\]',
+            r'Dates:[^p]*publicationDate:\s*\[(\d{4})\]',
+            r'Date:[^p]*publicationDate:\s*\[(\d{4})\]'
+        ]
+        
+        date_patterns.extend(bracketed_patterns)
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, section_text, re.IGNORECASE)
+            if match:
+                year = match.group(1)
+                if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
+                    return year
+        
+        # Look for copyright or phonogram year markers
+        year_markers = [
+            r'[©℗](\d{4})', 
+            r'[©℗](?:\s*)(\d{4})', 
+            r'copyright\s+(\d{4})', 
+            r'phonogram\s+(\d{4})'
+        ]
+        
+        years_found = []
+        for marker in year_markers:
+            matches = re.findall(marker, section_text, re.IGNORECASE)
+            for year in matches:
+                if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
+                    years_found.append(int(year))
+        
+        if years_found:
+            # Return the most recent year when we find multiple copyright/phonogram years
+            return str(max(years_found))
+        
+        # Look for standalone 4-digit years
+        year_pattern = r'(?<!\d)(\d{4})(?!\d)'
+        matches = re.findall(year_pattern, section_text)
+        valid_years = [int(y) for y in matches if 1900 <= int(y) <= datetime.now().year]
+        if valid_years:
+            # Return the most frequently occurring year
+            from collections import Counter
+            return str(Counter(valid_years).most_common(1)[0][0])
+    
+    return None
+
+def compare_publication_years(metadata_year, oclc_year):
+    """
+    Compare publication years and return a match status.
+    """
+    # If either year is missing, don't count it against the match
+    if metadata_year is None or oclc_year is None:
+        return (True, f"Incomplete year data: metadata_year={metadata_year}, oclc_year={oclc_year}")
+    
+    # Convert to integers for numerical comparison
+    metadata_year_int = int(metadata_year)
+    oclc_year_int = int(oclc_year)
+    
+    # Check if the absolute difference is less than or equal to 1
+    year_diff = abs(metadata_year_int - oclc_year_int)
+    
+    if year_diff <= 1:
+        if year_diff == 0:
+            return (True, f"Years match exactly: {metadata_year} == {oclc_year}")
+        else:
+            return (True, f"Years are within 1 year: {metadata_year} vs {oclc_year}")
+    else:
+        return (False, f"Years differ by more than 1 year: {metadata_year} vs {oclc_year} (difference: {year_diff} years)")
+
 def main():
     # Specify the folder prefix based on your output location
     base_dir_prefix = "final-workflow/on-demand-processing-cd/cd-output-folders/results-"
@@ -327,14 +500,18 @@ def main():
     CONFIDENCE_SCORE_COLUMN = 'I'
     EXPLANATION_COLUMN = 'J'
     VERIFICATION_COLUMN = 'L'  # Column for track verification results
+    YEAR_VERIFICATION_COLUMN = 'M'  # New column for year verification results
     OTHER_POTENTIAL_MATCHES_COLUMN = 'K'  # Column for other potential matches
     
     sheet[f'{VERIFICATION_COLUMN}1'] = 'Track Verification Results'
+    sheet[f'{YEAR_VERIFICATION_COLUMN}1'] = 'Year Verification Results'
     
     sheet.column_dimensions[VERIFICATION_COLUMN].width = 40
+    sheet.column_dimensions[YEAR_VERIFICATION_COLUMN].width = 40
     
     records_processed = 0
     records_adjusted_tracks = 0
+    records_adjusted_years = 0
     records_skipped = 0
     records_skipped_none_matches = 0
     
@@ -357,8 +534,9 @@ def main():
                 if other_potential_matches_str.strip().lower() in ["none", "none."]:
                     # Clear the verification columns for rows with "None" in other potential matches
                     sheet[f'{VERIFICATION_COLUMN}{row}'].value = "Not Applicable"
+                    sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = "Not Applicable"
                     records_skipped_none_matches += 1
-                    print(f"Skipping row {row}: Other potential matches is None")
+                    print(f"Skipping row {row}")
                     continue
             
             if not all([metadata, oclc_results, oclc_number, confidence_score, explanation]):
@@ -369,18 +547,21 @@ def main():
                 if conf_score < 85:
                     # Clear the verification columns for skipped rows
                     sheet[f'{VERIFICATION_COLUMN}{row}'].value = None
+                    sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = None
                     records_skipped += 1
                     print(f"Skipping row {row}: Confidence score {conf_score}% is below threshold")
                     continue
             except (ValueError, TypeError):
                 # Clear the verification columns for rows with invalid confidence scores
                 sheet[f'{VERIFICATION_COLUMN}{row}'].value = None
+                sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = None
                 records_skipped += 1
                 continue
                 
             track_related_terms = ["track", "content", "song", "listing"]
             if not explanation or not any(term in explanation.lower() for term in track_related_terms):
                 sheet[f'{VERIFICATION_COLUMN}{row}'].value = None
+                sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = None
                 records_skipped += 1
                 print(f"Skipping row {row}: No track-related terms in explanation")
                 continue
@@ -393,6 +574,32 @@ def main():
             
             print(f"Metadata tracks ({len(metadata_tracks)}): {metadata_tracks}")
             print(f"OCLC tracks ({len(oclc_tracks)}): {oclc_tracks}")
+            
+            # Extract and compare publication years - USING THE NEW APPROACH
+            metadata_year = extract_and_normalize_year(metadata, is_oclc=False)
+            
+            # Use the new function to extract year specifically for this OCLC number
+            oclc_year = extract_year_from_oclc_by_number(oclc_results, oclc_number)
+            
+            print(f"Extracted years - Metadata: {metadata_year}, OCLC: {oclc_year}")
+            
+            year_match, year_details = compare_publication_years(metadata_year, oclc_year)
+            
+            if not metadata_year and not oclc_year:
+                match_status = "N/A - No years to compare"
+            elif not metadata_year or not oclc_year:
+                match_status = "Considered match - Incomplete data"
+            else:
+                year_diff = abs(int(metadata_year) - int(oclc_year))
+                if year_diff <= 1:
+                    if year_diff == 0:
+                        match_status = "Yes - Exact match"
+                    else:
+                        match_status = "Yes - Within 1 year"
+                else:
+                    match_status = "No - More than 1 year difference"
+                
+            year_verification_result = f"Metadata year: {metadata_year if metadata_year else 'Not found'}\nOCLC year: {oclc_year if oclc_year else 'Not found'}\nMatch: {match_status}"
             
             # Skip track similarity check if no tracks found
             track_similarity = 0
@@ -435,7 +642,10 @@ def main():
                 sheet[f'{VERIFICATION_COLUMN}{row}'].value = verification_result
                 sheet[f'{VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
             
-            # Determine if confidence needs to be adjusted based on track similarity
+            sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = year_verification_result
+            sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
+            
+            # Determine if confidence needs to be adjusted based on both track and year verification
             adjust_confidence = False
             adjustment_reasons = []
             
@@ -443,6 +653,14 @@ def main():
             if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 80:
                 adjust_confidence = True
                 adjustment_reasons.append(f"track listing mismatch (similarity {track_similarity:.2f}%, below 80% threshold)")
+            
+            # Check year match - only adjust if both years are present and differ by more than 1 year
+            if metadata_year and oclc_year and not year_match:
+                adjust_confidence = True
+                year_diff = abs(int(metadata_year) - int(oclc_year))
+                adjustment_reasons.append(f"publication year mismatch (metadata: {metadata_year}, OCLC: {oclc_year}, difference: {year_diff} years)")
+            elif not metadata_year or not oclc_year:
+                print(f"Not penalizing for missing year data: metadata_year={metadata_year}, oclc_year={oclc_year}")
             
             # Apply confidence adjustment if needed
             if adjust_confidence:
@@ -483,17 +701,30 @@ def main():
                         match_status = "✓" if best_match >= 0.8 else "✗"
                         note += f"\n{i+1}. {meta_track} {match_status} {best_match_track} ({best_match:.2f})"
                 
+                # Add year comparison details - only for actual mismatches that are more than 1 year apart
+                if metadata_year and oclc_year and not year_match:
+                    year_diff = abs(int(metadata_year) - int(oclc_year))
+                    note += f"\n\nYear comparison: Metadata year {metadata_year} differs from OCLC year {oclc_year} by {year_diff} years"
+                
                 sheet[f'{EXPLANATION_COLUMN}{row}'].value = explanation + note
                 
                 if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 80:
                     records_adjusted_tracks += 1
                 
+                if metadata_year and oclc_year and not year_match:
+                    records_adjusted_years += 1
+                
                 # Update verification result with action taken
                 actions = []
                 verification_result = sheet[f'{VERIFICATION_COLUMN}{row}'].value
+                year_verification_result = sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value
                 
                 if track_similarity < 80 and len(metadata_tracks) > 0 and len(oclc_tracks) > 0:
                     actions.append("track mismatch")
+                
+                # Only count year mismatch when both years exist but differ by more than 1 year
+                if metadata_year and oclc_year and not year_match:
+                    actions.append("year mismatch of more than 1 year")
                 
                 if actions:
                     action_text = f"\nAction: Reduced confidence from {old_confidence}% to {new_confidence}% due to {' and '.join(actions)}"
@@ -501,17 +732,40 @@ def main():
                         sheet[f'{VERIFICATION_COLUMN}{row}'].value = verification_result + action_text
                     else:
                         sheet[f'{VERIFICATION_COLUMN}{row}'].value = action_text
+                    
+                    sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = year_verification_result + action_text
             else:
                 if sheet[f'{VERIFICATION_COLUMN}{row}'].value:
                     sheet[f'{VERIFICATION_COLUMN}{row}'].value += "\nAction: None (similarity is acceptable)"
+                
+                # For year verification, provide appropriate message based on year data
+                year_action = "\nAction: "
+                if not metadata_year and not oclc_year:
+                    year_action += "None (no year data to compare)"
+                elif not metadata_year or not oclc_year:
+                    year_action += "None (incomplete year data, not penalized)"
+                else:
+                    year_diff = abs(int(metadata_year) - int(oclc_year))
+                    if year_diff <= 1:
+                        if year_diff == 0:
+                            year_action += "None (years match exactly)"
+                        else:
+                            year_action += f"None (years are within 1 year: {metadata_year} vs {oclc_year})"
+                    else:
+                        year_action += f"Reduced confidence (years differ by {year_diff} years)"
+                
+                if sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value:
+                    sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value += year_action
             
         except Exception as e:
             print(f"Error processing row {row}: {e}")
             sheet[f'{VERIFICATION_COLUMN}{row}'].value = f"Error: {str(e)}"
             sheet[f'{VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
+            sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = f"Error: {str(e)}"
+            sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
     
     current_date = datetime.now().strftime("%Y-%m-%d")
-    output_file = f"ai-music-step-4-{current_date}.xlsx"
+    output_file = f"ai-music-step-4-year-and-track-check{current_date}.xlsx"
     full_output_path = os.path.join(results_folder, output_file)
     
     wb.save(full_output_path)
@@ -520,6 +774,7 @@ def main():
     print(f"Summary:")
     print(f"  - Processed: {records_processed} records with confidence ≥ 85% and track listings mentioned")
     print(f"  - Adjusted for tracks: {records_adjusted_tracks} records due to low track similarity (< 80% match)")
+    print(f"  - Adjusted for years: {records_adjusted_years} records due to publication year mismatch (only when both years present and differ by more than 1 year)")
     print(f"  - Skipped: {sheet.max_row - 1 - records_processed - records_skipped_none_matches} records (low confidence or no track listings)")
     print(f"  - Skipped due to 'None' in other potential matches: {records_skipped_none_matches} records")  
     

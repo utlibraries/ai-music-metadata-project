@@ -11,7 +11,7 @@ import re
 api_calls = {'count': 0, 'reset_time': time.time()}
 
 def find_latest_results_folder(prefix):
-    # Get the parent directory of the prefix (e.g., "final-workflow/on-demand-processing-cd/cd-output-folders")
+    # Get the parent directory of the prefix
     base_dir = os.path.dirname(prefix)
     pattern = os.path.join(base_dir, "results-*")
     
@@ -19,8 +19,8 @@ def find_latest_results_folder(prefix):
     if not matching_folders:
         return None
 
-    # Use the modification time to determine the latest folder
-    latest_folder = max(matching_folders, key=os.path.getmtime)
+    latest_folder = max(matching_folders)
+    
     return latest_folder
 
 def get_access_token(client_id, client_secret):
@@ -152,6 +152,12 @@ def construct_queries_from_metadata(metadata):
 
     queries = []
 
+    if first_track and second_track:
+        queries.append(f'"{first_track}" "{second_track}"')
+        
+    if artist and first_track and second_track:
+        queries.append(f'"{artist}" "{first_track}" "{second_track}"')
+        
     if title:
         if all([title, subtitle, artist]):
             queries.append(f'"{title}" "{subtitle}" "{artist}" CD')
@@ -167,6 +173,9 @@ def construct_queries_from_metadata(metadata):
 
         if all([title, first_track]):
             queries.append(f'"{title}" "{first_track}"')
+            
+        if all([title, subtitle]):
+            queries.append(f'"{title}" "{subtitle}"')
 
         if title and publisher:
             queries.append(f'"{title}" {publisher} CD')
@@ -174,8 +183,7 @@ def construct_queries_from_metadata(metadata):
         if title and product_code:
             queries.append(f'"{title}" {product_code}')
 
-    if artist and first_track and second_track:
-        queries.append(f'"{artist}" "{first_track}" "{second_track}" CD')
+    
         
     if artist and publisher and product_code:
         queries.append(f'"{artist}" {publisher} "{product_code}"')
@@ -186,9 +194,6 @@ def construct_queries_from_metadata(metadata):
     if artist and publisher and first_track:
         queries.append(f'{artist} {publisher} {first_track} CD')
     
-    if first_track and second_track:
-        queries.append(f'"{first_track}" "{second_track}" CD')
-        
     if first_track:
         queries.append(f'"{first_track}" CD')
 
@@ -249,12 +254,18 @@ def format_oclc_results(json_response, access_token):
                 is_held_by_IXA, total_holding_count, holding_institutions = get_holdings_info(oclc_number, access_token)
                 formatted_results.append(f"\nHeld by IXA: {'Yes' if is_held_by_IXA else 'No'}")
                 formatted_results.append(f"Total Institutions Holding: {total_holding_count}")
-                formatted_results.append(f"Institutions: {', '.join(holding_institutions)}")
             
             if 'identifier' in record:
                 formatted_results.append("\nIdentifier:")
-                for key, value in record['identifier'].items():
-                    formatted_results.append(f"  - {key}: {value}")
+                # Add OCLC number
+                if 'oclcNumber' in record['identifier']:
+                    formatted_results.append(f"  - oclcNumber: {record['identifier']['oclcNumber']}")
+                
+                # Add UPC if it exists
+                if 'otherStandardIdentifiers' in record['identifier']:
+                    for id_item in record['identifier']['otherStandardIdentifiers']:
+                        if isinstance(id_item, dict) and id_item.get('type') == 'Universal Product Code (UPC)':
+                            formatted_results.append(f"  - UPC: {id_item.get('id', 'N/A')}")
             
             if 'title' in record:
                 formatted_results.append("Title Information:")
@@ -279,16 +290,9 @@ def format_oclc_results(json_response, access_token):
                             role = person.get('type', 'N/A')
                             formatted_results.append(f"  - {name.strip()} ({role})")
             
-            if 'subjects' in record:
-                formatted_results.append("Subjects:")
-                for subject in record['subjects']:
-                    if 'text' in subject:
-                        formatted_results.append(f"  - {subject['text']}")
+            # Skip Subjects section per request
             
-            if 'classification' in record:
-                formatted_results.append("Classification:")
-                for key, value in record['classification'].items():
-                    formatted_results.append(f"  - {key}: {value}")
+            # Skip Classification section per request
             
             if 'publishers' in record:
                 formatted_results.append("Publishers:")
@@ -300,19 +304,139 @@ def format_oclc_results(json_response, access_token):
             
             if 'date' in record:
                 formatted_results.append("Dates:")
-                for key, value in record['date'].items():
-                    formatted_results.append(f"  - {key}: {value}")
+                # Only include publicationDate
+                if 'publicationDate' in record['date']:
+                    formatted_results.append(f"  - publicationDate: {record['date']['publicationDate']}")
+                # Skip other date fields per request
             
             if 'language' in record:
                 formatted_results.append("Language:")
                 for key, value in record['language'].items():
                     formatted_results.append(f"  - {key}: {value}")
+                        
+            if 'description' in record:
+                formatted_results.append("Description:")
+                if 'physicalDescription' in record['description']:
+                    formatted_results.append(f"  - Physical: {record['description']['physicalDescription']}")
+                if 'contents' in record['description']:
+                    for content in record['description']['contents']:
+                        if 'contentNote' in content:
+                            formatted_results.append(f"  - Content: {content['contentNote'].get('text', '')}")
+                        
+            formatted_results.append("-" * 40)
             
-            if 'format' in record:
-                formatted_results.append("Format:")
-                for key, value in record['format'].items():
+        return "\n".join(formatted_results)
+        
+    except json.JSONDecodeError:
+        return "Error: Invalid JSON response"
+    except Exception as e:
+        return f"Error formatting results: {str(e)}"
+    
+def format_oclc_api_response_for_accumulation(data, access_token, seen_oclc_numbers=None):
+    if seen_oclc_numbers is None:
+        seen_oclc_numbers = set()
+        
+    try:
+        if not isinstance(data, dict):
+            return "Error: Invalid JSON response"
+            
+        total_records = data.get('numberOfRecords', 0)
+        if total_records == 0:
+            return "No records found"
+            
+        formatted_results = []
+        valid_records = []
+        
+        for record in data.get('bibRecords', []):
+            # Skip records we've already seen
+            oclc_number = None
+            if 'identifier' in record and 'oclcNumber' in record['identifier']:
+                oclc_number = record['identifier']['oclcNumber']
+                if oclc_number in seen_oclc_numbers:
+                    continue
+            
+            include_record = False
+            if 'format' in record and 'specificFormat' in record['format']:
+                specific_format = record['format']['specificFormat']
+                if isinstance(specific_format, str) and any(cd_term in specific_format for cd_term in ["CD", "compact disc", "Compact Disc"]):
+                    include_record = True
+            
+            if include_record:
+                valid_records.append(record)
+        
+        filtered_total = len(valid_records)
+        if filtered_total == 0:
+            return "No matching records with CD format found"
+        
+        for record in valid_records[:5]:
+            # Add a divider line between records
+            formatted_results.append("\n" + "-" * 40)
+            
+            oclc_number = None
+            if 'identifier' in record and 'oclcNumber' in record['identifier']:
+                oclc_number = record['identifier']['oclcNumber']
+                formatted_results.append(f"OCLC Number: {oclc_number}")
+            
+            if oclc_number:
+                is_held_by_IXA, total_holding_count, holding_institutions = get_holdings_info(oclc_number, access_token)
+                formatted_results.append(f"\nHeld by IXA: {'Yes' if is_held_by_IXA else 'No'}")
+                formatted_results.append(f"Total Institutions Holding: {total_holding_count}")
+            
+            if 'identifier' in record:
+                formatted_results.append("\nIdentifier:")
+                # Add OCLC number
+                if 'oclcNumber' in record['identifier']:
+                    formatted_results.append(f"  - oclcNumber: {record['identifier']['oclcNumber']}")
+                
+                # Add UPC if it exists
+                if 'otherStandardIdentifiers' in record['identifier']:
+                    for id_item in record['identifier']['otherStandardIdentifiers']:
+                        if isinstance(id_item, dict) and id_item.get('type') == 'Universal Product Code (UPC)':
+                            formatted_results.append(f"  - UPC: {id_item.get('id', 'N/A')}")
+            
+            if 'title' in record:
+                formatted_results.append("Title Information:")
+                if 'mainTitles' in record['title']:
+                    for title in record['title']['mainTitles']:
+                        formatted_results.append(f"  - Main Title: {title.get('text', 'N/A')}")
+                if 'subtitles' in record['title']:
+                    for subtitle in record['title']['subtitles']:
+                        formatted_results.append(f"  - Subtitle: {subtitle.get('text', 'N/A')}")
+            
+            if 'contributor' in record:
+                formatted_results.append("Contributors:")
+                for creator_type in ['creators', 'contributors']:
+                    if creator_type in record['contributor']:
+                        for person in record['contributor'][creator_type]:
+                            if 'firstName' in person and 'secondName' in person:
+                                name = f"{person.get('firstName', {}).get('text', '')} {person.get('secondName', {}).get('text', '')}"
+                            elif 'nonPersonName' in person:
+                                name = person['nonPersonName'].get('text', '')
+                            else:
+                                name = 'N/A'
+                            role = person.get('type', 'N/A')
+                            formatted_results.append(f"  - {name.strip()} ({role})")
+            
+            if 'publishers' in record:
+                formatted_results.append("Publishers:")
+                for pub in record['publishers']:
+                    pub_name = pub.get('publisherName', {}).get('text', 'N/A')
+                    pub_place = pub.get('publicationPlace', 'N/A')
+                    formatted_results.append(f"  - Name: {pub_name}")
+                    formatted_results.append(f"    Place: {pub_place}")
+            
+            if 'date' in record:
+                formatted_results.append("Dates:")
+                # Only include publicationDate
+                if 'publicationDate' in record['date']:
+                    formatted_results.append(f"  - publicationDate: {record['date']['publicationDate']}")
+                # Skip other date fields per request
+            
+            if 'language' in record:
+                formatted_results.append("Language:")
+                for key, value in record['language'].items():
                     formatted_results.append(f"  - {key}: {value}")
-            
+                        
             if 'musicInfo' in record:
                 formatted_results.append("Music Information:")
                 for key, value in record['musicInfo'].items():
@@ -326,12 +450,6 @@ def format_oclc_results(json_response, access_token):
                     for content in record['description']['contents']:
                         if 'contentNote' in content:
                             formatted_results.append(f"  - Content: {content['contentNote'].get('text', '')}")
-            
-            if 'digitalAccessAndLocations' in record:
-                formatted_results.append("Digital Access:")
-                for access in record['digitalAccessAndLocations']:
-                    formatted_results.append(f"  - {access}")
-            
             if 'note' in record:
                 formatted_results.append("Notes:")
                 if isinstance(record['note'], dict):
@@ -340,15 +458,13 @@ def format_oclc_results(json_response, access_token):
                 elif isinstance(record['note'], list):
                     for note in record['note']:
                         formatted_results.append(f"  - {note}")
-            
+                                    
             formatted_results.append("-" * 40)
             
-        return "\n".join(formatted_results)
+        return "\n".join(formatted_results), filtered_total
         
-    except json.JSONDecodeError:
-        return "Error: Invalid JSON response"
     except Exception as e:
-        return f"Error formatting results: {str(e)}"
+        return f"Error formatting results: {str(e)}", 0
     
 def get_holdings_info(oclc_number, access_token):
     global api_calls
@@ -362,8 +478,7 @@ def get_holdings_info(oclc_number, access_token):
     }
     
     params = {
-        "oclcNumber": oclc_number,
-        "limit": 5
+        "oclcNumber": oclc_number
     }
     
     try:
@@ -409,7 +524,7 @@ def remove_non_latin(text):
     cleaned = re.sub(r'\(\s*\)', '', cleaned)
     return cleaned.strip()
 
-def query_oclc_api(metadata, barcode, limit=5):
+def query_oclc_api(metadata, barcode, limit=10):
     global api_calls
     current_time = time.time()
     if current_time - api_calls['reset_time'] >= 86400:
@@ -439,7 +554,7 @@ def query_oclc_api(metadata, barcode, limit=5):
     cleaned_queries = []
     for q in queries:
         if isinstance(q, str) and q.strip():
-            cleaned = q.replace(str(barcode), "").strip()
+            cleaned = q.replace(str(barcode), "x").strip()
             if len(cleaned) >= 3:
                 cleaned_queries.append(cleaned)
 
@@ -453,8 +568,19 @@ def query_oclc_api(metadata, barcode, limit=5):
 
     query_log = ["Attempted Queries:"]
     attempted_queries = []
+    
+    # Track unique OCLC numbers to avoid duplicates
+    seen_oclc_numbers = set()
+    accumulated_results = []
+    total_records_found = 0
+    max_results_to_show = 10  # Changed from max_results_sets to max_results_to_show (limit to 10 records total)
 
     for idx, query in enumerate(cleaned_queries, 1):
+        # If we already have enough unique records, stop
+        if len(seen_oclc_numbers) >= max_results_to_show:
+            query_log.append(f"\nReached maximum of {max_results_to_show} unique records. Stopping search.")
+            break
+            
         query_log.append(f"\nQuery {idx}: {query}")
         attempted_queries.append(idx)
         
@@ -479,9 +605,43 @@ def query_oclc_api(metadata, barcode, limit=5):
                 continue
                 
             if total_records > 0:
-                results = format_oclc_results(response.text, access_token)
-                query_log.append(f"Successful match found")
-                return results, "\n".join(query_log)
+                # Extract OCLC numbers from the current response to check for new records
+                current_oclc_numbers = set()
+                for record in data.get('bibRecords', []):
+                    # Only consider CD format records
+                    include_record = False
+                    if 'format' in record and 'specificFormat' in record['format']:
+                        specific_format = record['format']['specificFormat']
+                        if isinstance(specific_format, str) and any(cd_term in specific_format for cd_term in ["CD", "compact disc", "Compact Disc"]):
+                            include_record = True
+                    
+                    if not include_record:
+                        continue
+                        
+                    # Check OCLC number
+                    if 'identifier' in record and 'oclcNumber' in record['identifier']:
+                        oclc_number = record['identifier']['oclcNumber']
+                        if oclc_number and oclc_number not in seen_oclc_numbers:
+                            current_oclc_numbers.add(oclc_number)
+                
+                if current_oclc_numbers:
+                    # We found new unique CD format records
+                    results, record_count = format_oclc_api_response_for_accumulation(data, access_token, seen_oclc_numbers)
+                    
+                    if results and "No matching records with CD format found" not in results and "No records found" not in results:
+                        accumulated_results.append(results)
+                        total_records_found += record_count
+                        # Add the new OCLC numbers to our seen set
+                        seen_oclc_numbers.update(current_oclc_numbers)
+                        query_log.append(f"Added new CD format matches (now have {len(seen_oclc_numbers)} unique records)")
+                        
+                        # Check if we've hit our limit
+                        if len(seen_oclc_numbers) >= max_results_to_show:
+                            query_log.append(f"Reached maximum of {max_results_to_show} unique records. Will stop after processing this batch.")
+                    else:
+                        query_log.append(f"No new CD format matches found")
+                else:
+                    query_log.append(f"No new unique CD format matches found")
             else:
                 query_log.append(f"No matches found")
             
@@ -489,7 +649,37 @@ def query_oclc_api(metadata, barcode, limit=5):
             api_calls['count'] += 1
             query_log.append(f"Query failed: {str(e)}")
 
-    return "No matching records found", "\n".join(query_log)
+    # Combine all accumulated results with a single count at the top
+    if accumulated_results:
+        # Add the total count at the top, but limit to max_results_to_show
+        displayed_record_count = min(total_records_found, max_results_to_show)
+        total_header = f"Total CD Format Records Found: {total_records_found} (Displaying: {displayed_record_count})"
+        
+        # Limit the actual content to show only max_results_to_show records
+        limited_results = []
+        record_count = 0
+        
+        # Parse through accumulated results to extract and limit individual records
+        for result_set in accumulated_results:
+            if record_count >= max_results_to_show:
+                break
+                
+            # Split by record divider
+            record_sections = result_set.split("-" * 40)
+            
+            for section in record_sections:
+                if record_count >= max_results_to_show:
+                    break
+                    
+                if section.strip() and "OCLC Number:" in section:
+                    limited_results.append("-" * 40)
+                    limited_results.append(section.strip())
+                    record_count += 1
+        
+        combined_results = total_header + "\n\n" + "\n".join(limited_results)
+        return combined_results, "\n".join(query_log)
+    else:
+        return "No matching records with CD format found after trying all queries", "\n".join(query_log)
     
 def process_metadata_file(input_file):
     wb = load_workbook(input_file)
