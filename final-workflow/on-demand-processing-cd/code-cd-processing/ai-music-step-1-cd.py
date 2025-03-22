@@ -28,7 +28,7 @@ Publishers:
   - Place: [Place of publication if available]
   - Numbers: [UPC/EAN/ISBN]
 Dates:
-  - publicationDate: [Publication Year - if written on a sticker, mark as 'Sticker Date']
+  - publicationDate: [Record Date as written on the disc]
 Language:
   - sungLanguage: [Languages of sung text]
   - printedLanguage: [All languages of printed text]
@@ -56,7 +56,7 @@ Series:
 Notes:
   - generalNotes: [{'text': [Note Text]}]
 
-***Important: These CD's were donated by a university radio station to our library. Handwritten information on white stickers should be ignored.  Publication dates or years on stickers should be marked as 'sticker dates', as they may indicate the date of acquisition.  The back cover is often the best place to look for the publication year.  When in doubt, mark fields in the metadata as 'Not visible'*** 
+***Important: These CD's were donated by a university radio station to our library. Handwritten information on white stickers should be ignored.  When in doubt, mark fields in the metadata as 'Not visible'*** 
  
 Analyze the provided images and return metadata formatted exactly as above. Pay special attention to capturing only text that is clearly legible."""
 
@@ -259,7 +259,7 @@ def main():
     start_time = time.time()
     
     base_dir = "final-workflow/on-demand-processing-cd"
-    images_folder = os.path.join(base_dir, "cd-input-folders/cd-scans-100")
+    images_folder = os.path.join(base_dir, "cd-input-folders/manu-chao-test")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     # Create results folder with today's date

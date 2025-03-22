@@ -39,6 +39,38 @@ def extract_upc_from_metadata(metadata_text):
     else:
         return None, f"Number '{clean_num}' (from '{numbers_text}') is not a valid UPC/EAN (expected 12-13 digits, got {len(clean_num)})"
 
+def clean_dates_in_metadata(metadata_text):
+    """
+    Replace dates that include month or day components with 'Not visible'.
+    Keep standalone years (e.g., '2002').
+    """
+    # First, find the Dates section
+    dates_section_pattern = r'(Dates:.*?publicationDate:)\s*(.*?)(?:\n|$)'
+    dates_match = re.search(dates_section_pattern, metadata_text, re.DOTALL | re.MULTILINE)
+    
+    if not dates_match:
+        return metadata_text  # No dates section found
+    
+    date_value = dates_match.group(2).strip()
+    
+    # Check if the date is already "Not visible"
+    if date_value.lower() == "not visible":
+        return metadata_text
+    
+    # Check if the date is just a 4-digit year (which we want to keep)
+    if re.match(r'^[0-9]{4}$', date_value):
+        return metadata_text  # Keep standalone years
+    
+    # Otherwise, it's a complex date with month/day components - replace it
+    cleaned_text = re.sub(
+        dates_section_pattern,
+        r'\1 Not visible\n',
+        metadata_text,
+        flags=re.DOTALL | re.MULTILINE
+    )
+    
+    return cleaned_text
+
 def process_excel_file(input_file_path):
     """Process the Excel file containing metadata entries and update it in place."""
     # Load the workbook
@@ -54,19 +86,24 @@ def process_excel_file(input_file_path):
         metadata_cell = ws.cell(row=row_idx, column=metadata_col_idx)
         
         if metadata_cell.value:
+            # Clean dates in the metadata
+            updated_metadata = clean_dates_in_metadata(metadata_cell.value)
+            
             # Process UPC
-            upc, _ = extract_upc_from_metadata(metadata_cell.value)
+            upc, _ = extract_upc_from_metadata(updated_metadata)
             
             # Only modify the metadata if it contains a numbers section
-            if 'Numbers:' in metadata_cell.value:
+            if 'Numbers:' in updated_metadata:
                 # Replace number section with cleaned version
                 updated_metadata = re.sub(
                     r'(Publishers:.*?Numbers:)\s*(.*?)(\n|$)',
                     lambda m: f"{m.group(1)} {upc if upc else 'Not visible'}{m.group(3)}",
-                    metadata_cell.value,
+                    updated_metadata,
                     flags=re.DOTALL | re.MULTILINE
                 )
-                metadata_cell.value = updated_metadata
+            
+            # Update the cell with cleaned metadata
+            metadata_cell.value = updated_metadata
     
     # Save the updated workbook back to the same file
     wb.save(input_file_path)
