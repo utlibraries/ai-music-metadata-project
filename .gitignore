@@ -48,6 +48,7 @@ testing-output/
 vinyl-scans-*/
 final-workflow/on-demand-processing-cd/cd-output-folders/*
 final-workflow/on-demand-processing-cd/cd-output-folders/.gitkeep
+final-workflow/on-demand-processing-cd/cd-input-folders/cd-scans-20
 
 # Project-specific files
 *.docx
