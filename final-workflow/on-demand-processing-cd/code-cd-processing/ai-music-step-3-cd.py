@@ -1,7 +1,6 @@
 import os
 import glob
 import time
-import shutil  # Added for file operations
 from openai import OpenAI
 import openpyxl
 from openpyxl.styles import Alignment
@@ -218,7 +217,7 @@ Format for Response:
   1. OCLC number: [number or 'No matching records found']
   2. Confidence score: [%]
   3. Explanation: [List of things that match as key value pairs. If there are multiple records that could be a match, explain why you chose the one you did. If there are no matches, explain why.]
-  4. Other potential good matches: [List of other OCLC numbers that could be good matches, if applicable. No explanation, just numbers separated by commas.]
+  4. Other potential good matches: [List of other OCLC numbers that could be good matches and a one sentence explanation for each match as key value pairs. If there are no other potential matches, write 'No other potential good matches.']
   
 Once you have responded, go back through the response that you wrote and carefully verify each piece of information. If you find a mistake, look for a better record. If there isn't one, reduce the confidence score to 80% or lower. If there is one, once again carefully verify all the facts that support your choice. If you still can't find a match, write "No matching records found" and set the confidence score as 0.
 
@@ -288,39 +287,73 @@ OCLC Results: {oclc_results}
                 if "Other potential good matches:" in analysis_result:
                     other_matches_part = analysis_result.split("Other potential good matches:")[1].strip()
                     if other_matches_part and oclc_results:
-                        potential_matches = [num.strip() for num in other_matches_part.split(',') if num.strip()]
+                        # Use improved regex to extract OCLC numbers from the LLM response
+                        # Look for patterns like "OCLC Number: 1234567890" or "- OCLC Number: 1234567890"
+                        oclc_patterns = re.findall(r'OCLC Number:?\s*(\d{8,10})', other_matches_part, re.IGNORECASE)
+                        
+                        # If the above pattern doesn't find matches, try a more generic pattern
+                        if not oclc_patterns:
+                            # Look for patterns that might include a dash before OCLC
+                            oclc_patterns = re.findall(r'[- ]*OCLC(?:\s+Number)?:?\s*(\d{8,10})', other_matches_part, re.IGNORECASE)
+                        
+                        # If still no matches, try to find any 8-10 digit number that might be an OCLC number
+                        if not oclc_patterns:
+                            oclc_patterns = re.findall(r'\b(\d{8,10})\b', other_matches_part)
+                        
                         formatted_matches = []
-                        for match_num in potential_matches:
+                        
+                        # Process each potential match
+                        for match_num in oclc_patterns:
                             match_info = ""
+                            # Find the section in OCLC results that contains this number
+                            match_section = None
+                            
+                            # Look for the OCLC section in the results
                             if f"OCLC Number: {match_num}" in oclc_results:
-                                record_section = oclc_results.split(f"OCLC Number: {match_num}")[1].split("----------------------------------------")[0]
+                                # Split by the OCLC number and take the part after it
+                                split_results = oclc_results.split(f"OCLC Number: {match_num}")
+                                if len(split_results) > 1:
+                                    # Take the part after the OCLC number and split by the next dashed line
+                                    match_section = split_results[1].split("----------------------------------------")[0]
+                            
+                            if match_section:
                                 held_by_ixa = "No"
-                                if "Held by IXA: Yes" in record_section:
+                                if "Held by IXA: Yes" in match_section:
                                     held_by_ixa = "Yes"
+                                
                                 total_holdings = "0"
-                                if "Total Institutions Holding:" in record_section:
-                                    holdings_part = record_section.split("Total Institutions Holding:")[1].split("\n")[0].strip()
+                                if "Total Institutions Holding:" in match_section:
+                                    holdings_part = match_section.split("Total Institutions Holding:")[1].split("\n")[0].strip()
                                     total_holdings = holdings_part
+                                
                                 title = ""
-                                if "- Main Title:" in record_section:
-                                    title_part = record_section.split("- Main Title:")[1].split("\n")[0].strip()
+                                if "- Main Title:" in match_section:
+                                    title_part = match_section.split("- Main Title:")[1].split("\n")[0].strip()
                                     title = title_part
+                                
                                 specific_format = ""
-                                if "- specificFormat:" in record_section:
-                                    format_part = record_section.split("- specificFormat:")[1].split("\n")[0].strip()
+                                if "- specificFormat:" in match_section:
+                                    format_part = match_section.split("- specificFormat:")[1].split("\n")[0].strip()
                                     specific_format = format_part
-                                if specific_format.strip() == "CD":
-                                    match_info = f"OCLC: {match_num} | IXA: {held_by_ixa} | Holdings: {total_holdings}"
-                                    if specific_format:
-                                        match_info += f" | Format: {specific_format}"
-                                    if title:
-                                        match_info += f" | Title: {title}"
-                                    if match_info:
-                                        formatted_matches.append(match_info)
-                        other_matches = "\n".join(formatted_matches) if formatted_matches else other_matches_part
+                                
+                                # Always include the match info regardless of format - this ensures we get the matches
+                                match_info = f"OCLC: {match_num} | IXA: {held_by_ixa} | Holdings: {total_holdings}"
+                                if specific_format:
+                                    match_info += f" | Format: {specific_format}"
+                                if title:
+                                    match_info += f" | Title: {title}"
+                                
+                                if match_info:
+                                    formatted_matches.append(match_info)
+                        
+                        # Add the structured information followed by the original text
+                        if formatted_matches:
+                            other_matches = "\n".join(formatted_matches) + "\n\nOriginal LLM response:\n" + other_matches_part
+                        else:
+                            other_matches = "No structured matches found.\n\nOriginal LLM response:\n" + other_matches_part
                     else:
                         other_matches = other_matches_part
-
+            
             except Exception as parsing_error:
                 print(f"Error parsing response in row {row}: {parsing_error}")
 
@@ -444,7 +477,6 @@ OCLC Results: {oclc_results}
     script_duration = time.time() - script_start_time
     avg_call_time = total_api_time / successful_calls if successful_calls > 0 else 0
     avg_tokens_per_call = total_tokens / successful_calls if successful_calls > 0 else 0
-    estimated_cost = (total_tokens / 1000) * 0.003  # Estimate based on $0.003 per 1K tokens
     
     # Add summary data
     summary_sheet.append([
@@ -458,7 +490,6 @@ OCLC Results: {oclc_results}
         total_completion_tokens,
         total_tokens,
         round(avg_tokens_per_call, 2),
-        round(estimated_cost, 4),
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ])
 
@@ -476,7 +507,6 @@ OCLC Results: {oclc_results}
         log_file.write(f"Total completion tokens: {total_completion_tokens}\n")
         log_file.write(f"Total tokens: {total_tokens}\n")
         log_file.write(f"Average tokens per call: {round(avg_tokens_per_call, 2)}\n")
-        log_file.write(f"Estimated cost ($0.003 per 1K tokens): ${round(estimated_cost, 4)}\n")
 
     current_date = datetime.now().strftime("%Y-%m-%d")
     output_file = f"ai-music-step-3-{current_date}.xlsx"
@@ -501,7 +531,6 @@ OCLC Results: {oclc_results}
     print(f"- Total script execution time: {round(script_duration, 2)} seconds")
     print(f"- Total API time: {round(total_api_time, 2)} seconds")
     print(f"- Total tokens used: {total_tokens} (Prompt: {total_prompt_tokens}, Completion: {total_completion_tokens})")
-    print(f"- Estimated cost: ${round(estimated_cost, 4)}")
 
 if __name__ == "__main__":
     main()

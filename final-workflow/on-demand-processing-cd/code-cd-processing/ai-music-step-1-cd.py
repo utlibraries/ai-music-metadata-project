@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from io import BytesIO
 from PIL import Image as PILImage
-from openpyxl import Workbook, load_workbook  # Added load_workbook
+from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from openpyxl.drawing.image import Image
@@ -327,7 +327,7 @@ def main():
     start_time = time.time()
     
     base_dir = "final-workflow/on-demand-processing-cd"
-    images_folder = os.path.join(base_dir, "cd-input-folders/cd-scans-20")
+    images_folder = os.path.join(base_dir, "cd-input-folders/cd-scans-6")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     # Create results folder with today's date
