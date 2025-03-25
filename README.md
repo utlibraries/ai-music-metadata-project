@@ -35,8 +35,8 @@ To run this project, you will need to set up the following environment variables
 - `ai-music-step-1.5-cd.py`: Cleans up pub numbers to leave only UPCs
 - `ai-music-step-2-cd.py`: Queries OCLC API with the extracted metadata
 - `ai-music-step-3-cd.py`: Uses GPT-4o-mini to analyze OCLC results and assign confidence scores
-- `ai-music-step-4-cd.py`: Verifies track listings to validate the matches
-- `ai-music-step-4-track-and-year-cd.py`: Verifies track listings and publication year to validate the matches (this is an option, but will result in many more non-matches)
+- `ai-music-step-4-cd.py`: Verifies track listings and publication year to validate the matches
+- `ai-music-step-4-cd-track-only.py`: Verifies track listings only (this may be useful if year validation is causing too many incorrect mismatches)
 - `query-testing-oclc.py`: This is a script to test OCLC queries directly in the terminal - can be helpful for testing querying strategies
 
 The project processes CD images stored as pairs of JPEG files. Each CD is represented by two images: one for the front cover and one for the back cover. A third image may be used if necessary.  The image groups follow a specific naming convention:

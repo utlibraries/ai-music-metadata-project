@@ -477,6 +477,47 @@ def compare_publication_years(metadata_year, oclc_year):
             return (True, f"Years are within 1 year: {metadata_year} vs {oclc_year}")
     else:
         return (False, f"Years differ by more than 1 year: {metadata_year} vs {oclc_year} (difference: {year_diff} years)")
+def check_oclc_held_by_ixa(oclc_results, oclc_number):
+    """
+    Check if a specific OCLC number is held by IXA.
+    Returns 'Y' if held by IXA, 'N' if not, or 'N/A' if there are no other potential matches.
+    """
+    if not oclc_results or not oclc_number:
+        return 'N/A'
+    
+    # Find the section for this OCLC number
+    oclc_section_pattern = rf"OCLC Number: {oclc_number}.*?(?:(?:----------------------------------------)|$)"
+    oclc_section = re.search(oclc_section_pattern, oclc_results, re.DOTALL)
+    
+    if oclc_section:
+        section_text = oclc_section.group(0)
+        
+        # Direct check for "Held by IXA: Yes" string
+        if re.search(r'Held by IXA:\s*Yes', section_text, re.IGNORECASE):
+            return 'Y'
+        elif re.search(r'Held by IXA:\s*No', section_text, re.IGNORECASE):
+            return 'N'
+    
+    return 'N/A'
+
+def check_other_matches_held_by_ixa(other_matches_text):
+    """
+    Check if any of the other potential matches are held by IXA.
+    Returns 'Y' if at least one is held by IXA, 'N' if none are, 
+    or 'N/A' if can't determine or no other matches exist.
+    """
+    if not other_matches_text or other_matches_text.lower() in ['none', 'none.', 'no other potential good matches.']:
+        return 'N'
+    
+    # Look for instances of "IXA: Yes" in the structured match information
+    if re.search(r'IXA: Yes', other_matches_text, re.IGNORECASE):
+        return 'Y'
+    
+    # If we have structured data but no "IXA: Yes", then none are held by IXA
+    if re.search(r'IXA: No', other_matches_text, re.IGNORECASE):
+        return 'N'
+    
+    return 'N/A'
 
 def main():
     # Specify the folder prefix based on your output location
@@ -512,21 +553,29 @@ def main():
     OCLC_NUMBER_COLUMN = 'H'
     CONFIDENCE_SCORE_COLUMN = 'I'
     EXPLANATION_COLUMN = 'J'
+    OTHER_POTENTIAL_MATCHES_COLUMN = 'K'  # Column for other potential matches
     VERIFICATION_COLUMN = 'L'  # Column for track verification results
     YEAR_VERIFICATION_COLUMN = 'M'  # New column for year verification results
-    OTHER_POTENTIAL_MATCHES_COLUMN = 'K'  # Column for other potential matches
+    IXA_HOLDING_COLUMN = 'N'   # New column for IXA holding status of chosen OCLC
+    OTHER_IXA_HOLDING_COLUMN = 'O'  # New column for IXA holding status of other matches
     
     sheet[f'{VERIFICATION_COLUMN}1'] = 'Track Verification Results'
     sheet[f'{YEAR_VERIFICATION_COLUMN}1'] = 'Year Verification Results'
+    sheet[f'{IXA_HOLDING_COLUMN}1'] = 'Match Held at IXA?'
+    sheet[f'{OTHER_IXA_HOLDING_COLUMN}1'] = 'Potential Matches at IXA?'
     
     sheet.column_dimensions[VERIFICATION_COLUMN].width = 40
     sheet.column_dimensions[YEAR_VERIFICATION_COLUMN].width = 40
+    sheet.column_dimensions[IXA_HOLDING_COLUMN].width = 20
+    sheet.column_dimensions[OTHER_IXA_HOLDING_COLUMN].width = 25
     
     records_processed = 0
     records_adjusted_tracks = 0
     records_adjusted_years = 0
     records_skipped = 0
     records_skipped_none_matches = 0
+    records_main_match_at_ixa = 0
+    records_other_matches_at_ixa = 0
     
     print(f"Starting verification for records with confidence ≥ 85% that mention tracks...")
     print(f"Total rows in spreadsheet: {sheet.max_row - 1}")
@@ -539,6 +588,37 @@ def main():
             confidence_score = sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value
             explanation = sheet[f'{EXPLANATION_COLUMN}{row}'].value
             other_potential_matches = sheet[f'{OTHER_POTENTIAL_MATCHES_COLUMN}{row}'].value
+            
+            # Check and populate IXA holdings status regardless of other processing
+            if oclc_number and str(oclc_number).strip() != "" and oclc_number != "Not found" and oclc_results:
+                # Check if the chosen OCLC match is held by IXA
+                ixa_holding_status = check_oclc_held_by_ixa(oclc_results, str(oclc_number).strip())
+                sheet[f'{IXA_HOLDING_COLUMN}{row}'].value = ixa_holding_status
+                
+                # Update counter for IXA holdings
+                if ixa_holding_status == 'Y':
+                    records_main_match_at_ixa += 1
+            else:
+                sheet[f'{IXA_HOLDING_COLUMN}{row}'].value = 'N/A'
+            
+            # Check if any other potential matches are held by IXA
+            if other_potential_matches:
+                other_ixa_status = check_other_matches_held_by_ixa(str(other_potential_matches))
+                sheet[f'{OTHER_IXA_HOLDING_COLUMN}{row}'].value = other_ixa_status
+                
+                # Update counter for other matches at IXA
+                if other_ixa_status == 'Y':
+                    records_other_matches_at_ixa += 1
+            else:
+                sheet[f'{OTHER_IXA_HOLDING_COLUMN}{row}'].value = 'N/A'
+            
+            if not oclc_number or str(oclc_number).strip() == "":
+                # Clear the verification columns when no OCLC number is present
+                sheet[f'{VERIFICATION_COLUMN}{row}'].value = None
+                sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = None
+                records_skipped += 1
+                print(f"Skipping row {row}: No OCLC number provided")
+                continue
             
             if not oclc_number or str(oclc_number).strip() == "":
             # Clear the verification columns when no OCLC number is present
@@ -798,6 +878,9 @@ def main():
     print(f"  - Adjusted for years: {records_adjusted_years} records due to publication year mismatch (only when both years present and differ by more than 1 year)")
     print(f"  - Skipped: {sheet.max_row - 1 - records_processed - records_skipped_none_matches} records (low confidence or no track listings)")
     print(f"  - Skipped due to 'None' in other potential matches: {records_skipped_none_matches} records")  
+    print(f"IXA Holdings:")
+    print(f"  - Records where LLM's chosen OCLC match is held by IXA: {records_main_match_at_ixa}")
+    print(f"  - Records where at least one other potential match is held by IXA: {records_other_matches_at_ixa}")
     
 if __name__ == "__main__":
     main()
