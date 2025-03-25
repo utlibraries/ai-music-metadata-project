@@ -2,7 +2,6 @@ import os
 import base64
 import re
 import time
-import shutil  # Added for file operations
 from datetime import datetime
 from io import BytesIO
 from PIL import Image as PILImage
