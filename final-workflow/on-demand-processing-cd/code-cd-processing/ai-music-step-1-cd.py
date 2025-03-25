@@ -2,10 +2,11 @@ import os
 import base64
 import re
 import time
+import shutil  # Added for file operations
 from datetime import datetime
 from io import BytesIO
 from PIL import Image as PILImage
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook  # Added load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from openpyxl.drawing.image import Image
@@ -28,7 +29,7 @@ Publishers:
   - Place: [Place of publication if available]
   - Numbers: [UPC/EAN/ISBN]
 Dates:
-  - publicationDate: [Record Date as written on the disc]
+  - publicationDate: [Record all dates as printed on the disc - separate multiple dates with commas]
 Language:
   - sungLanguage: [Languages of sung text]
   - printedLanguage: [All languages of printed text]
@@ -80,7 +81,6 @@ def group_images_by_barcode(folder_path):
         
     return image_groups
 
-
 def process_folder(folder_path, wb, results_folder_path):
     ws = wb.active
     headers = ['Input Image 1', 'Input Image 2', 'Input Image 3', 'Barcode', 'AI-Generated Metadata', 
@@ -100,6 +100,28 @@ def process_folder(folder_path, wb, results_folder_path):
     summary_ws.append(['Total Items', 'Items with Issues', 'Total Time (s)', 
                        'Total Prompt Tokens', 'Total Completion Tokens', 'Total Tokens',
                        'Average Time per Item (s)', 'Average Tokens per Item'])
+
+    # Create a temporary workbook for periodic saving (no images)
+    temp_wb = Workbook()
+    temp_ws = temp_wb.active
+    temp_ws.append(headers)
+    for col, header in enumerate(headers, start=1):
+        if col == 4:  # Barcode column
+            temp_ws.column_dimensions[get_column_letter(col)].width = 15
+        elif col >= 6:  # Token and timing columns
+            temp_ws.column_dimensions[get_column_letter(col)].width = 15
+        else:
+            temp_ws.column_dimensions[get_column_letter(col)].width = 30 if col <= 3 else 52
+            
+    # Create temp summary sheet
+    temp_summary_ws = temp_wb.create_sheet(title="Summary")
+    temp_summary_ws.append(['Total Items', 'Items with Issues', 'Total Time (s)', 
+                           'Total Prompt Tokens', 'Total Completion Tokens', 'Total Tokens',
+                           'Average Time per Item (s)', 'Average Tokens per Item'])
+    
+    # Temporary file path
+    temp_output_file = "temp_progress.xlsx"
+    temp_output_path = os.path.join(results_folder_path, temp_output_file)
 
     image_groups = group_images_by_barcode(folder_path)
     total_items = len(image_groups)
@@ -188,8 +210,11 @@ def process_folder(folder_path, wb, results_folder_path):
                     round(item_duration, 2), prompt_tokens, completion_tokens, total_item_tokens
                 ]
                 ws.append(row_data)
+                
+                # Also add to temporary workbook (without images)
+                temp_ws.append(row_data)
 
-                # Add thumbnail images to Excel
+                # Add thumbnail images to main Excel workbook only
                 for i, img_path in enumerate(image_paths, start=1):
                     img = PILImage.open(img_path)
                     img.thumbnail((200, 200))
@@ -206,21 +231,57 @@ def process_folder(folder_path, wb, results_folder_path):
 
                 for cell in ws[ws.max_row]:
                     cell.alignment = Alignment(vertical='top', wrap_text=True)
+                
+                for cell in temp_ws[temp_ws.max_row]:
+                    cell.alignment = Alignment(vertical='top', wrap_text=True)
 
             except Exception as e:
                 print(f"Error generating content for barcode {barcode}: {str(e)}")
-                ws.append(['', '', '', barcode, f"Error: {str(e)}", 0, 0, 0, 0])
+                error_message = f"Error: {str(e)}"
+                ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
+                temp_ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
                 items_with_issues += 1
 
         except Exception as e:
             print(f"Error processing barcode {barcode}: {str(e)}")
-            ws.append(['', '', '', barcode, f"Error: {str(e)}", 0, 0, 0, 0])
+            error_message = f"Error: {str(e)}"
+            ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
+            temp_ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
             items_with_issues += 1
 
         # Log progress with token usage
         print(f"Processed {processed_items}/{total_items} items. Barcode: {barcode}. Time: {round(item_duration, 2)}s. Tokens: {total_item_tokens if 'total_item_tokens' in locals() else 0}")
+        
+        # Save temporary workbook every 10 rows
+        if processed_items % 10 == 0:
+            # Update summary data in temp workbook
+            avg_time = total_time / processed_items if processed_items > 0 else 0
+            avg_tokens = total_tokens / processed_items if processed_items > 0 else 0
+            
+            # Clear old summary data and add new
+            for row in temp_summary_ws.iter_rows(min_row=2, max_row=2):
+                for cell in row:
+                    cell.value = None
+            
+            temp_summary_ws.append([
+                processed_items, 
+                items_with_issues, 
+                round(total_time, 2),
+                total_prompt_tokens,
+                total_completion_tokens,
+                total_tokens,
+                round(avg_time, 2),
+                round(avg_tokens, 2)
+            ])
+            
+            # Save temporary progress
+            try:
+                temp_wb.save(temp_output_path)
+                print(f"Progress saved ({processed_items}/{total_items} items)")
+            except Exception as save_error:
+                print(f"Warning: Could not save temporary progress: {save_error}")
 
-    # Add summary data
+    # Add summary data to main workbook
     avg_time = total_time / total_items if total_items > 0 else 0
     avg_tokens = total_tokens / total_items if total_items > 0 else 0
     
@@ -252,6 +313,14 @@ def process_folder(folder_path, wb, results_folder_path):
     print(f"Total processing time: {round(total_time, 2)} seconds")
     print(f"Total tokens used: {total_tokens} (Prompt: {total_prompt_tokens}, Completion: {total_completion_tokens})")
     
+    # Clean up temporary file
+    try:
+        if os.path.exists(temp_output_path):
+            os.remove(temp_output_path)
+            print(f"Temporary progress file removed: {temp_output_path}")
+    except Exception as remove_error:
+        print(f"Warning: Could not remove temporary progress file: {remove_error}")
+    
     return total_items, items_with_issues, total_time, total_tokens
 
 
@@ -259,7 +328,7 @@ def main():
     start_time = time.time()
     
     base_dir = "final-workflow/on-demand-processing-cd"
-    images_folder = os.path.join(base_dir, "cd-input-folders/cd-scans-issues-testing")
+    images_folder = os.path.join(base_dir, "cd-input-folders/cd-scans-20")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     # Create results folder with today's date

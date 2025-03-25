@@ -1,6 +1,7 @@
 import os
 import glob
 import time
+import shutil  # Added for file operations
 from openai import OpenAI
 import openpyxl
 from openpyxl.styles import Alignment
@@ -55,12 +56,27 @@ def main():
     # Load the workbook and select the active worksheet
     wb = openpyxl.load_workbook(workbook_path)
     sheet = wb.active
+    
+    # Create a temporary workbook for frequent saving (no images)
+    temp_wb = openpyxl.Workbook()
+    temp_sheet = temp_wb.active
+    
+    # Copy headers and column settings
+    for col_idx, cell in enumerate(sheet[1], 1):
+        temp_sheet.cell(row=1, column=col_idx, value=cell.value)
+        # Copy column widths where available
+        column_letter = openpyxl.utils.get_column_letter(col_idx)
+        if column_letter in sheet.column_dimensions:
+            temp_sheet.column_dimensions[column_letter].width = sheet.column_dimensions[column_letter].width
 
     # Create a summary sheet for token and timing metrics
     if "TokenSummary" not in wb.sheetnames:
         summary_sheet = wb.create_sheet("TokenSummary")
     else:
         summary_sheet = wb["TokenSummary"]
+    
+    # Also create summary in temp workbook
+    temp_summary_sheet = temp_wb.create_sheet("TokenSummary")
     
     # Set up the summary sheet headers
     summary_headers = [
@@ -70,9 +86,16 @@ def main():
         "Average Tokens per Call", "Estimated Cost ($0.003/1K)", "Date Completed"
     ]
     summary_sheet.append(summary_headers)
+    temp_summary_sheet.append(summary_headers)
     
     for col, header in enumerate(summary_headers, start=1):
-        summary_sheet.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 20
+        col_letter = openpyxl.utils.get_column_letter(col)
+        summary_sheet.column_dimensions[col_letter].width = 20
+        temp_summary_sheet.column_dimensions[col_letter].width = 20
+
+    # Temporary file path for saving progress
+    temp_output_file = "temp_step3_progress.xlsx"
+    temp_output_path = os.path.join(results_folder, temp_output_file)
 
     # Define the columns
     METADATA_COLUMN = 'E'
@@ -96,6 +119,16 @@ def main():
     sheet[f'{PROMPT_TOKENS_COLUMN}1'] = 'Prompt Tokens'
     sheet[f'{COMPLETION_TOKENS_COLUMN}1'] = 'Completion Tokens'
     sheet[f'{TOTAL_TOKENS_COLUMN}1'] = 'Total Tokens'
+    
+    # Add the same headers to temp sheet
+    temp_sheet[f'{RESULT_COLUMN}1'] = 'LLM-Assessed Correct OCLC #'
+    temp_sheet[f'{CONFIDENCE_SCORE_COLUMN}1'] = 'LLM Confidence Score'
+    temp_sheet[f'{EXPLANATION_COLUMN}1'] = 'LLM Explanation'
+    temp_sheet[f'{OTHER_MATCHES_COLUMN}1'] = 'Other Potential Matches'
+    temp_sheet[f'{PROCESSING_TIME_COLUMN}1'] = 'Processing Time (s)'
+    temp_sheet[f'{PROMPT_TOKENS_COLUMN}1'] = 'Prompt Tokens'
+    temp_sheet[f'{COMPLETION_TOKENS_COLUMN}1'] = 'Completion Tokens'
+    temp_sheet[f'{TOTAL_TOKENS_COLUMN}1'] = 'Total Tokens'
 
     # Set column widths
     sheet.column_dimensions[RESULT_COLUMN].width = 30
@@ -106,6 +139,16 @@ def main():
     sheet.column_dimensions[PROMPT_TOKENS_COLUMN].width = 15
     sheet.column_dimensions[COMPLETION_TOKENS_COLUMN].width = 18
     sheet.column_dimensions[TOTAL_TOKENS_COLUMN].width = 15
+    
+    # Mirror column widths in temp sheet
+    temp_sheet.column_dimensions[RESULT_COLUMN].width = 30
+    temp_sheet.column_dimensions[CONFIDENCE_SCORE_COLUMN].width = 20
+    temp_sheet.column_dimensions[EXPLANATION_COLUMN].width = 40
+    temp_sheet.column_dimensions[OTHER_MATCHES_COLUMN].width = 70
+    temp_sheet.column_dimensions[PROCESSING_TIME_COLUMN].width = 18
+    temp_sheet.column_dimensions[PROMPT_TOKENS_COLUMN].width = 15
+    temp_sheet.column_dimensions[COMPLETION_TOKENS_COLUMN].width = 18
+    temp_sheet.column_dimensions[TOTAL_TOKENS_COLUMN].width = 15
 
     # Initialize counters for summary
     total_rows = 0
@@ -115,6 +158,7 @@ def main():
     total_prompt_tokens = 0
     total_completion_tokens = 0
     total_tokens = 0
+    processed_rows = 0
 
     for row in range(2, sheet.max_row + 1):  # Row 1 is the header
         row_start_time = time.time()
@@ -128,6 +172,18 @@ def main():
             sheet[f'{RESULT_COLUMN}{row}'].value = "No OCLC data to process"
             sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value = 0
             sheet[f'{EXPLANATION_COLUMN}{row}'].value = "Skipped: No valid OCLC results to analyze"
+            processed_rows += 1
+            
+            # Mirror in temp sheet
+            temp_sheet[f'{RESULT_COLUMN}{row}'].value = "No OCLC data to process"
+            temp_sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value = 0
+            temp_sheet[f'{EXPLANATION_COLUMN}{row}'].value = "Skipped: No valid OCLC results to analyze"
+            
+            # Copy data from other columns to temp sheet
+            for col in range(1, 8):  # Columns A-G
+                col_letter = openpyxl.utils.get_column_letter(col)
+                temp_sheet[f'{col_letter}{row}'].value = sheet[f'{col_letter}{row}'].value
+                
             # Increment the skipped counter for summary metrics
             total_rows += 1  # Still count this as a processed row
             failed_calls += 1  # Count as a "failed" call for metrics
@@ -171,143 +227,218 @@ Metadata: {metadata}
 OCLC Results: {oclc_results}
 ''')
         try:
-                # Time the API call
-                api_call_start = time.time()
-                response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[
-                        {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and also have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=1000,
-                    temperature=0.5
-                )
-                api_call_duration = time.time() - api_call_start
-                total_api_time += api_call_duration
-                
-                # Extract token usage
-                prompt_tokens = response.usage.prompt_tokens
-                completion_tokens = response.usage.completion_tokens
-                tokens_used = prompt_tokens + completion_tokens
-                
-                # Add to totals
-                total_prompt_tokens += prompt_tokens
-                total_completion_tokens += completion_tokens
-                total_tokens += tokens_used
-                
-                successful_calls += 1
+            # Time the API call
+            api_call_start = time.time()
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and also have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1000,
+                temperature=0.5
+            )
+            api_call_duration = time.time() - api_call_start
+            total_api_time += api_call_duration
+            
+            # Extract token usage
+            prompt_tokens = response.usage.prompt_tokens
+            completion_tokens = response.usage.completion_tokens
+            tokens_used = prompt_tokens + completion_tokens
+            
+            # Add to totals
+            total_prompt_tokens += prompt_tokens
+            total_completion_tokens += completion_tokens
+            total_tokens += tokens_used
+            
+            successful_calls += 1
 
-                analysis_result = response.choices[0].message.content.strip()
+            analysis_result = response.choices[0].message.content.strip()
 
-                oclc_number = "Not found"
-                confidence_score = "0"
-                explanation = "Could not parse response"
-                other_matches = ""
+            oclc_number = "Not found"
+            confidence_score = "0"
+            explanation = "Could not parse response"
+            other_matches = ""
 
-                try:
-                    if "OCLC number:" in analysis_result:
-                        oclc_part = analysis_result.split("OCLC number:")[1].split("\n")[0].strip()
-                        oclc_number = ''.join(char for char in oclc_part if char.isdigit())
+            try:
+                if "OCLC number:" in analysis_result:
+                    oclc_part = analysis_result.split("OCLC number:")[1].split("\n")[0].strip()
+                    oclc_number = ''.join(char for char in oclc_part if char.isdigit())
 
-                    if "Confidence score:" in analysis_result:
-                        confidence_part = analysis_result.split("Confidence score:")[1].split("%")[0].strip()
-                        try:
-                            confidence_score = int(float(confidence_part))
-                            confidence_score = min(100, max(0, confidence_score))
-                        except ValueError:
-                            confidence_score = 0
-
+                if "Confidence score:" in analysis_result:
+                    confidence_part = analysis_result.split("Confidence score:")[1].split("%")[0].strip()
                     try:
-                        confidence_score = min(100, int(confidence_score))
+                        confidence_score = int(float(confidence_part))
+                        confidence_score = min(100, max(0, confidence_score))
                     except ValueError:
                         confidence_score = 0
 
-                    if "Explanation:" in analysis_result:
-                        explanation_parts = analysis_result.split("Explanation:")[1].split("Other potential good matches:")
-                        explanation = explanation_parts[0].strip()
-                        if explanation.endswith("4."):
-                            explanation = explanation[:-2].strip()
-                        explanation = re.sub(r'\s+\d+\.\s*$', '', explanation)
+                try:
+                    confidence_score = min(100, int(confidence_score))
+                except ValueError:
+                    confidence_score = 0
 
-                    if "Other potential good matches:" in analysis_result:
-                        other_matches_part = analysis_result.split("Other potential good matches:")[1].strip()
-                        if other_matches_part and oclc_results:
-                            potential_matches = [num.strip() for num in other_matches_part.split(',') if num.strip()]
-                            formatted_matches = []
-                            for match_num in potential_matches:
-                                match_info = ""
-                                if f"OCLC Number: {match_num}" in oclc_results:
-                                    record_section = oclc_results.split(f"OCLC Number: {match_num}")[1].split("----------------------------------------")[0]
-                                    held_by_ixa = "No"
-                                    if "Held by IXA: Yes" in record_section:
-                                        held_by_ixa = "Yes"
-                                    total_holdings = "0"
-                                    if "Total Institutions Holding:" in record_section:
-                                        holdings_part = record_section.split("Total Institutions Holding:")[1].split("\n")[0].strip()
-                                        total_holdings = holdings_part
-                                    title = ""
-                                    if "- Main Title:" in record_section:
-                                        title_part = record_section.split("- Main Title:")[1].split("\n")[0].strip()
-                                        title = title_part
-                                    specific_format = ""
-                                    if "- specificFormat:" in record_section:
-                                        format_part = record_section.split("- specificFormat:")[1].split("\n")[0].strip()
-                                        specific_format = format_part
-                                    if specific_format.strip() == "CD":
-                                        match_info = f"OCLC: {match_num} | IXA: {held_by_ixa} | Holdings: {total_holdings}"
-                                        if specific_format:
-                                            match_info += f" | Format: {specific_format}"
-                                        if title:
-                                            match_info += f" | Title: {title}"
-                                        if match_info:
-                                            formatted_matches.append(match_info)
-                            other_matches = "\n".join(formatted_matches) if formatted_matches else other_matches_part
-                        else:
-                            other_matches = other_matches_part
+                if "Explanation:" in analysis_result:
+                    explanation_parts = analysis_result.split("Explanation:")[1].split("Other potential good matches:")
+                    explanation = explanation_parts[0].strip()
+                    if explanation.endswith("4."):
+                        explanation = explanation[:-2].strip()
+                    explanation = re.sub(r'\s+\d+\.\s*$', '', explanation)
 
-                except Exception as parsing_error:
-                    print(f"Error parsing response in row {row}: {parsing_error}")
+                if "Other potential good matches:" in analysis_result:
+                    other_matches_part = analysis_result.split("Other potential good matches:")[1].strip()
+                    if other_matches_part and oclc_results:
+                        potential_matches = [num.strip() for num in other_matches_part.split(',') if num.strip()]
+                        formatted_matches = []
+                        for match_num in potential_matches:
+                            match_info = ""
+                            if f"OCLC Number: {match_num}" in oclc_results:
+                                record_section = oclc_results.split(f"OCLC Number: {match_num}")[1].split("----------------------------------------")[0]
+                                held_by_ixa = "No"
+                                if "Held by IXA: Yes" in record_section:
+                                    held_by_ixa = "Yes"
+                                total_holdings = "0"
+                                if "Total Institutions Holding:" in record_section:
+                                    holdings_part = record_section.split("Total Institutions Holding:")[1].split("\n")[0].strip()
+                                    total_holdings = holdings_part
+                                title = ""
+                                if "- Main Title:" in record_section:
+                                    title_part = record_section.split("- Main Title:")[1].split("\n")[0].strip()
+                                    title = title_part
+                                specific_format = ""
+                                if "- specificFormat:" in record_section:
+                                    format_part = record_section.split("- specificFormat:")[1].split("\n")[0].strip()
+                                    specific_format = format_part
+                                if specific_format.strip() == "CD":
+                                    match_info = f"OCLC: {match_num} | IXA: {held_by_ixa} | Holdings: {total_holdings}"
+                                    if specific_format:
+                                        match_info += f" | Format: {specific_format}"
+                                    if title:
+                                        match_info += f" | Title: {title}"
+                                    if match_info:
+                                        formatted_matches.append(match_info)
+                        other_matches = "\n".join(formatted_matches) if formatted_matches else other_matches_part
+                    else:
+                        other_matches = other_matches_part
 
-                # Calculate total processing time for this row
-                row_duration = time.time() - row_start_time
+            except Exception as parsing_error:
+                print(f"Error parsing response in row {row}: {parsing_error}")
 
-                # Update cells with results and metrics
-                result_cell = sheet[f'{RESULT_COLUMN}{row}']
-                confidence_cell = sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}']
-                explanation_cell = sheet[f'{EXPLANATION_COLUMN}{row}']
-                other_matches_cell = sheet[f'{OTHER_MATCHES_COLUMN}{row}']
-                time_cell = sheet[f'{PROCESSING_TIME_COLUMN}{row}']
-                prompt_tokens_cell = sheet[f'{PROMPT_TOKENS_COLUMN}{row}']
-                completion_tokens_cell = sheet[f'{COMPLETION_TOKENS_COLUMN}{row}']
-                total_tokens_cell = sheet[f'{TOTAL_TOKENS_COLUMN}{row}']
+            # Calculate total processing time for this row
+            row_duration = time.time() - row_start_time
+            processed_rows += 1
+            
+            # Update cells with results and metrics
+            result_cell = sheet[f'{RESULT_COLUMN}{row}']
+            confidence_cell = sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}']
+            explanation_cell = sheet[f'{EXPLANATION_COLUMN}{row}']
+            other_matches_cell = sheet[f'{OTHER_MATCHES_COLUMN}{row}']
+            time_cell = sheet[f'{PROCESSING_TIME_COLUMN}{row}']
+            prompt_tokens_cell = sheet[f'{PROMPT_TOKENS_COLUMN}{row}']
+            completion_tokens_cell = sheet[f'{COMPLETION_TOKENS_COLUMN}{row}']
+            total_tokens_cell = sheet[f'{TOTAL_TOKENS_COLUMN}{row}']
 
-                result_cell.value = oclc_number if isinstance(oclc_number, str) else int(oclc_number)
-                confidence_cell.value = confidence_score
-                explanation_cell.value = explanation
-                other_matches_cell.value = other_matches
-                time_cell.value = round(row_duration, 2)
-                prompt_tokens_cell.value = prompt_tokens
-                completion_tokens_cell.value = completion_tokens
-                total_tokens_cell.value = tokens_used
+            result_cell.value = oclc_number if isinstance(oclc_number, str) else int(oclc_number)
+            confidence_cell.value = confidence_score
+            explanation_cell.value = explanation
+            other_matches_cell.value = other_matches
+            time_cell.value = round(row_duration, 2)
+            prompt_tokens_cell.value = prompt_tokens
+            completion_tokens_cell.value = completion_tokens
+            total_tokens_cell.value = tokens_used
 
-                # Set cell alignment
-                for cell in [result_cell, confidence_cell, explanation_cell, other_matches_cell, 
-                            time_cell, prompt_tokens_cell, completion_tokens_cell, total_tokens_cell]:
-                    cell.alignment = Alignment(wrap_text=True)
+            # Update temp workbook with the same data
+            temp_result_cell = temp_sheet[f'{RESULT_COLUMN}{row}']
+            temp_confidence_cell = temp_sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}']
+            temp_explanation_cell = temp_sheet[f'{EXPLANATION_COLUMN}{row}']
+            temp_other_matches_cell = temp_sheet[f'{OTHER_MATCHES_COLUMN}{row}']
+            temp_time_cell = temp_sheet[f'{PROCESSING_TIME_COLUMN}{row}']
+            temp_prompt_tokens_cell = temp_sheet[f'{PROMPT_TOKENS_COLUMN}{row}']
+            temp_completion_tokens_cell = temp_sheet[f'{COMPLETION_TOKENS_COLUMN}{row}']
+            temp_total_tokens_cell = temp_sheet[f'{TOTAL_TOKENS_COLUMN}{row}']
+            
+            temp_result_cell.value = oclc_number if isinstance(oclc_number, str) else int(oclc_number)
+            temp_confidence_cell.value = confidence_score
+            temp_explanation_cell.value = explanation
+            temp_other_matches_cell.value = other_matches
+            temp_time_cell.value = round(row_duration, 2)
+            temp_prompt_tokens_cell.value = prompt_tokens
+            temp_completion_tokens_cell.value = completion_tokens
+            temp_total_tokens_cell.value = tokens_used
+            
+            # Copy data from other columns to temp sheet
+            for col in range(1, 8):  # Columns A-G
+                col_letter = openpyxl.utils.get_column_letter(col)
+                temp_sheet[f'{col_letter}{row}'].value = sheet[f'{col_letter}{row}'].value
 
-                print(f"\n--- Processed row {row}/{sheet.max_row} ---")
-                print(f"OCLC Number: {result_cell.value}")
-                print(f"Confidence Score: {confidence_cell.value}%")
-                print(f"Processing Time: {round(row_duration, 2)}s (API: {round(api_call_duration, 2)}s)")
-                print(f"Tokens: {tokens_used} (Prompt: {prompt_tokens}, Completion: {completion_tokens})")
-                print(f"Explanation: {explanation_cell.value}")
-                if other_matches:
-                    print(f"Other Potential Matches: \n{other_matches}")
-                print("-----------------------------------")
+            # Set cell alignment in both workbooks
+            for cell in [result_cell, confidence_cell, explanation_cell, other_matches_cell, 
+                        time_cell, prompt_tokens_cell, completion_tokens_cell, total_tokens_cell]:
+                cell.alignment = Alignment(wrap_text=True)
+                
+            for cell in [temp_result_cell, temp_confidence_cell, temp_explanation_cell, temp_other_matches_cell, 
+                        temp_time_cell, temp_prompt_tokens_cell, temp_completion_tokens_cell, temp_total_tokens_cell]:
+                cell.alignment = Alignment(wrap_text=True)
+
+            print(f"\n--- Processed row {row}/{sheet.max_row} ---")
+            print(f"OCLC Number: {result_cell.value}")
+            print(f"Confidence Score: {confidence_cell.value}%")
+            print(f"Processing Time: {round(row_duration, 2)}s (API: {round(api_call_duration, 2)}s)")
+            print(f"Tokens: {tokens_used} (Prompt: {prompt_tokens}, Completion: {completion_tokens})")
+            print(f"Explanation: {explanation_cell.value}")
+            if other_matches:
+                print(f"Other Potential Matches: \n{other_matches}")
+            print("-----------------------------------")
+            
+            # Save temporary workbook every 10 processed rows
+            if processed_rows % 10 == 0:
+                # Update summary data in temp workbook
+                avg_call_time = total_api_time / successful_calls if successful_calls > 0 else 0
+                avg_tokens_per_call = total_tokens / successful_calls if successful_calls > 0 else 0
+                estimated_cost = (total_tokens / 1000) * 0.003  # Estimate based on $0.003 per 1K tokens
+                
+                # Clear old summary data and add new
+                for sum_row in temp_summary_sheet.iter_rows(min_row=2, max_row=2):
+                    for cell in sum_row:
+                        cell.value = None
+                
+                temp_summary_sheet.append([
+                    total_rows,
+                    successful_calls,
+                    failed_calls,
+                    round(time.time() - script_start_time, 2),
+                    round(total_api_time, 2),
+                    round(avg_call_time, 2),
+                    total_prompt_tokens,
+                    total_completion_tokens,
+                    total_tokens,
+                    round(avg_tokens_per_call, 2),
+                    round(estimated_cost, 4),
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                ])
+                
+                try:
+                    temp_wb.save(temp_output_path)
+                    print(f"Progress saved ({row}/{sheet.max_row} rows)")
+                except Exception as save_error:
+                    print(f"Warning: Could not save temporary progress: {save_error}")
 
         except Exception as e:
-                failed_calls += 1
-                print(f"Error processing row {row}: {e}")
+            failed_calls += 1
+            print(f"Error processing row {row}: {e}")
+            # Update both workbooks to show the error
+            sheet[f'{RESULT_COLUMN}{row}'].value = "Error processing"
+            sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value = 0
+            sheet[f'{EXPLANATION_COLUMN}{row}'].value = f"Error: {str(e)}"
+            
+            temp_sheet[f'{RESULT_COLUMN}{row}'].value = "Error processing"
+            temp_sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value = 0
+            temp_sheet[f'{EXPLANATION_COLUMN}{row}'].value = f"Error: {str(e)}"
+            
+            # Copy data from other columns to temp sheet
+            for col in range(1, 8):  # Columns A-G
+                col_letter = openpyxl.utils.get_column_letter(col)
+                temp_sheet[f'{col_letter}{row}'].value = sheet[f'{col_letter}{row}'].value
 
     # Calculate script metrics
     script_duration = time.time() - script_start_time
@@ -352,6 +483,15 @@ OCLC Results: {oclc_results}
     full_output_path = os.path.join(results_folder, output_file)
         
     wb.save(full_output_path)
+    
+    # Clean up temporary file
+    try:
+        if os.path.exists(temp_output_path):
+            os.remove(temp_output_path)
+            print(f"Temporary progress file removed: {temp_output_path}")
+    except Exception as remove_error:
+        print(f"Warning: Could not remove temporary progress file: {remove_error}")
+    
     print(f"\nResults saved to {full_output_path}")
     print(f"Token usage log saved to {log_file_path}")
     print("\nSummary:")

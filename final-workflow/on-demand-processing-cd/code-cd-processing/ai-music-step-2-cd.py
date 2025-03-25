@@ -3,6 +3,7 @@ import glob
 import json
 import requests
 import time
+import shutil  # Added for file operations
 from datetime import datetime
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Alignment
@@ -690,25 +691,55 @@ def query_oclc_api(metadata, barcode, limit=10):
     else:
         return "No matching records with CD format found after trying all queries", "\n".join(query_log)
     
-def process_metadata_file(input_file):
+def process_metadata_file(input_file, results_folder_path):
     wb = load_workbook(input_file)
     ws = wb.active
+
+    # Create a temporary workbook for periodic saving
+    temp_wb = Workbook()
+    temp_ws = temp_wb.active
+    
+    # Copy headers from main workbook
+    for col_idx, cell in enumerate(ws[1], 1):
+        temp_ws.cell(row=1, column=col_idx, value=cell.value)
+        # Copy column widths
+        from openpyxl.utils import get_column_letter
+        column_letter = get_column_letter(col_idx)
+        if column_letter in ws.column_dimensions:
+            temp_ws.column_dimensions[column_letter].width = ws.column_dimensions[column_letter].width
 
     if ws['F1'].value != 'OCLC Query':
         ws.insert_cols(6)
         ws['F1'] = 'OCLC Query'
+        temp_ws['F1'] = 'OCLC Query'
     if ws['G1'].value != 'OCLC API Results':
         ws.insert_cols(7)
         ws['G1'] = 'OCLC API Results'
+        temp_ws['G1'] = 'OCLC API Results'
         
     ws.column_dimensions['F'].width = 52
     ws.column_dimensions['G'].width = 52
+    temp_ws.column_dimensions['F'].width = 52
+    temp_ws.column_dimensions['G'].width = 52
+    
+    # Temporary file path
+    temp_output_file = "temp_step2_progress.xlsx"
+    temp_output_path = os.path.join(results_folder_path, temp_output_file)
     
     total_rows = ws.max_row
+    processed_rows = 0
+    
     for row in range(2, total_rows + 1):
         metadata_str = ws.cell(row=row, column=5).value  # Column E
         barcode = ws.cell(row=row, column=4).value       # Column D
         if not metadata_str or metadata_str.startswith('Error'):
+            # Still copy this row to temp workbook
+            for col_idx in range(1, ws.max_column + 1):
+                cell_value = ws.cell(row=row, column=col_idx).value
+                temp_cell = temp_ws.cell(row=row, column=col_idx, value=cell_value)
+                if ws.cell(row=row, column=col_idx).alignment:
+                    temp_cell.alignment = Alignment(vertical='top', wrap_text=True)
+            processed_rows += 1
             continue
 
         try:
@@ -719,20 +750,69 @@ def process_metadata_file(input_file):
             queries = construct_queries_from_metadata(metadata_fields)
             results, query_log = query_oclc_api({"Queries": queries}, barcode)
             
+            # Update main workbook
             ws.cell(row=row, column=6, value=query_log)
             ws.cell(row=row, column=7, value=results)
             ws.cell(row=row, column=6).alignment = Alignment(vertical='top', wrap_text=True)
             ws.cell(row=row, column=7).alignment = Alignment(vertical='top', wrap_text=True)
+            
+            # Update temp workbook
+            temp_ws.cell(row=row, column=6, value=query_log)
+            temp_ws.cell(row=row, column=7, value=results)
+            temp_ws.cell(row=row, column=6).alignment = Alignment(vertical='top', wrap_text=True)
+            temp_ws.cell(row=row, column=7).alignment = Alignment(vertical='top', wrap_text=True)
+            
+            # Copy image cells and other data from main to temp
+            for col_idx in range(1, 6):  # Columns A-E
+                cell_value = ws.cell(row=row, column=col_idx).value
+                temp_cell = temp_ws.cell(row=row, column=col_idx, value=cell_value)
+                if ws.cell(row=row, column=col_idx).alignment:
+                    temp_cell.alignment = Alignment(vertical='top', wrap_text=True)
+            
+            processed_rows += 1
             print(f"Processed row {row}/{total_rows}")
+            
+            # Save temporary workbook every 10 rows
+            if processed_rows % 10 == 0:
+                try:
+                    temp_wb.save(temp_output_path)
+                    print(f"Progress saved ({processed_rows}/{total_rows} rows)")
+                except Exception as save_error:
+                    print(f"Warning: Could not save temporary progress: {save_error}")
+                    
             time.sleep(0.1)
 
         except Exception as e:
             error_message = f"Error processing row {row}: {str(e)}"
             print(error_message)
+            
+            # Update both workbooks with error
             ws.cell(row=row, column=6, value="Error processing")
             ws.cell(row=row, column=7, value=error_message)
             ws.cell(row=row, column=6).alignment = Alignment(vertical='top', wrap_text=True)
             ws.cell(row=row, column=7).alignment = Alignment(vertical='top', wrap_text=True)
+            
+            temp_ws.cell(row=row, column=6, value="Error processing")
+            temp_ws.cell(row=row, column=7, value=error_message)
+            temp_ws.cell(row=row, column=6).alignment = Alignment(vertical='top', wrap_text=True)
+            temp_ws.cell(row=row, column=7).alignment = Alignment(vertical='top', wrap_text=True)
+            
+            # Copy other columns from main to temp
+            for col_idx in range(1, 6):  # Columns A-E
+                cell_value = ws.cell(row=row, column=col_idx).value
+                temp_cell = temp_ws.cell(row=row, column=col_idx, value=cell_value)
+                if ws.cell(row=row, column=col_idx).alignment:
+                    temp_cell.alignment = Alignment(vertical='top', wrap_text=True)
+            
+            processed_rows += 1
+
+    # Clean up temporary file
+    try:
+        if os.path.exists(temp_output_path):
+            os.remove(temp_output_path)
+            print(f"Temporary progress file removed: {temp_output_path}")
+    except Exception as remove_error:
+        print(f"Warning: Could not remove temporary progress file: {remove_error}")
 
     return wb
 
@@ -760,7 +840,7 @@ def main():
     input_file = os.path.join(results_folder, latest_file)
     
     print(f"Processing file: {input_file}")
-    wb = process_metadata_file(input_file)
+    wb = process_metadata_file(input_file, results_folder)
     
     current_date = datetime.now().strftime("%Y-%m-%d")
     output_file = f"ai-music-step-2-{current_date}.xlsx"
