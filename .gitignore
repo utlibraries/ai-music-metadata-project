@@ -50,6 +50,9 @@ final-workflow/on-demand-processing-cd/cd-output-folders/*
 final-workflow/on-demand-processing-cd/cd-output-folders/.gitkeep
 final-workflow/on-demand-processing-cd/cd-input-folders/cd-scans-20
 final-workflow/on-demand-processing-cd/cd-input-folders/cd-scans-500
+preprocessed_images/
+specialized_preprocessed/
+
 
 # Project-specific files
 *.docx
