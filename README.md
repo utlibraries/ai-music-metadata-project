@@ -47,7 +47,8 @@ The starter kit here contains:
 - A folder will be created to store the excel files created by running the code
 
 ## Output
-The final Excel file contains the following columns:
+1. Excel files for Steps 1-4.  
+They build on each other, the Step 4 file contains the following columns:
 - **Input Images**: Thumbnails of the CD images used for extraction
 - **Barcode**: The unique identifier for each CD
 - **AI-Generated Metadata**: The metadata extracted by GPT-4o-mini
@@ -59,6 +60,11 @@ The final Excel file contains the following columns:
 - **Other Potential Matches**: Alternative OCLC numbers that might be matches
 - **Track Verification Results**: Analysis of track listing similarity between metadata and OCLC record
 - **Year Verification Results**: Analysis of publication year similarity between metadata and OCLC record
+- **Match Held at IXA?**: States whether or not the match is held at our library (Y/N)
+- **Potential Matches at IXA?**: States whether or not potential matches listed are held at our library (Y/N)
+2. Excel file for Step 5: review spreadsheet that includes the barcodes, OCLC matches, confidence score, other potential matches, and formatted OCLC bibliographic information for the OCLC matches. 
+3. A log of the OpenAI API usage for Step 1.
+4. A log of the API usage for Step 3.   
 
 ## Contact
 For any questions, please reach out to:
