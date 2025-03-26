@@ -11,12 +11,8 @@ This project automates the extraction and analysis of metadata from CD images. I
 
 ## Prerequisites
 To use this project, you must have access to:
-- **OpenAI API** for GPT-4o-mini integration
+- **OpenAI API** for LLM integration
 - **OCLC Search API** for querying OCLC WorldCat records
-
-Make sure to have the following installed:
-- Python 3.7 or higher
-- Pip (Python package manager)
 
 ## Installation
 1. Clone this repository to your local machine
@@ -32,13 +28,14 @@ To run this project, you will need to set up the following environment variables
 
 ## Project Structure
 - `ai-music-step-1-cd.py`: Extracts metadata from CD images using GPT-4o-mini
-- `ai-music-step-1.5-cd.py`: Cleans up pub numbers to leave only UPCs
+- `ai-music-step-1.5-cd.py`: Cleans up pub numbers and dates - only allows for standalone years
 - `ai-music-step-2-cd.py`: Queries OCLC API with the extracted metadata
-- `ai-music-step-3-cd.py`: Uses GPT-4o-mini to analyze OCLC results and assign confidence scores
+- `ai-music-step-3-cd.py`: Uses GPT-4o to analyze OCLC results and assign confidence scores
 - `ai-music-step-4-cd.py`: Verifies track listings and publication year to validate the matches
-- `query-testing-oclc.py`: This is a script to test OCLC queries directly in the terminal - can be helpful for testing querying strategies
+- `ai-music-step-5-cd.py`: Optional - creates a simplified spreadsheet with key fields and OCLC results for easier detailed review of results.  
+- `query-testing-oclc.py`: This is a script to test OCLC queries directly in the terminal - can be helpful for testing querying strategies and editing automated queries in step 2 to fit your collection.
 
-The project processes CD images stored as pairs of JPEG files. Each CD is represented by two images: one for the front cover and one for the back cover. A third image may be used if necessary.  The image groups follow a specific naming convention:
+This project processes CD images stored as pairs of JPEG files. Each CD is represented by two images: one for the front cover and one for the back cover. A third image may be used if necessary.  The image groups follow a specific naming convention:
 
 Front image: [barcode]a.jpeg
 Back image: [barcode]b.jpeg
