@@ -494,7 +494,7 @@ OCLC Results: {oclc_results}
     ])
 
     # Create a token usage log file
-    log_file_path = os.path.join(results_folder, "oclc_token_usage_log.txt")
+    log_file_path = os.path.join(results_folder, "step_3_token_usage_log.txt")
     with open(log_file_path, "w") as log_file:
         log_file.write(f"Processing completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         log_file.write(f"Total rows processed: {total_rows}\n")

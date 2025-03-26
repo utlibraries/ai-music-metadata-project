@@ -296,7 +296,7 @@ def process_folder(folder_path, wb, results_folder_path):
     ])
     
     # Create a token usage log file
-    log_file_path = os.path.join(results_folder_path, "token_usage_log.txt")
+    log_file_path = os.path.join(results_folder_path, "step_1_token_usage_log.txt")
     with open(log_file_path, "w") as log_file:
         log_file.write(f"Processing completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         log_file.write(f"Total items processed: {total_items}\n")
@@ -327,7 +327,7 @@ def main():
     start_time = time.time()
     
     base_dir = "final-workflow/on-demand-processing-cd"
-    images_folder = os.path.join(base_dir, "cd-input-folders/cd-scans-500")
+    images_folder = os.path.join(base_dir, "cd-input-folders/cd-scans-5")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     # Create results folder with today's date
