@@ -21,7 +21,7 @@ def find_latest_results_folder(prefix):
     return latest_folder
 
 # Load the API key from environment variable
-client = OpenAI(api_key=os.getenv('OPENAI_HMRC_API_KEY'))
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 def main():
     # Start timing the entire script execution
