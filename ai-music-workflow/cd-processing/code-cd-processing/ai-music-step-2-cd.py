@@ -818,7 +818,7 @@ def process_metadata_file(input_file, results_folder_path):
 
 def main():
     # Instead of specifying the full folder name, just provide the prefix.
-    base_dir_prefix = "final-workflow/cd-processing/cd-output-folders/results-"
+    base_dir_prefix = "ai-music-workflow/cd-processing/cd-output-folders/results-"
     
     # Find the latest results folder using the prefix.
     results_folder = find_latest_results_folder(base_dir_prefix)

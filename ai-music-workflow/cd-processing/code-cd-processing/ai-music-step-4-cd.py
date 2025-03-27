@@ -521,7 +521,7 @@ def check_other_matches_held_by_ixa(other_matches_text):
 
 def main():
     # Specify the folder prefix based on your output location
-    base_dir_prefix = "final-workflow/cd-processing/cd-output-folders/results-"
+    base_dir_prefix = "ai-music-workflow/cd-processing/cd-output-folders/results-"
     
     # Find the latest results folder using the prefix
     results_folder = find_latest_results_folder(base_dir_prefix)
