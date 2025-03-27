@@ -38,7 +38,7 @@ Temporary Items
 .apdisk
 
 # Project-specific directories
-final-workflow/ai-music-workflow/on-demand-processing-vinyl/
+# final-workflow/ai-music-workflow/on-demand-processing-vinyl/
 final-workflow/on-demand-processing-cd/cd-output-folders/*
 final-workflow/on-demand-processing-cd/cd-output-folders/.gitkeep
 
