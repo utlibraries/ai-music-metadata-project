@@ -300,11 +300,7 @@ def format_oclc_results(json_response, access_token):
                                 name = 'N/A'
                             role = person.get('type', 'N/A')
                             formatted_results.append(f"  - {name.strip()} ({role})")
-            
-            # Skip Subjects section per request
-            
-            # Skip Classification section per request
-            
+                        
             if 'publishers' in record:
                 formatted_results.append("Publishers:")
                 for pub in record['publishers']:

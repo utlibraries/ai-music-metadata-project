@@ -23,8 +23,9 @@ To use this project, you must have access to:
 
 ## Environment Variables
 To run this project, you will need to set up the following environment variables:
+- `OPENAI_API_KEY`: Your OpenAI API key
 - `OCLC_CLIENT_ID` and `OCLC_SECRET`: Credentials for accessing the OCLC API
-- `OPENAI_HMRC_API_KEY`: Your OpenAI API key
+
 
 ## Project Structure
 - `ai-music-step-1-cd.py`: Extracts metadata from CD images using GPT-4o-mini
