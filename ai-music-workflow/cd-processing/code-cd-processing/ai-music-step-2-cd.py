@@ -3,7 +3,6 @@ import glob
 import json
 import requests
 import time
-import shutil  # Added for file operations
 from datetime import datetime
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Alignment
@@ -262,7 +261,7 @@ def format_oclc_results(json_response, access_token):
                 formatted_results.append(f"OCLC Number: {oclc_number}")
             
             if oclc_number:
-                is_held_by_IXA, total_holding_count, holding_institutions = get_holdings_info(oclc_number, access_token)
+                is_held_by_IXA, total_holding_count = get_holdings_info(oclc_number, access_token)
                 formatted_results.append(f"\nHeld by IXA: {'Yes' if is_held_by_IXA else 'No'}")
                 formatted_results.append(f"Total Institutions Holding: {total_holding_count}")
             
