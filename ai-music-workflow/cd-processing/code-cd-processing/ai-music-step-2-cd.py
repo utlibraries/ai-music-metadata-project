@@ -314,7 +314,6 @@ def format_oclc_results(json_response, access_token):
                 # Only include publicationDate
                 if 'publicationDate' in record['date']:
                     formatted_results.append(f"  - publicationDate: {record['date']['publicationDate']}")
-                # Skip other date fields per request
             
             if 'language' in record:
                 formatted_results.append("Language:")
@@ -440,7 +439,6 @@ def format_oclc_api_response_for_accumulation(data, access_token, seen_oclc_numb
                 # Only include publicationDate
                 if 'publicationDate' in record['date']:
                     formatted_results.append(f"  - publicationDate: {record['date']['publicationDate']}")
-                # Skip other date fields per request
             
             if 'language' in record:
                 formatted_results.append("Language:")
