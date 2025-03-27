@@ -123,7 +123,7 @@ def find_latest_results_folder(prefix):
 
 def main():
     # Base directory prefix
-    base_dir_prefix = "final-workflow/on-demand-processing-cd/cd-output-folders/results-"
+    base_dir_prefix = "final-workflow/cd-processing/cd-output-folders/results-"
     
     # Find the latest results folder
     results_folder = find_latest_results_folder(base_dir_prefix)

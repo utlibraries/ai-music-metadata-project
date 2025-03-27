@@ -26,7 +26,7 @@ def find_latest_step4_file(results_folder):
 
 def create_review_spreadsheet():
     # Set the folder prefix 
-    base_dir_prefix = "final-workflow/on-demand-processing-cd/cd-output-folders/results-"
+    base_dir_prefix = "final-workflow/cd-processing/cd-output-folders/results-"
     results_folder = find_latest_results_folder(base_dir_prefix)
     if not results_folder:
         print("No results folder found! Please run the previous scripts first.")

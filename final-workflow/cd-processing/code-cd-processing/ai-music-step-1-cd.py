@@ -326,8 +326,8 @@ def process_folder(folder_path, wb, results_folder_path):
 def main():
     start_time = time.time()
     
-    base_dir = "final-workflow/on-demand-processing-cd"
-    images_folder = os.path.join(base_dir, "cd-input-folders/cd-scans-5")
+    base_dir = "final-workflow/cd-processing"
+    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-5")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     # Create results folder with today's date
