@@ -36,11 +36,12 @@ To run this project, you will need to set up the following environment variables
 - `ai-music-step-5-cd.py`: Creates a simplified spreadsheet with key fields and formatted OCLC results for easier detailed review of results.  
 - `query-testing-oclc.py`: This is a script to test OCLC queries directly in the terminal - can be helpful for testing querying strategies and editing automated queries in step 2 to fit your collection.
 
-This project processes CD images stored as pairs of JPEG files. Each CD is represented by two images: one for the front cover and one for the back cover. A third image may be used if necessary.  The image groups follow a specific naming convention:
+This project processes CD images stored as pairs of JPEG files. Each CD is represented by two images: one for the front cover and one for the back cover. A third image may be used if necessary.  
 
-Front image: [barcode]a.jpeg
-Back image: [barcode]b.jpeg
-Optional third image: [barcode]c.jpeg
+The image groups follow a specific naming convention:
+- Front image: [barcode]a.jpeg
+- Back image: [barcode]b.jpeg
+- Optional third image: [barcode]c.jpeg
 
 The starter kit here contains:
 - A  small set of scanned images of 5 CDs
