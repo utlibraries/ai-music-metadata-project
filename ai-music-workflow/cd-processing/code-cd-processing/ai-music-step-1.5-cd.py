@@ -1,7 +1,6 @@
 import re
 import os
 import glob
-from pathlib import Path
 import openpyxl
 
 def clean_number(number_text):
@@ -107,6 +106,7 @@ def process_excel_file(input_file_path):
     
     # Save the updated workbook back to the same file
     wb.save(input_file_path)
+    print(f"Updated spreadsheet to leave only UPC numbers, EAN numbers, and YYYY dates: {input_file_path}")
 
 def find_latest_results_folder(prefix):
     # Get the parent directory of the prefix
