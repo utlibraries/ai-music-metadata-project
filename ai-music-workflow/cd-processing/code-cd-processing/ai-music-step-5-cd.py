@@ -69,7 +69,7 @@ def create_review_spreadsheet():
 
     # Save the review file using today's date
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    new_file_name = f"results-review-cd-{current_date}.xlsx"
+    new_file_name = f"review-spreadsheet-cd-{current_date}.xlsx"
     new_file_path = os.path.join(results_folder, new_file_name)
     
     wb_new.save(new_file_path)
