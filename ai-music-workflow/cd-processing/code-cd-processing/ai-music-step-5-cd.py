@@ -106,12 +106,13 @@ def get_bib_info(oclc_number, access_token):
         response.raise_for_status()
         
         print(f"API response status: {response.status_code}")
-        print(f"API response headers: {response.headers}")
         
         data = response.json()
-        print(f"Response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dictionary'}")
         if isinstance(data, dict) and 'bibRecords' in data:
             print(f"Found {len(data['bibRecords'])} bibliographic records")
+            # Extract first record from bibRecords array
+            if len(data['bibRecords']) > 0:
+                return data['bibRecords'][0]
         else:
             print("No 'bibRecords' key found in response")
             
@@ -183,12 +184,103 @@ def format_bib_info(data):
                 upc = identifier.get("id", "N/A")
                 break
     
+    # Enhanced content parsing logic
     contents = []
-    if "description" in record and "contents" in record["description"]:
-        for content_item in record["description"]["contents"]:
-            if "titles" in content_item:
-                contents = content_item["titles"]
-                break
+    
+    # Method 1: Look for contents in the description field
+    if "description" in record:
+        # Check for the contentNote field in contents array - this is the format in the example
+        if "contents" in record["description"]:
+            for content_item in record["description"]["contents"]:
+                # Check for contentNote object which contains track listings
+                if "contentNote" in content_item and "text" in content_item["contentNote"]:
+                    content_text = content_item["contentNote"]["text"]
+                    # Common pattern: tracks separated by " -- "
+                    if " -- " in content_text:
+                        # Split by " -- " and clean up each track
+                        tracks = []
+                        for track in content_text.split(" -- "):
+                            track = track.strip()
+                            # Remove trailing period if it exists
+                            if track.endswith('.'):
+                                track = track[:-1].strip()
+                            tracks.append(track)
+                        contents.extend(tracks)
+                        continue
+                
+                # Check for titles array format (original method)
+                if "titles" in content_item:
+                    for title_item in content_item["titles"]:
+                        if isinstance(title_item, str):
+                            contents.append(title_item)
+                        elif isinstance(title_item, dict) and "text" in title_item:
+                            contents.append(title_item["text"])
+                
+                # Check for different content formats
+                if "items" in content_item:
+                    for item in content_item["items"]:
+                        if isinstance(item, str):
+                            contents.append(item)
+                        elif isinstance(item, dict) and "text" in item:
+                            contents.append(item["text"])
+
+        # Method 2: Check for TOC as a note
+        if "notes" in record["description"]:
+            for note in record["description"]["notes"]:
+                # Look for various types of content notes
+                is_content_note = False
+                if "text" in note and any(marker in note["text"].lower() for marker in ["contents:", "tracks:", "track listing"]):
+                    is_content_note = True
+                
+                if is_content_note and "text" in note:
+                    toc_text = note["text"]
+                    
+                    # Try multiple approaches to parse the track list
+                    # Approach 1: Split by common delimiters
+                    for delimiter in ["--", ";", "/"]:
+                        if delimiter in toc_text:
+                            # Extract the content part (after any header like "Contents:" if present)
+                            content_part = toc_text
+                            for header in ["Contents:", "Tracks:", "Track listing:"]:
+                                if header.lower() in toc_text.lower():
+                                    content_part = toc_text.split(header, 1)[-1].strip()
+                                    break
+                                
+                            # Split by delimiter and clean up
+                            parts = [part.strip() for part in content_part.split(delimiter) if part.strip()]
+                            if parts:
+                                contents.extend(parts)
+                                break
+
+    # Method 3: Check for special MARC21 fields often used for music contents
+    if "varFields" in record:
+        for field in record.get("varFields", []):
+            if field.get("marcTag") in ["505", "500"] and "subfields" in field:
+                for subfield in field["subfields"]:
+                    if subfield.get("code") == "a" and subfield.get("content"):
+                        content = subfield["content"]
+                        # Split content by common delimiters in track listings
+                        for delimiter in ["--", ";", "/"]:
+                            if delimiter in content:
+                                parts = [part.strip() for part in content.split(delimiter) if part.strip()]
+                                if parts:
+                                    contents.extend(parts)
+                                    break
+    
+    # Method 4: Check for $t prefixed content
+    if "description" in record and "notes" in record["description"]:
+        for note in record["description"]["notes"]:
+            if "text" in note and "**$t**" in note["text"]:
+                parts = note["text"].split("**$t**")
+                # Skip the first part as it's usually empty or a header
+                for part in parts[1:]:
+                    # Clean up each part and add to contents
+                    cleaned_part = part.strip()
+                    if cleaned_part:
+                        # Remove trailing -- if present
+                        if cleaned_part.endswith("--"):
+                            cleaned_part = cleaned_part[:-2].strip()
+                        contents.append(cleaned_part)
     
     oclc_number = "N/A"
     if "identifier" in record and "oclcNumber" in record["identifier"]:
@@ -207,7 +299,12 @@ def format_bib_info(data):
     if contents:
         output.append("Contents:")
         for i, track in enumerate(contents, 1):
-            output.append(f"  {i}. {track}")
+            # Clean up the track listing
+            cleaned_track = track
+            # Remove any trailing punctuation
+            if cleaned_track.endswith(('.', ';')):
+                cleaned_track = cleaned_track[:-1]
+            output.append(f"  {i}. {cleaned_track}")
     
     output.append(f"OCLC Number: {oclc_number}")
     
