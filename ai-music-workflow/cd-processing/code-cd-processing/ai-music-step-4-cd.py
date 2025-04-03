@@ -179,6 +179,19 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
     if not metadata_tracks or not oclc_tracks:
         return 0.0
     
+    # Check for significant track count differences
+    metadata_count = len(metadata_tracks)
+    oclc_count = len(oclc_tracks)
+    track_count_ratio = min(metadata_count, oclc_count) / max(metadata_count, oclc_count)
+    
+    # If there's a significant difference in track counts (less than 70% ratio),
+    # penalize the similarity score
+    track_count_penalty = 0.0
+    if track_count_ratio < 0.7:
+        print(f"\nSignificant track count difference: Metadata has {metadata_count} tracks, OCLC has {oclc_count} tracks")
+        print(f"Track count ratio: {track_count_ratio:.2f}, applying penalty")
+        track_count_penalty = (0.7 - track_count_ratio) * 50  # Scale penalty based on the severity
+    
     processed_metadata_tracks = []
     processed_oclc_tracks = oclc_tracks.copy()
     
@@ -285,12 +298,19 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
     similarity = matches / len(norm_metadata_tracks)
     print(f"Total matches: {matches:.2f} out of {len(norm_metadata_tracks)} tracks")
     
-    if multi_part_groups and similarity * 100 < 80:
-        adjusted_similarity = min(80.0, similarity * 100 + 10.0)
+    # Apply track count penalty if exists
+    final_similarity = similarity * 100 - track_count_penalty
+    if track_count_penalty > 0:
+        print(f"Applying track count penalty: -{track_count_penalty:.2f}%")
+        print(f"Final similarity after penalty: {final_similarity:.2f}%")
+    
+    # Apply multi-part track bonus if needed
+    if multi_part_groups and final_similarity < 80:
+        adjusted_similarity = min(80.0, final_similarity + 10.0)
         print(f"Applying multi-part track bonus: final similarity {adjusted_similarity:.2f}%")
         return adjusted_similarity
     
-    return similarity * 100
+    return max(0, final_similarity)  # Ensure we don't return negative values
 
 def extract_and_normalize_year(text, is_oclc=False):
     """Extract and normalize publication year to YYYY format."""
