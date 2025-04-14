@@ -478,6 +478,7 @@ def extract_year_from_oclc_by_number(oclc_results, oclc_number):
 def compare_publication_years(metadata_year, oclc_year):
     """
     Compare publication years and return a match status.
+    Requires exact matching - any difference is considered a mismatch.
     """
     # If either year is missing, don't count it against the match
     if metadata_year is None or oclc_year is None:
@@ -487,16 +488,13 @@ def compare_publication_years(metadata_year, oclc_year):
     metadata_year_int = int(metadata_year)
     oclc_year_int = int(oclc_year)
     
-    # Check if the absolute difference is less than or equal to 1
-    year_diff = abs(metadata_year_int - oclc_year_int)
-    
-    if year_diff <= 1:
-        if year_diff == 0:
-            return (True, f"Years match exactly: {metadata_year} == {oclc_year}")
-        else:
-            return (True, f"Years are within 1 year: {metadata_year} vs {oclc_year}")
+    # Only exact matches are considered valid
+    if metadata_year_int == oclc_year_int:
+        return (True, f"Years match exactly: {metadata_year} == {oclc_year}")
     else:
-        return (False, f"Years differ by more than 1 year: {metadata_year} vs {oclc_year} (difference: {year_diff} years)")
+        year_diff = abs(metadata_year_int - oclc_year_int)
+        return (False, f"Years differ: {metadata_year} vs {oclc_year} (difference: {year_diff} years)")
+
 def check_oclc_held_by_ixa(oclc_results, oclc_number):
     """
     Check if a specific OCLC number is held by IXA.
@@ -711,14 +709,11 @@ def main():
             elif not metadata_year or not oclc_year:
                 match_status = "Considered match - Incomplete data"
             else:
-                year_diff = abs(int(metadata_year) - int(oclc_year))
-                if year_diff <= 1:
-                    if year_diff == 0:
-                        match_status = "Yes - Exact match"
-                    else:
-                        match_status = "Yes - Within 1 year"
+                if metadata_year == oclc_year:
+                    match_status = "Yes - Exact match"
                 else:
-                    match_status = "No - More than 1 year difference"
+                    year_diff = abs(int(metadata_year) - int(oclc_year))
+                    match_status = f"No - Years differ by {year_diff} year(s)"
                 
             year_verification_result = f"Metadata year: {metadata_year if metadata_year else 'Not found'}\nOCLC year: {oclc_year if oclc_year else 'Not found'}\nMatch: {match_status}"
             
@@ -775,8 +770,8 @@ def main():
                 adjust_confidence = True
                 adjustment_reasons.append(f"track listing mismatch (similarity {track_similarity:.2f}%, below 80% threshold)")
             
-            # Check year match - only adjust if both years are present and differ by more than 1 year
-            if metadata_year and oclc_year and not year_match:
+            # Check year match - any difference is considered a mismatch
+            if metadata_year and oclc_year and metadata_year != oclc_year:
                 adjust_confidence = True
                 year_diff = abs(int(metadata_year) - int(oclc_year))
                 adjustment_reasons.append(f"publication year mismatch (metadata: {metadata_year}, OCLC: {oclc_year}, difference: {year_diff} years)")
@@ -822,8 +817,8 @@ def main():
                         match_status = "✓" if best_match >= 0.8 else "✗"
                         note += f"\n{i+1}. {meta_track} {match_status} {best_match_track} ({best_match:.2f})"
                 
-                # Add year comparison details - only for actual mismatches that are more than 1 year apart
-                if metadata_year and oclc_year and not year_match:
+                # Add year comparison details if needed
+                if metadata_year and oclc_year and metadata_year != oclc_year:
                     year_diff = abs(int(metadata_year) - int(oclc_year))
                     note += f"\n\nYear comparison: Metadata year {metadata_year} differs from OCLC year {oclc_year} by {year_diff} years"
                 
@@ -832,7 +827,7 @@ def main():
                 if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 80:
                     records_adjusted_tracks += 1
                 
-                if metadata_year and oclc_year and not year_match:
+                if metadata_year and oclc_year and metadata_year != oclc_year:
                     records_adjusted_years += 1
                 
                 # Update verification result with action taken
@@ -843,9 +838,9 @@ def main():
                 if track_similarity < 80 and len(metadata_tracks) > 0 and len(oclc_tracks) > 0:
                     actions.append("track mismatch")
                 
-                # Only count year mismatch when both years exist but differ by more than 1 year
-                if metadata_year and oclc_year and not year_match:
-                    actions.append("year mismatch of more than 1 year")
+                if metadata_year and oclc_year and metadata_year != oclc_year:
+                    year_diff = abs(int(metadata_year) - int(oclc_year))
+                    actions.append(f"year mismatch of {year_diff} year(s)")
                 
                 if actions:
                     action_text = f"\nAction: Reduced confidence from {old_confidence}% to {new_confidence}% due to {' and '.join(actions)}"
@@ -866,14 +861,11 @@ def main():
                 elif not metadata_year or not oclc_year:
                     year_action += "None (incomplete year data, not penalized)"
                 else:
-                    year_diff = abs(int(metadata_year) - int(oclc_year))
-                    if year_diff <= 1:
-                        if year_diff == 0:
-                            year_action += "None (years match exactly)"
-                        else:
-                            year_action += f"None (years are within 1 year: {metadata_year} vs {oclc_year})"
+                    if metadata_year == oclc_year:
+                        year_action += "None (years match exactly)"
                     else:
-                        year_action += f"Reduced confidence (years differ by {year_diff} years)"
+                        year_diff = abs(int(metadata_year) - int(oclc_year))
+                        year_action += f"Reduced confidence (years differ by {year_diff} year(s))"
                 
                 if sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value:
                     sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value += year_action
@@ -895,7 +887,7 @@ def main():
     print(f"Summary:")
     print(f"  - Processed: {records_processed} records with confidence ≥ 85% and track listings mentioned")
     print(f"  - Adjusted for tracks: {records_adjusted_tracks} records due to low track similarity (< 80% match)")
-    print(f"  - Adjusted for years: {records_adjusted_years} records due to publication year mismatch (only when both years present and differ by more than 1 year)")
+    print(f"  - Adjusted for years: {records_adjusted_years} records due to publication year mismatch (any difference when both years present)")
     print(f"  - Skipped: {records_skipped} records (low confidence or no track listings)")
     print(f"IXA Holdings:")
     print(f"  - Records where LLM's chosen OCLC match is held by IXA: {records_main_match_at_ixa}")
