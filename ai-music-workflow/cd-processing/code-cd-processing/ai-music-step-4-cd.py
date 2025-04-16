@@ -184,13 +184,14 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
     oclc_count = len(oclc_tracks)
     track_count_ratio = min(metadata_count, oclc_count) / max(metadata_count, oclc_count)
     
-    # If there's a significant difference in track counts (less than 70% ratio),
-    # penalize the similarity score
+    # Track count penalty logic
     track_count_penalty = 0.0
+    
+    # Apply basic track count penalty for significant differences
     if track_count_ratio < 0.7:
         print(f"\nSignificant track count difference: Metadata has {metadata_count} tracks, OCLC has {oclc_count} tracks")
         print(f"Track count ratio: {track_count_ratio:.2f}, applying penalty")
-        track_count_penalty = (0.7 - track_count_ratio) * 50  # Scale penalty based on the severity
+        track_count_penalty = (0.7 - track_count_ratio) * 25  # Base penalty, may be adjusted later
     
     processed_metadata_tracks = []
     processed_oclc_tracks = oclc_tracks.copy()
@@ -230,6 +231,10 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
     
     matches = 0
     matched_tracks = []
+    
+    # Track presence and order check
+    metadata_tracks_found = 0
+    metadata_track_to_oclc_position = {}  # Dictionary to map metadata track index to OCLC position
     
     for i, meta_track in enumerate(norm_metadata_tracks):
         best_match = 0
@@ -280,6 +285,10 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
                 match_symbol += "(substring)"
             match_info += f"{match_symbol} {processed_oclc_tracks[best_match_index]} ({best_match:.2f})"
             matches += best_match
+            metadata_tracks_found += 1
+            
+            # Store position mapping
+            metadata_track_to_oclc_position[i] = best_match_index
         else:
             if best_match_index >= 0:
                 match_info += f"✗ {processed_oclc_tracks[best_match_index]} ({best_match:.2f})"
@@ -298,11 +307,81 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
     similarity = matches / len(norm_metadata_tracks)
     print(f"Total matches: {matches:.2f} out of {len(norm_metadata_tracks)} tracks")
     
-    # Apply track count penalty if exists
-    final_similarity = similarity * 100 - track_count_penalty
+    # Check if at least 80% of metadata tracks were found in OCLC
+    high_match_percentage = metadata_tracks_found >= 0.8 * len(norm_metadata_tracks)
+    
+    # Verify positions and patterns - Key for detecting mismatches
+    order_penalty = 0
+    if metadata_count >= 3 and high_match_percentage:
+        # Get the positions where matches were found
+        positions = [metadata_track_to_oclc_position[i] for i in range(len(norm_metadata_tracks)) if i in metadata_track_to_oclc_position]
+        
+        # No matches found
+        if len(positions) == 0:
+            return 0.0
+            
+        # Sort positions to analyze distribution
+        sorted_positions = sorted(positions)
+        
+        # Check if sequence is preserved (tracks appear in same order in both lists)
+        sequence_preserved = True
+        for i in range(len(positions) - 1):
+            if positions[i] >= positions[i+1]:
+                sequence_preserved = False
+                break
+        
+        # Calculate metrics to determine if this is a "scattered compilation"
+        if len(sorted_positions) >= 2:
+            # Position spread - what percentage of OCLC tracks lie between first and last match
+            position_spread = (sorted_positions[-1] - sorted_positions[0] + 1) / oclc_count
+            
+            # Average gap between consecutive positions in sorted order
+            avg_gap = (sorted_positions[-1] - sorted_positions[0]) / (len(sorted_positions) - 1)
+            
+            # CRITICAL CHECK FOR SCATTERED COMPILATION:
+            # 1. If we have a subset of tracks (metadata < 50% of OCLC)
+            # 2. And most metadata tracks are found in OCLC
+            # 3. But they span a significant portion of the OCLC tracklist
+            is_scattered_compilation = (
+                track_count_ratio < 0.5 and
+                metadata_tracks_found >= 0.8 * metadata_count and
+                position_spread > 0.3 and
+                (not sequence_preserved or avg_gap > 2.0)
+            )
+            
+            if is_scattered_compilation:
+                print(f"DETECTED SCATTERED COMPILATION PATTERN:")
+                print(f"- Tracks found at positions: {positions}")
+                print(f"- Position spread: {position_spread:.2f} of OCLC tracklist")
+                print(f"- Average gap between tracks: {avg_gap:.2f}")
+                print(f"- Original sequence preserved: {sequence_preserved}")
+                
+                # Apply a strong penalty 
+                order_penalty = 30
+                if not sequence_preserved:
+                    # Additional penalty for out-of-order tracks
+                    order_penalty += 10
+            
+            # Special case: Subset but in correct sequence with reasonable gaps
+            elif (track_count_ratio < 0.7 and 
+                  metadata_tracks_found >= 0.8 * metadata_count and 
+                  sequence_preserved and 
+                  avg_gap < 2.0):
+                print(f"Subset of tracks in correct sequence with reasonable gaps - likely valid match")
+                # Reduce penalty for well-ordered subset
+                track_count_penalty = min(track_count_penalty, 10)
+    
+    # Apply penalties
+    final_similarity = similarity * 100 - track_count_penalty - order_penalty
+    
     if track_count_penalty > 0:
         print(f"Applying track count penalty: -{track_count_penalty:.2f}%")
-        print(f"Final similarity after penalty: {final_similarity:.2f}%")
+    
+    if order_penalty > 0:
+        print(f"Applying track order/pattern penalty: -{order_penalty:.2f}%")
+    
+    if track_count_penalty > 0 or order_penalty > 0:
+        print(f"Final similarity after penalties: {final_similarity:.2f}%")
     
     # Apply multi-part track bonus if needed
     if multi_part_groups and final_similarity < 80:
