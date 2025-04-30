@@ -24,7 +24,7 @@ Title Information:
   - Primary Contributor: [Artist/Performer Name]
   - Additional Contributors: [arrangers, engineers, producers, session musicians]
 Publishers:
-  - Name: [Publisher Name]
+  - Name: [Publisher Name - please list all publisher, label, series, and distributor names visible on the disc]
   - Place: [Place of publication if available]
   - Numbers: [UPC/EAN/ISBN]
 Dates:
@@ -50,13 +50,10 @@ Contents:
         "titleTransliteration": [Title transliteration if applicable],
       }
     ]
-Series:
-  - seriesTitle: [Series name if any]
-  - seriesNumber: [Number within series]
 Notes:
   - generalNotes: [{'text': [Note Text]}]
 
-***Important: These CD's were donated by a university radio station to our library. Handwritten information on white stickers should be ignored.  When in doubt, mark fields in the metadata as 'Not visible'*** 
+***Important: These are images of CD's that were donated by a university radio station to our library. Handwritten information on white stickers should be ignored.  When in doubt, mark fields in the metadata as 'Not visible'*** 
  
 Analyze the provided images and return metadata formatted exactly as above. Pay special attention to capturing only text that is clearly legible."""
 
@@ -65,18 +62,24 @@ def group_images_by_barcode(folder_path):
     image_groups = defaultdict(list)
     
     for filename in os.listdir(folder_path):
-        if filename.lower().endswith(('.jpg', '.jpeg')):  
+        if filename.lower().endswith(('.jpg', '.jpeg', '.png')):  
             # Extract barcode number (everything before the letter)
-            match = re.match(r'(\d+)[abc]\.jpe?g', filename)
+            match = re.match(r'(\d+)[abc]\.png', filename.lower())
             if match:
                 barcode = match.group(1)
                 image_groups[barcode].append(os.path.join(folder_path, filename))
             else:
-                print(f"Filename does not match pattern: {filename}")
+                # Try matching for jpg/jpeg format as fallback
+                match = re.match(r'(\d+)[abc]\.jpe?g', filename.lower())
+                if match:
+                    barcode = match.group(1)
+                    image_groups[barcode].append(os.path.join(folder_path, filename))
+                else:
+                    print(f"Filename does not match pattern: {filename}")
     
     # Sort files within each group by the letter (a, b, c)
     for barcode in image_groups:
-        image_groups[barcode].sort(key=lambda x: os.path.basename(x)[-5])  # Sort by the letter before .jpg/.jpeg
+        image_groups[barcode].sort(key=lambda x: os.path.basename(x).lower()[-5])  # Sort by the letter before extension
         
     return image_groups
 
@@ -145,12 +148,12 @@ def process_folder(folder_path, wb, results_folder_path):
 
             for i, img_path in enumerate(image_paths):
                 # Determine image type based on filename
-                filename = os.path.basename(img_path)
-                if filename.endswith('a.jpg') or filename.endswith('a.jpeg'):
+                filename = os.path.basename(img_path).lower()
+                if filename.endswith('a.png') or filename.endswith('a.jpg') or filename.endswith('a.jpeg'):
                     image_type = "FRONT COVER"
-                elif filename.endswith('b.jpg') or filename.endswith('b.jpeg'):
+                elif filename.endswith('b.png') or filename.endswith('b.jpg') or filename.endswith('b.jpeg'):
                     image_type = "BACK COVER"
-                elif filename.endswith('c.jpg') or filename.endswith('c.jpeg'):
+                elif filename.endswith('c.png') or filename.endswith('c.jpg') or filename.endswith('c.jpeg'):
                     image_type = "ADDITIONAL IMAGE"
                 else:
                     image_type = "IMAGE"
@@ -169,16 +172,30 @@ def process_folder(folder_path, wb, results_folder_path):
                 # Start API call timing
                 api_start_time = time.time()
                 
+                # Determine content type based on file extension
+                content_types = []
+                for img_path in image_paths:
+                    ext = os.path.splitext(img_path)[1].lower()
+                    if ext == '.png':
+                        content_types.append("image/png")
+                    else:
+                        content_types.append("image/jpeg")  # Default to jpeg for jpg/jpeg
+                
+                # Create messages with appropriate content types
+                image_contents = []
+                for i, base64_image in enumerate(base64_images):
+                    image_contents.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{content_types[i]};base64,{base64_image}"}
+                    })
+                
                 response = client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{
                         "role": "user",
                         "content": [
                             {"type": "text", "text": prompt},
-                            *[{
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
-                            } for base64_image in base64_images]
+                            *image_contents
                         ]
                     }],
                     max_tokens=2000
@@ -327,7 +344,7 @@ def main():
     start_time = time.time()
     
     base_dir = "ai-music-workflow/cd-processing"
-    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-5")
+    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-retest")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     # Create results folder with today's date
