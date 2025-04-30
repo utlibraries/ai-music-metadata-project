@@ -201,16 +201,18 @@ f'''Analyze the following OCLC results based on the given metadata and determine
    - Title 
    - Artist/Performer
    - Contributors (some matching - not all need to match)
-   - Publisher Name (exact match preferred; corporate ownership relationships like "Columbia is part of Sony" should NOT be considered a match)
+   - Publisher Name (the metadata record may include multiple names of publishers and distributor.  These do not all need to match the OCLC record, but there should be at least one exact match unless there are no visible publishers in the metadata; corporate ownership relationships like "Columbia is part of Sony" should NOT be considered a match.)
    - Physical Description (should make sense for a CD)
    - Content (track listings - these should be mostly similar, with small differences in spelling or punctuation)
-   - Year (this is a key field only if present in the metadata, AND not marked as being a sticker date)
+   - Year (Should be an exact match if present in both the metadata and oclc record. If there are two years written in a record, the latter of the years is the reissue date, which is what we want to match)
 3. ***Notes on Matching Special Cases***:
    - Titles in non-Latin scripts that match in meaning or transliteration should also be considered equivalent.
    - If a field is marked as partially obscured, lessen the importance of that field in the matching process.
    - Different releases in different regions (e.g., Japanese release vs. US release) should be treated as different records even if title and content match.
-4. When information is not visible in the metadata, do not use that field in your consideration of a match. 
-5. If there is no likely match, write "No matching records found" and set the confidence score as 0.
+4. When information is not visible in the metadata, DO NOT use that field in your consideration of a match. It may be written in the metadata as 'not visible' or 'not available', etc.
+5. If there is a publisher in the OCLC record but it cannot be found anywhere in the metadata, the OCLC record or the CD may be a reissue - mark it as 80 because that way it will be checked by a cataloger. 
+6. The publisher should have at least one match between the metadata and OCLC record.  This may be a partial match, but it needs to be at least a fuzzy match.  No corporate relationships or associations unless explicitly mentioned in both the metadata and the OCLC record.  If the publisher is not visible in the metadata, do not use this field in your consideration of a match.
+7. If there is no likely match, write "No matching records found" and set the confidence score as 0.
 
 Format for Response:
 - Your response must follow this format exactly:

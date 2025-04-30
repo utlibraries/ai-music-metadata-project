@@ -40,7 +40,7 @@ Temporary Items
 # Project-specific directories
 ai-music-workflow/on-demand-processing-vinyl/
 ai-music-workflow/cd-processing/cd-output-folders/
-
+ai-music-workflow/cd-processing/cd-image-folders/cd-scans-retest/
 
 # Project-specific files
 *.docx
