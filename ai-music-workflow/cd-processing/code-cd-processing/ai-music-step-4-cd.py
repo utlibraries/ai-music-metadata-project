@@ -385,7 +385,7 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
     
     # Apply multi-part track bonus if needed
     if multi_part_groups and final_similarity < 80:
-        adjusted_similarity = min(80.0, final_similarity + 10.0)
+        adjusted_similarity = min(79.0, final_similarity + 10.0)
         print(f"Applying multi-part track bonus: final similarity {adjusted_similarity:.2f}%")
         return adjusted_similarity
     
@@ -674,7 +674,7 @@ def main():
     records_main_match_at_ixa = 0
     records_other_matches_at_ixa = 0
     
-    print(f"Starting verification for records with confidence ≥ 85% that mention tracks...")
+    print(f"Starting verification for records with confidence ≥ 80% that mention tracks...")
     print(f"Total rows in spreadsheet: {sheet.max_row - 1}")
     
     for row in range(2, sheet.max_row + 1):
@@ -742,7 +742,7 @@ def main():
                 
             try:
                 conf_score = float(confidence_score)
-                if conf_score < 85:
+                if conf_score < 80:
                     # Clear the verification columns for skipped rows
                     sheet[f'{VERIFICATION_COLUMN}{row}'].value = None
                     sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = None
@@ -860,7 +860,7 @@ def main():
             # Apply confidence adjustment if needed
             if adjust_confidence:
                 old_confidence = confidence_score
-                new_confidence = 80
+                new_confidence = 79
                 sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value = new_confidence
                 
                 note = f"\n\n[AUTOMATIC REVIEW: Confidence reduced due to: {'; '.join(adjustment_reasons)}. Please verify manually.]"
@@ -964,7 +964,7 @@ def main():
     print(f"\nResults saved to {full_output_path}")
     # Updated summary statistics
     print(f"Summary:")
-    print(f"  - Processed: {records_processed} records with confidence ≥ 85% and track listings mentioned")
+    print(f"  - Processed: {records_processed} records with confidence ≥ 80% and track listings mentioned")
     print(f"  - Adjusted for tracks: {records_adjusted_tracks} records due to low track similarity (< 80% match)")
     print(f"  - Adjusted for years: {records_adjusted_years} records due to publication year mismatch (any difference when both years present)")
     print(f"  - Skipped: {records_skipped} records (low confidence or no track listings)")

@@ -582,14 +582,15 @@ def query_oclc_api(metadata, barcode, limit=10):
     total_records_found = 0
     max_results_to_show = 10  # Our target - 10 CD results
 
-    # Try ALL queries - don't stop until we've tried everything
+    # Try queries until we have 10 unique results or exhausted all queries
     for idx, query in enumerate(cleaned_queries, 1):
+        # Check if we already have enough results - NEW EXIT CONDITION
+        if len(seen_oclc_numbers) >= max_results_to_show:
+            query_log.append(f"\nReached target of {max_results_to_show} unique CD records. Stopping further queries.")
+            break  # Stop the loop once we have 10 unique results
+            
         query_log.append(f"\nQuery {idx}: {query}")
         attempted_queries.append(idx)
-        
-        # Note if we already have enough results, but still try the query
-        if len(seen_oclc_numbers) >= max_results_to_show:
-            query_log.append(f"Already have {max_results_to_show} unique records, but trying this query anyway.")
         
         params = {
             "q": query,
@@ -641,6 +642,10 @@ def query_oclc_api(metadata, barcode, limit=10):
                         # Add the new OCLC numbers to our seen set
                         seen_oclc_numbers.update(current_oclc_numbers)
                         query_log.append(f"Added new CD format matches (now have {len(seen_oclc_numbers)} unique records)")
+                        
+                        # Check if we've reached our target - NEW CHECK
+                        if len(seen_oclc_numbers) >= max_results_to_show:
+                            query_log.append(f"Reached target of {max_results_to_show} unique CD records.")
                     else:
                         query_log.append(f"No new CD format matches found")
                 else:
@@ -683,7 +688,7 @@ def query_oclc_api(metadata, barcode, limit=10):
         return combined_results, "\n".join(query_log)
     else:
         return "No matching records with CD format found after trying all queries", "\n".join(query_log)
-    
+       
 def process_metadata_file(input_file, results_folder_path):
     wb = load_workbook(input_file)
     ws = wb.active
