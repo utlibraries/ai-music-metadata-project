@@ -124,6 +124,12 @@ def process_folder(folder_path, wb, results_folder_path):
     # Temporary file path
     temp_output_file = "temp_progress.xlsx"
     temp_output_path = os.path.join(results_folder_path, temp_output_file)
+    
+    # Create a text file to log all LLM responses
+    llm_log_file_path = os.path.join(results_folder_path, "llm_responses_step_1_log.txt")
+    with open(llm_log_file_path, "w") as llm_log_file:
+        llm_log_file.write(f"LLM Responses Log - Step 1 - Created at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        llm_log_file.write("="*80 + "\n\n")
 
     image_groups = group_images_by_barcode(folder_path)
     total_items = len(image_groups)
@@ -139,6 +145,8 @@ def process_folder(folder_path, wb, results_folder_path):
     for barcode, image_paths in sorted(image_groups.items()):
         processed_items += 1
         item_start_time = time.time()
+        # The row number in the Excel sheet will be processed_items + 1 (accounting for header row)
+        row_number = processed_items + 1
 
         try:
             # Take up to first 3 images for each barcode
@@ -215,6 +223,16 @@ def process_folder(folder_path, wb, results_folder_path):
                 total_tokens += total_item_tokens
 
                 metadata_output = response.choices[0].message.content.strip()
+                
+                # Write the complete LLM response to the log file with row number
+                with open(llm_log_file_path, "a") as llm_log_file:
+                    llm_log_file.write(f"Row {row_number} - Barcode {barcode} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    llm_log_file.write("-"*80 + "\n")
+                    llm_log_file.write(f"LLM RESPONSE:\n{metadata_output}\n\n")
+                    llm_log_file.write(f"TOKENS: {total_item_tokens} (Prompt: {prompt_tokens}, Completion: {completion_tokens})\n")
+                    llm_log_file.write(f"PROCESSING TIME: {round(api_duration, 2)}s\n")
+                    llm_log_file.write("="*80 + "\n\n")
+                
                 print(f"Extracted Metadata for barcode {barcode}: {metadata_output}")
 
                 # Calculate total processing time for this item
@@ -257,6 +275,11 @@ def process_folder(folder_path, wb, results_folder_path):
                 ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
                 temp_ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
                 items_with_issues += 1
+                
+                # Log errors to the LLM log file with row number
+                with open(llm_log_file_path, "a") as llm_log_file:
+                    llm_log_file.write(f"ERROR for Row {row_number} - Barcode {barcode}: {e}\n")
+                    llm_log_file.write("-"*80 + "\n\n")
 
         except Exception as e:
             print(f"Error processing barcode {barcode}: {str(e)}")
@@ -264,6 +287,11 @@ def process_folder(folder_path, wb, results_folder_path):
             ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
             temp_ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
             items_with_issues += 1
+            
+            # Log errors to the LLM log file with row number
+            with open(llm_log_file_path, "a") as llm_log_file:
+                llm_log_file.write(f"ERROR processing Row {row_number} - Barcode {barcode}: {e}\n")
+                llm_log_file.write("-"*80 + "\n\n")
 
         # Log progress with token usage
         print(f"Processed {processed_items}/{total_items} items. Barcode: {barcode}. Time: {round(item_duration, 2)}s. Tokens: {total_item_tokens if 'total_item_tokens' in locals() else 0}")
@@ -328,6 +356,7 @@ def process_folder(folder_path, wb, results_folder_path):
     print(f"Processed {total_items} items. {items_with_issues} items had issues.")
     print(f"Total processing time: {round(total_time, 2)} seconds")
     print(f"Total tokens used: {total_tokens} (Prompt: {total_prompt_tokens}, Completion: {total_completion_tokens})")
+    print(f"LLM responses log saved to {llm_log_file_path}")
     
     # Clean up temporary file
     try:
@@ -344,7 +373,7 @@ def main():
     start_time = time.time()
     
     base_dir = "ai-music-workflow/cd-processing"
-    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-retest")
+    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-5")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     # Create results folder with today's date

@@ -73,6 +73,12 @@ def main():
         summary_sheet = wb.create_sheet("TokenSummary")
     else:
         summary_sheet = wb["TokenSummary"]
+        
+    # Create a text file to log all LLM responses
+    llm_log_file_path = os.path.join(results_folder, "llm_responses_step_3_log.txt")
+    with open(llm_log_file_path, "w") as llm_log_file:
+        llm_log_file.write(f"LLM Responses Log - Created at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        llm_log_file.write("="*80 + "\n\n")
     
     # Also create summary in temp workbook
     temp_summary_sheet = temp_wb.create_sheet("TokenSummary")
@@ -97,16 +103,17 @@ def main():
     temp_output_path = os.path.join(results_folder, temp_output_file)
 
     # Define the columns
+    BARCODE_COLUMN = 'D'  
     METADATA_COLUMN = 'E'
     OCLC_RESULTS_COLUMN = 'G'
     RESULT_COLUMN = 'H'
     CONFIDENCE_SCORE_COLUMN = 'I'
     EXPLANATION_COLUMN = 'J'
-    OTHER_MATCHES_COLUMN = 'K'  # Column for other potential matches
-    PROCESSING_TIME_COLUMN = 'L'  # New column for processing time
-    PROMPT_TOKENS_COLUMN = 'M'   # New column for prompt tokens
-    COMPLETION_TOKENS_COLUMN = 'N'  # New column for completion tokens
-    TOTAL_TOKENS_COLUMN = 'O'    # New column for total tokens
+    OTHER_MATCHES_COLUMN = 'K'  
+    PROCESSING_TIME_COLUMN = 'L'  
+    PROMPT_TOKENS_COLUMN = 'M'   
+    COMPLETION_TOKENS_COLUMN = 'N'  
+    TOTAL_TOKENS_COLUMN = 'O'    
 
 
     # Add headers for all columns including new ones
@@ -158,11 +165,18 @@ def main():
     total_completion_tokens = 0
     total_tokens = 0
     processed_rows = 0
+    
+    # Create a text file to log all LLM responses
+    llm_log_file_path = os.path.join(results_folder, "llm_responses_step_3_log.txt")
+    with open(llm_log_file_path, "w") as llm_log_file:
+        llm_log_file.write(f"LLM Responses Log - Step 3 - Created at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        llm_log_file.write("="*80 + "\n\n")
 
     for row in range(2, sheet.max_row + 1):  # Row 1 is the header
         row_start_time = time.time()
         metadata = sheet[f'{METADATA_COLUMN}{row}'].value
         oclc_results = sheet[f'{OCLC_RESULTS_COLUMN}{row}'].value
+        barcode = sheet[f'{BARCODE_COLUMN}{row}'].value  # Get the barcode from column D
 
         # Skip rows with missing data or "No matching records" message
         if not metadata or not oclc_results or oclc_results == "No matching records found" or oclc_results.strip() == "":
@@ -195,7 +209,7 @@ def main():
 f'''Analyze the following OCLC results based on the given metadata and determine which result is the best match. Methodically go through each record, choose the top 3, then consider them again and choose the record that matches the most elements in the metadata. If two or more records tie for best match, prioritize records that have more holdings and that are held by IXA. If there is no likely match, write "No matching records found".
 
 **Important Instructions**:
-1. Confidence Score: 0% indicates no confidence, and 100% indicates high confidence that we have found the correct OCLC number. At or below 80%, the record will be checked by a cataloger. 
+1. Confidence Score: 0% indicates no confidence, and 100% indicates high confidence that we have found the correct OCLC number. If the confidence is below 79%, the record will be checked by a cataloger. 
 2. ***Key Fields in order of importance***:
    - UPC/Product Code (a match is HIGHEST priority if available in both metadata and OCLC record - if not available in one or the other, skip this field.  Occasionally, the UPC is partially obscured in the metadata - if some of the numbers in a UPC are incorrect but other fields are matching, it is still a match)
    - Title 
@@ -210,7 +224,7 @@ f'''Analyze the following OCLC results based on the given metadata and determine
    - If a field is marked as partially obscured, lessen the importance of that field in the matching process.
    - Different releases in different regions (e.g., Japanese release vs. US release) should be treated as different records even if title and content match.
 4. When information is not visible in the metadata, DO NOT use that field in your consideration of a match. It may be written in the metadata as 'not visible' or 'not available', etc.
-5. If there is a publisher in the OCLC record but it cannot be found anywhere in the metadata, the OCLC record or the CD may be a reissue - mark it as 80 because that way it will be checked by a cataloger. 
+5. If there is a publisher in the OCLC record but it cannot be found anywhere in the metadata, the OCLC record or the CD may be a reissue - mark it as 79 because that way it will be checked by a cataloger. 
 6. The publisher should have at least one match between the metadata and OCLC record.  This may be a partial match, but it needs to be at least a fuzzy match.  No corporate relationships or associations unless explicitly mentioned in both the metadata and the OCLC record.  If the publisher is not visible in the metadata, do not use this field in your consideration of a match.
 7. If there is no likely match, write "No matching records found" and set the confidence score as 0.
 
@@ -221,7 +235,7 @@ Format for Response:
   3. Explanation: [List of things that match as key value pairs. If there are multiple records that could be a match, explain why you chose the one you did. If there are no matches, explain why.]
   4. Other potential good matches: [List of other OCLC numbers that could be good matches and a one sentence explanation for each match as key value pairs. If there are no other potential matches, write 'No other potential good matches.']
   
-Once you have responded, go back through the response that you wrote and carefully verify each piece of information. If you find a mistake, look for a better record. If there isn't one, reduce the confidence score to 80% or lower. If there is one, once again carefully verify all the facts that support your choice. If you still can't find a match, write "No matching records found" and set the confidence score as 0.
+Once you have responded, go back through the response that you wrote and carefully verify each piece of information. If you find a mistake, look for a better record. If there isn't one, reduce the confidence score to 79% or lower. If there is one, once again carefully verify all the facts that support your choice. If you still can't find a match, write "No matching records found" and set the confidence score as 0.
 
 Metadata: {metadata}
 
@@ -236,12 +250,12 @@ OCLC Results: {oclc_results}
                     {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and also have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=1000,
+                max_tokens=1500,
                 temperature=0.5
             )
             api_call_duration = time.time() - api_call_start
             total_api_time += api_call_duration
-            
+        
             # Extract token usage
             prompt_tokens = response.usage.prompt_tokens
             completion_tokens = response.usage.completion_tokens
@@ -255,6 +269,16 @@ OCLC Results: {oclc_results}
             successful_calls += 1
 
             analysis_result = response.choices[0].message.content.strip()
+            
+            # Write the complete LLM response to the log file
+            with open(llm_log_file_path, "a") as llm_log_file:
+                llm_log_file.write(f"Row {row} - Barcode {barcode} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                llm_log_file.write("-"*80 + "\n")
+                llm_log_file.write(f"LLM RESPONSE:\n{analysis_result}\n\n")
+                llm_log_file.write(f"TOKENS: {tokens_used} (Prompt: {prompt_tokens}, Completion: {completion_tokens})\n")
+                llm_log_file.write(f"PROCESSING TIME: {round(api_call_duration, 2)}s\n")
+                llm_log_file.write("="*80 + "\n\n")
+                
 
             oclc_number = "Not found"
             confidence_score = "0"
@@ -358,6 +382,11 @@ OCLC Results: {oclc_results}
             
             except Exception as parsing_error:
                 print(f"Error parsing response in row {row}: {parsing_error}")
+                
+                # Log any parsing errors to the LLM log file
+                with open(llm_log_file_path, "a") as llm_log_file:
+                    llm_log_file.write(f"PARSING ERROR in row {row} - Barcode {barcode}: {parsing_error}\n")
+                    llm_log_file.write("-"*80 + "\n\n")
 
             # Calculate total processing time for this row
             row_duration = time.time() - row_start_time
@@ -416,6 +445,8 @@ OCLC Results: {oclc_results}
                 cell.alignment = Alignment(wrap_text=True)
 
             print(f"\n--- Processed row {row}/{sheet.max_row} ---")
+            print(f"Barcode: {barcode}")
+            print(f"OCLC Number: {result_cell.value}")
             print(f"OCLC Number: {result_cell.value}")
             print(f"Confidence Score: {confidence_cell.value}%")
             print(f"Processing Time: {round(row_duration, 2)}s (API: {round(api_call_duration, 2)}s)")
@@ -461,6 +492,17 @@ OCLC Results: {oclc_results}
         except Exception as e:
             failed_calls += 1
             print(f"Error processing row {row}: {e}")
+            
+            # Log errors to the LLM log file
+            with open(llm_log_file_path, "a") as llm_log_file:
+                llm_log_file.write(f"ERROR in row {row}: {e}\n")
+                llm_log_file.write("-"*80 + "\n\n")
+                
+            # Log errors to the LLM log file
+            with open(llm_log_file_path, "a") as llm_log_file:
+                llm_log_file.write(f"ERROR in row {row} - Barcode {barcode}: {e}\n")
+                llm_log_file.write("-"*80 + "\n\n")
+                
             # Update both workbooks to show the error
             sheet[f'{RESULT_COLUMN}{row}'].value = "Error processing"
             sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value = 0
@@ -479,6 +521,7 @@ OCLC Results: {oclc_results}
     script_duration = time.time() - script_start_time
     avg_call_time = total_api_time / successful_calls if successful_calls > 0 else 0
     avg_tokens_per_call = total_tokens / successful_calls if successful_calls > 0 else 0
+    estimated_cost = (total_tokens / 1000) * 0.003  # Estimate based on $0.003 per 1K tokens
     
     # Add summary data
     summary_sheet.append([
@@ -492,6 +535,7 @@ OCLC Results: {oclc_results}
         total_completion_tokens,
         total_tokens,
         round(avg_tokens_per_call, 2),
+        round(estimated_cost, 4),
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ])
 
@@ -509,6 +553,7 @@ OCLC Results: {oclc_results}
         log_file.write(f"Total completion tokens: {total_completion_tokens}\n")
         log_file.write(f"Total tokens: {total_tokens}\n")
         log_file.write(f"Average tokens per call: {round(avg_tokens_per_call, 2)}\n")
+        log_file.write(f"Estimated cost ($0.003/1K tokens): ${round(estimated_cost, 4)}\n")
 
     current_date = datetime.now().strftime("%Y-%m-%d")
     output_file = f"ai-music-step-3-{current_date}.xlsx"
@@ -526,6 +571,7 @@ OCLC Results: {oclc_results}
     
     print(f"\nResults saved to {full_output_path}")
     print(f"Token usage log saved to {log_file_path}")
+    print(f"LLM responses log saved to {llm_log_file_path}")
     print("\nSummary:")
     print(f"- Total rows processed: {total_rows}")
     print(f"- Successful API calls: {successful_calls}")
@@ -533,6 +579,7 @@ OCLC Results: {oclc_results}
     print(f"- Total script execution time: {round(script_duration, 2)} seconds")
     print(f"- Total API time: {round(total_api_time, 2)} seconds")
     print(f"- Total tokens used: {total_tokens} (Prompt: {total_prompt_tokens}, Completion: {total_completion_tokens})")
+    print(f"- Estimated cost: ${round(estimated_cost, 4)}")
 
 if __name__ == "__main__":
     main()
