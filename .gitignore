@@ -47,3 +47,4 @@ ai-music-workflow/cd-processing/cd-image-folders/cd-scans-retest/
 move-jpeg-files.sh
 *.xlsx
 *.txt
+ai-music-workflow/cd-processing/code-cd-processing/ai-music-step-5.editing-cd.py
