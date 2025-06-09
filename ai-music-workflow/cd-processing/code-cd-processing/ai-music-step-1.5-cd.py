@@ -130,9 +130,9 @@ def main():
     if not results_folder:
         return
     
-    # Look for previous step files in the results folder
+    # Look for previously created spreadsheet in the results folder
     input_files = [f for f in os.listdir(results_folder) 
-                   if f.startswith('ai-music-step-1-') and f.endswith('.xlsx')]
+                   if f.startswith('cd-metadata-ai-') and f.endswith('.xlsx')]
     
     if not input_files:
         return

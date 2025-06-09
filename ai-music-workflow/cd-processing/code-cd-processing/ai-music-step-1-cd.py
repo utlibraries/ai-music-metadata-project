@@ -11,6 +11,8 @@ from openpyxl.styles import Alignment
 from openpyxl.drawing.image import Image
 from openai import OpenAI
 from collections import defaultdict
+from token_logging import create_token_usage_log, log_individual_response
+
 
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
@@ -84,16 +86,14 @@ def group_images_by_barcode(folder_path):
     return image_groups
 
 def process_folder(folder_path, wb, results_folder_path):
+    model_name = "gpt-4o-mini-2024-07-18"  
     ws = wb.active
-    headers = ['Input Image 1', 'Input Image 2', 'Input Image 3', 'Barcode', 'AI-Generated Metadata', 
-               'Processing Time (s)', 'Prompt Tokens', 'Completion Tokens', 'Total Tokens']
+    headers = ['Input Image 1', 'Input Image 2', 'Input Image 3', 'Barcode', 'AI-Generated Metadata']
     ws.append(headers)
 
     for col, header in enumerate(headers, start=1):
         if col == 4:  # Barcode column
-            ws.column_dimensions[get_column_letter(col)].width = 15
-        elif col >= 6:  # Token and timing columns
-            ws.column_dimensions[get_column_letter(col)].width = 15
+            ws.column_dimensions[get_column_letter(col)].width = 17
         else:
             ws.column_dimensions[get_column_letter(col)].width = 30 if col <= 3 else 52
 
@@ -103,14 +103,17 @@ def process_folder(folder_path, wb, results_folder_path):
                        'Total Prompt Tokens', 'Total Completion Tokens', 'Total Tokens',
                        'Average Time per Item (s)', 'Average Tokens per Item'])
 
+    # Create logs folder within the results folder
+    logs_folder_path = os.path.join(results_folder_path, "logs")
+    if not os.path.exists(logs_folder_path):
+        os.makedirs(logs_folder_path)
+
     # Create a temporary workbook for periodic saving (no images)
     temp_wb = Workbook()
     temp_ws = temp_wb.active
     temp_ws.append(headers)
     for col, header in enumerate(headers, start=1):
         if col == 4:  # Barcode column
-            temp_ws.column_dimensions[get_column_letter(col)].width = 15
-        elif col >= 6:  # Token and timing columns
             temp_ws.column_dimensions[get_column_letter(col)].width = 15
         else:
             temp_ws.column_dimensions[get_column_letter(col)].width = 30 if col <= 3 else 52
@@ -122,14 +125,8 @@ def process_folder(folder_path, wb, results_folder_path):
                            'Average Time per Item (s)', 'Average Tokens per Item'])
     
     # Temporary file path
-    temp_output_file = "temp_progress.xlsx"
+    temp_output_file = "temp_cd_metadata_progress.xlsx"
     temp_output_path = os.path.join(results_folder_path, temp_output_file)
-    
-    # Create a text file to log all LLM responses
-    llm_log_file_path = os.path.join(results_folder_path, "llm_responses_step_1_log.txt")
-    with open(llm_log_file_path, "w") as llm_log_file:
-        llm_log_file.write(f"LLM Responses Log - Step 1 - Created at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        llm_log_file.write("="*80 + "\n\n")
 
     image_groups = group_images_by_barcode(folder_path)
     total_items = len(image_groups)
@@ -142,11 +139,27 @@ def process_folder(folder_path, wb, results_folder_path):
     total_tokens = 0
     total_time = 0
 
+    # REPLACE THIS SECTION IN ai-music-step-1-cd.py
+    # Find the line that starts: "for barcode, image_paths in sorted(image_groups.items()):"
+    # Replace from that line until the end of the main processing loop
+
+    # Also ADD this print statement right before the for loop:
+    print(f"\n🎯 STEP 1: METADATA EXTRACTION")
+    print(f"Found {total_items} CD image groups to process")
+    print(f"Starting metadata extraction using {model_name}...")
+    print("-" * 50)
+
     for barcode, image_paths in sorted(image_groups.items()):
         processed_items += 1
         item_start_time = time.time()
         # The row number in the Excel sheet will be processed_items + 1 (accounting for header row)
         row_number = processed_items + 1
+
+        # Enhanced progress display
+        print(f"\n📀 Processing CD {processed_items}/{total_items}")
+        print(f"   Barcode: {barcode}")
+        print(f"   Images: {len(image_paths)} files")
+        print(f"   Progress: {(processed_items/total_items)*100:.1f}%")
 
         try:
             # Take up to first 3 images for each barcode
@@ -167,10 +180,13 @@ def process_folder(folder_path, wb, results_folder_path):
                     image_type = "IMAGE"
                 
                 uploaded_files_info += f"[Image {i+1} - {image_type}: {img_path}]\n"
+                print(f"   📸 {image_type}: {os.path.basename(img_path)}")
 
             prompt = prompt_text + "\n" + uploaded_files_info
 
             try:
+                print(f"   🤖 Calling OpenAI API...")
+                
                 base64_images = []
                 for img_path in image_paths:
                     with open(img_path, "rb") as image_file:
@@ -198,7 +214,7 @@ def process_folder(folder_path, wb, results_folder_path):
                     })
                 
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=model_name,
                     messages=[{
                         "role": "user",
                         "content": [
@@ -224,24 +240,30 @@ def process_folder(folder_path, wb, results_folder_path):
 
                 metadata_output = response.choices[0].message.content.strip()
                 
-                # Write the complete LLM response to the log file with row number
-                with open(llm_log_file_path, "a") as llm_log_file:
-                    llm_log_file.write(f"Row {row_number} - Barcode {barcode} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    llm_log_file.write("-"*80 + "\n")
-                    llm_log_file.write(f"LLM RESPONSE:\n{metadata_output}\n\n")
-                    llm_log_file.write(f"TOKENS: {total_item_tokens} (Prompt: {prompt_tokens}, Completion: {completion_tokens})\n")
-                    llm_log_file.write(f"PROCESSING TIME: {round(api_duration, 2)}s\n")
-                    llm_log_file.write("="*80 + "\n\n")
+                # Enhanced success output
+                print(f"   ✅ API call successful!")
+                print(f"   ⏱️  API time: {api_duration:.2f}s")
+                print(f"   🎯 Tokens used: {total_item_tokens:,} (P:{prompt_tokens:,}, C:{completion_tokens:,})")
                 
-                print(f"Extracted Metadata for barcode {barcode}: {metadata_output}")
-
-                # Calculate total processing time for this item
-                item_duration = time.time() - item_start_time
-                total_time += item_duration
+                # Preview of extracted metadata (first 100 chars)
+                preview = metadata_output[:100].replace('\n', ' ')
+                print(f"   📄 Metadata preview: {preview}...")
+                
+                # Log individual response
+                log_individual_response(
+                    logs_folder_path=logs_folder_path,
+                    script_name="metadata_creation",
+                    row_number=row_number,
+                    barcode=barcode,
+                    response_text=metadata_output,
+                    model_name=model_name,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    processing_time=api_duration
+                )
                 
                 row_data = [
-                    '', '', '', barcode, metadata_output, 
-                    round(item_duration, 2), prompt_tokens, completion_tokens, total_item_tokens
+                    '', '', '', barcode, metadata_output
                 ]
                 ws.append(row_data)
                 
@@ -270,34 +292,71 @@ def process_folder(folder_path, wb, results_folder_path):
                     cell.alignment = Alignment(vertical='top', wrap_text=True)
 
             except Exception as e:
-                print(f"Error generating content for barcode {barcode}: {str(e)}")
+                print(f"   ❌ API call failed: {str(e)}")
                 error_message = f"Error: {str(e)}"
-                ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
-                temp_ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
+                ws.append(['', '', '', barcode, error_message])
+                temp_ws.append(['', '', '', barcode, error_message])
                 items_with_issues += 1
                 
-                # Log errors to the LLM log file with row number
-                with open(llm_log_file_path, "a") as llm_log_file:
-                    llm_log_file.write(f"ERROR for Row {row_number} - Barcode {barcode}: {e}\n")
-                    llm_log_file.write("-"*80 + "\n\n")
+                # Log errors to the response log
+                log_individual_response(
+                    logs_folder_path=logs_folder_path,
+                    script_name="metadata_creation",
+                    row_number=row_number,
+                    barcode=barcode,
+                    response_text=f"ERROR: {str(e)}",
+                    model_name=model_name,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    processing_time=0
+                )
 
         except Exception as e:
-            print(f"Error processing barcode {barcode}: {str(e)}")
+            print(f"   ❌ Processing failed: {str(e)}")
             error_message = f"Error: {str(e)}"
-            ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
-            temp_ws.append(['', '', '', barcode, error_message, 0, 0, 0, 0])
+            ws.append(['', '', '', barcode, error_message])
+            temp_ws.append(['', '', '', barcode, error_message])
             items_with_issues += 1
             
-            # Log errors to the LLM log file with row number
-            with open(llm_log_file_path, "a") as llm_log_file:
-                llm_log_file.write(f"ERROR processing Row {row_number} - Barcode {barcode}: {e}\n")
-                llm_log_file.write("-"*80 + "\n\n")
+            # Log errors to the response log
+            log_individual_response(
+                logs_folder_path=logs_folder_path,
+                script_name="metadata_creation",
+                row_number=row_number,
+                barcode=barcode,
+                response_text=f"ERROR processing: {str(e)}",
+                model_name=model_name,
+                prompt_tokens=0,
+                completion_tokens=0,
+                processing_time=0
+            )
 
-        # Log progress with token usage
-        print(f"Processed {processed_items}/{total_items} items. Barcode: {barcode}. Time: {round(item_duration, 2)}s. Tokens: {total_item_tokens if 'total_item_tokens' in locals() else 0}")
+        # Calculate timing and enhanced log progress (moved outside both try blocks)
+        item_duration = time.time() - item_start_time
+        total_time += item_duration
         
-        # Save temporary workbook every 10 rows
+        # Enhanced completion summary
+        print(f"   ⌚ Total item time: {item_duration:.2f}s")
+        print(f"   📊 Running totals: {total_tokens:,} tokens, ${(total_tokens/1000)*0.00015:.4f} cost")
+        
+        # Progress bar
+        progress = processed_items / total_items
+        bar_length = 30
+        filled_length = int(bar_length * progress)
+        bar = '█' * filled_length + '-' * (bar_length - filled_length)
+        print(f"   Progress: |{bar}| {progress*100:.1f}% ({processed_items}/{total_items})")
+        
+        # ETA calculation
+        if processed_items > 1:
+            avg_time = total_time / processed_items
+            remaining_items = total_items - processed_items
+            eta_seconds = remaining_items * avg_time
+            eta_minutes = eta_seconds / 60
+            print(f"   🕒 ETA: ~{eta_minutes:.1f} minutes remaining")
+        
+        # Save temporary workbook every 10 rows with enhanced messaging
         if processed_items % 10 == 0:
+            print(f"   💾 Saving progress checkpoint...")
             # Update summary data in temp workbook
             avg_time = total_time / processed_items if processed_items > 0 else 0
             avg_tokens = total_tokens / processed_items if processed_items > 0 else 0
@@ -321,42 +380,17 @@ def process_folder(folder_path, wb, results_folder_path):
             # Save temporary progress
             try:
                 temp_wb.save(temp_output_path)
-                print(f"Progress saved ({processed_items}/{total_items} items)")
+                print(f"   ✅ Progress saved ({processed_items}/{total_items} items)")
             except Exception as save_error:
-                print(f"Warning: Could not save temporary progress: {save_error}")
+                print(f"   ⚠️  Warning: Could not save temporary progress: {save_error}")
 
-    # Add summary data to main workbook
-    avg_time = total_time / total_items if total_items > 0 else 0
-    avg_tokens = total_tokens / total_items if total_items > 0 else 0
-    
-    summary_ws.append([
-        total_items, 
-        items_with_issues, 
-        round(total_time, 2),
-        total_prompt_tokens,
-        total_completion_tokens,
-        total_tokens,
-        round(avg_time, 2),
-        round(avg_tokens, 2)
-    ])
-    
-    # Create a token usage log file
-    log_file_path = os.path.join(results_folder_path, "step_1_token_usage_log.txt")
-    with open(log_file_path, "w") as log_file:
-        log_file.write(f"Processing completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        log_file.write(f"Total items processed: {total_items}\n")
-        log_file.write(f"Items with issues: {items_with_issues}\n")
-        log_file.write(f"Total processing time: {round(total_time, 2)} seconds\n")
-        log_file.write(f"Total prompt tokens: {total_prompt_tokens}\n")
-        log_file.write(f"Total completion tokens: {total_completion_tokens}\n")
-        log_file.write(f"Total tokens: {total_tokens}\n")
-        log_file.write(f"Average time per item: {round(avg_time, 2)} seconds\n")
-        log_file.write(f"Average tokens per item: {round(avg_tokens, 2)}\n")
-
-    print(f"Processed {total_items} items. {items_with_issues} items had issues.")
-    print(f"Total processing time: {round(total_time, 2)} seconds")
-    print(f"Total tokens used: {total_tokens} (Prompt: {total_prompt_tokens}, Completion: {total_completion_tokens})")
-    print(f"LLM responses log saved to {llm_log_file_path}")
+    # At the very end of the function, REPLACE the existing print statements with:
+    print(f"\n🎉 STEP 1 COMPLETED!")
+    print(f"✅ Successfully processed: {total_items - items_with_issues}/{total_items} CDs")
+    print(f"❌ Items with issues: {items_with_issues}")
+    print(f"⏱️  Total time: {total_time:.1f}s ({total_time/60:.1f} minutes)")
+    print(f"🎯 Total tokens: {total_tokens:,}")
+    print(f"💰 Estimated cost: ${(total_tokens/1000)*0.00015:.4f}")
     
     # Clean up temporary file
     try:
@@ -366,14 +400,13 @@ def process_folder(folder_path, wb, results_folder_path):
     except Exception as remove_error:
         print(f"Warning: Could not remove temporary progress file: {remove_error}")
     
-    return total_items, items_with_issues, total_time, total_tokens
-
+    return total_items, items_with_issues, total_time, total_prompt_tokens, total_completion_tokens, total_tokens
 
 def main():
     start_time = time.time()
     
     base_dir = "ai-music-workflow/cd-processing"
-    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-5")
+    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-100")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     # Create results folder with today's date
@@ -385,8 +418,13 @@ def main():
     if not os.path.exists(results_folder_path):
         os.makedirs(results_folder_path)
     
+    # Create logs folder within the results folder
+    logs_folder_path = os.path.join(results_folder_path, "logs")
+    if not os.path.exists(logs_folder_path):
+        os.makedirs(logs_folder_path)
+    
     wb = Workbook()
-    total_items, items_with_issues, total_time, total_tokens = process_folder(images_folder, wb, results_folder_path)
+    total_items, items_with_issues, total_time, total_prompt_tokens, total_completion_tokens, total_tokens = process_folder(images_folder, wb, results_folder_path)
 
     for row in wb.active.iter_rows():
         for cell in row:
@@ -395,18 +433,36 @@ def main():
     wb.active.freeze_panes = 'A2'
 
     # Save output to the results folder
-    output_file = f"ai-music-step-1-{current_date}.xlsx"
+    output_file = f"cd-metadata-ai-{current_date}.xlsx"
     full_output_path = os.path.join(results_folder_path, output_file)
 
     wb.save(full_output_path)
     
     total_execution_time = time.time() - start_time
     
+    # Calculate token breakdown (you'll need to track these in process_folder)
+    # For now, using total_tokens as completion tokens since that's what's tracked
+    model_name = "gpt-4o-mini-2024-07-18"
+    
+    # Create the token usage log
+    create_token_usage_log(
+        logs_folder_path=logs_folder_path,
+        script_name="metadata_creation",
+        model_name=model_name,
+        total_items=total_items,
+        items_with_issues=items_with_issues,
+        total_time=total_time,
+        total_prompt_tokens=total_prompt_tokens,
+        total_completion_tokens=total_completion_tokens,
+        total_cached_tokens=0
+    )
+    
     print(f"Results saved to {full_output_path}")
     print(f"Summary: Processed {total_items} items, {items_with_issues} with issues.")
     print(f"Total execution time: {round(total_execution_time, 2)} seconds")
     print(f"Total OpenAI API time: {round(total_time, 2)} seconds")
     print(f"Total tokens used: {total_tokens}")
+    print(f"Token usage log created in: {logs_folder_path}")
     
 if __name__ == "__main__":
     main()

@@ -721,7 +721,7 @@ def process_metadata_file(input_file, results_folder_path):
     temp_ws.column_dimensions['G'].width = 52
     
     # Temporary file path
-    temp_output_file = "temp_step2_progress.xlsx"
+    temp_output_file = "temp_cd_metadata_progress.xlsx"
     temp_output_path = os.path.join(results_folder_path, temp_output_file)
     
     total_rows = ws.max_row
@@ -828,7 +828,7 @@ def main():
     
     # Look for previous step files in the results folder.
     input_files = [f for f in os.listdir(results_folder) 
-                   if f.startswith('ai-music-step-1-') and f.endswith('.xlsx')]
+               if f.startswith('cd-metadata-ai-') and f.endswith('.xlsx')]
     
     if not input_files:
         print("No step 1 files found in the results folder!")
@@ -841,7 +841,7 @@ def main():
     wb = process_metadata_file(input_file, results_folder)
     
     current_date = datetime.now().strftime("%Y-%m-%d")
-    output_file = f"ai-music-step-2-{current_date}.xlsx"
+    output_file = f"cd-metadata-ai-{current_date}.xlsx"
     full_output_path = os.path.join(results_folder, output_file)
     
     wb.save(full_output_path)

@@ -630,7 +630,7 @@ def main():
     
     # Look for step 3 files in the results folder
     step3_files = [f for f in os.listdir(results_folder) 
-                   if f.startswith('ai-music-step-3-') and f.endswith('.xlsx')]
+               if f.startswith('cd-metadata-ai-') and f.endswith('.xlsx')]
     
     if not step3_files:
         print("No step 3 files found in the results folder!")
@@ -957,7 +957,7 @@ def main():
             sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
     
     current_date = datetime.now().strftime("%Y-%m-%d")
-    output_file = f"ai-music-step-4-{current_date}.xlsx"
+    output_file = f"cd-metadata-ai-{current_date}.xlsx"
     full_output_path = os.path.join(results_folder, output_file)
     
     wb.save(full_output_path)
