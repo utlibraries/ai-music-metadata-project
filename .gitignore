@@ -47,3 +47,5 @@ ai-music-workflow/cd-processing/cd-image-folders/cd-scans-500/
 move-jpeg-files.sh
 *.xlsx
 *.txt
+CLAUDE.local.md
+CLAUDE.md
