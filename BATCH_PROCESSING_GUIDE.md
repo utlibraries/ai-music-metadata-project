@@ -6,10 +6,10 @@ The AI Music Metadata Project now supports **OpenAI Batch Processing** for signi
 
 ## Benefits of Batch Processing
 
-- **50% Cost Savings**: Batch API pricing is 50% cheaper than real-time API calls
-- **Higher Rate Limits**: 2M tokens/day vs 500K for regular API
-- **Same Quality**: Identical model performance and output quality
-- **Reduced Monitoring**: Submit jobs and check back later vs real-time watching
+- **50% Cost Savings**
+- **Higher Rate Limits**
+- **Same Quality**
+- **Reduced Monitoring**
 
 ## How It Works
 

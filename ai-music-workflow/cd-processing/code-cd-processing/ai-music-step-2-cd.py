@@ -36,7 +36,7 @@ def get_access_token(client_id, client_secret):
         raise Exception(f"Failed to get access token: {response.text}")
     
 def extract_metadata_fields(metadata_str):
-    # Initialize the same structure you already expect
+    # Initialize the same structure
     fields = {
         "Main Title": None,
         "English Title": None,
@@ -261,7 +261,8 @@ def format_oclc_results(json_response, access_token):
                 formatted_results.append(f"OCLC Number: {oclc_number}")
             
             if oclc_number:
-                is_held_by_IXA, total_holding_count = get_holdings_info(oclc_number, access_token)
+                # FIXED: Now correctly unpacking all 3 return values
+                is_held_by_IXA, total_holding_count, holding_institutions = get_holdings_info(oclc_number, access_token)
                 formatted_results.append(f"\nHeld by IXA: {'Yes' if is_held_by_IXA else 'No'}")
                 formatted_results.append(f"Total Institutions Holding: {total_holding_count}")
             
@@ -485,7 +486,8 @@ def get_holdings_info(oclc_number, access_token):
     }
     
     params = {
-        "oclcNumber": oclc_number
+        "oclcNumber": oclc_number,
+        "limit": 50
     }
     
     try:

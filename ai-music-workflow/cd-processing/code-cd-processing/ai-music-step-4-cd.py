@@ -582,8 +582,8 @@ def check_oclc_held_by_ixa(oclc_results, oclc_number):
     if not oclc_results or not oclc_number:
         return 'N/A'
     
-    # Find the section for this OCLC number
-    oclc_section_pattern = rf"OCLC Number: {oclc_number}.*?(?:(?:----------------------------------------)|$)"
+    # Find the section for this OCLC number - use greedy quantifier
+    oclc_section_pattern = rf"OCLC Number: {oclc_number}.*?(?=OCLC Number:|$)"
     oclc_section = re.search(oclc_section_pattern, oclc_results, re.DOTALL)
     
     if oclc_section:
@@ -617,7 +617,7 @@ def check_other_matches_held_by_ixa(other_matches_text):
     return 'N/A'
 
 def main():
-    # Specify the folder prefix based on your output location
+    # Specify the folder prefix based on output location
     base_dir_prefix = "ai-music-workflow/cd-processing/cd-output-folders/results-"
     
     # Find the latest results folder using the prefix

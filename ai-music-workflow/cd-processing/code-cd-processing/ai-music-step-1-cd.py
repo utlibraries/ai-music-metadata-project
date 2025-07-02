@@ -14,7 +14,7 @@ from collections import defaultdict
 from token_logging import create_token_usage_log, log_individual_response
 
 
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY_PERSONAL'))
 
 def get_llm_prompt():
     return """Analyze these images of a compact disc and extract the following key metadata fields in the specified format. You are a music cataloger, and know that you are responsible for the accuracy of the information you produce.  If ANY information is unclear, partially visible, or not visible: mark it as 'Not visible' in the metadadata. If you have reason to believe that a sticker may be covering part of a key field, like the title or primary contributor, either mark it as 'Not visible' or make an educated guess based on the visible information and note that it may be partially obscured in parentheses.
@@ -406,7 +406,7 @@ def main():
     start_time = time.time()
     
     base_dir = "ai-music-workflow/cd-processing"
-    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-100")
+    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-5")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     # Create results folder with today's date
@@ -440,8 +440,7 @@ def main():
     
     total_execution_time = time.time() - start_time
     
-    # Calculate token breakdown (you'll need to track these in process_folder)
-    # For now, using total_tokens as completion tokens since that's what's tracked
+    # Calculate token breakdown
     model_name = "gpt-4o-mini-2024-07-18"
     
     # Create the token usage log

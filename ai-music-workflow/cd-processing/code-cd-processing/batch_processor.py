@@ -56,7 +56,7 @@ class BatchProcessor:
             return True
             
         # Check environment variable
-        use_batch_env = os.getenv('USE_BATCH_PROCESSING', 'auto').lower()
+        use_batch_env = os.getenv('USE_BATCH_PROCESSING', 'true').lower()
         
         if use_batch_env == 'true':
             return True
