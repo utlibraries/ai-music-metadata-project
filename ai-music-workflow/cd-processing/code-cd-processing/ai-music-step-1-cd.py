@@ -12,7 +12,8 @@ from openpyxl.drawing.image import Image
 from openai import OpenAI
 from collections import defaultdict
 from token_logging import create_token_usage_log, log_individual_response
-from batch_processor import BatchProcessor  # Add this import
+from batch_processor import BatchProcessor  
+from model_pricing import calculate_cost, estimate_cost, get_model_info
 
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
@@ -159,7 +160,7 @@ def prepare_batch_requests(image_groups, model_name):
 
 def process_folder_with_batch(folder_path, wb, results_folder_path):
     """Process folder using batch processing when appropriate."""
-    model_name = "gpt-4o-mini-2024-07-18"
+    model_name = "gpt-4o"
     ws = wb.active
     headers = ['Input Image 1', 'Input Image 2', 'Input Image 3', 'Barcode', 'AI-Generated Metadata']
     ws.append(headers)
@@ -437,10 +438,13 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
     return total_items, items_with_issues, total_time, total_prompt_tokens, total_completion_tokens, total_tokens
 
 def main():
-    start_time = time.time()
+    model_name = "gpt-4o"  
+    
+    # Start timing the entire script execution
+    script_start_time = time.time()
     
     base_dir = "ai-music-workflow/cd-processing"
-    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-100")
+    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-5")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     current_date = datetime.now().strftime("%Y-%m-%d")
@@ -454,9 +458,24 @@ def main():
     if not os.path.exists(logs_folder_path):
         os.makedirs(logs_folder_path)
     
+    # Get image groups to show count in model info
+    image_groups = group_images_by_barcode(images_folder)
+    total_items = len(image_groups)
+    
+    # Show model pricing info at start
+    model_info = get_model_info(model_name)
+    if model_info:
+        print(f"🧠 STEP 1: METADATA EXTRACTION")
+        print(f"Using model: {model_name}")
+        print(f"Pricing: ${model_info['input_per_1k']:.5f}/1K input, ${model_info['output_per_1k']:.5f}/1K output")
+        print(f"Batch discount: {model_info['batch_discount']*100:.0f}%")
+        print(f"Total CDs to process: {total_items}")
+        print("-" * 50)
+    
     wb = Workbook()
     total_items, items_with_issues, total_time, total_prompt_tokens, total_completion_tokens, total_tokens = process_folder_with_batch(images_folder, wb, results_folder_path)
 
+    # Apply formatting to all cells
     for row in wb.active.iter_rows():
         for cell in row:
             cell.alignment = Alignment(wrap_text=True, vertical='top')
@@ -467,9 +486,21 @@ def main():
     full_output_path = os.path.join(results_folder_path, output_file)
     wb.save(full_output_path)
     
-    total_execution_time = time.time() - start_time
-    model_name = "gpt-4o-mini-2024-07-18"
+    # Calculate script metrics
+    script_duration = time.time() - script_start_time
     
+    # Determine if batch processing was used (check if we have many items but zero processing time)
+    was_batch_processed = total_items > 10 and total_time == 0
+    
+    # Calculate actual cost using the model pricing
+    estimated_cost = calculate_cost(
+        model_name=model_name,
+        prompt_tokens=total_prompt_tokens,
+        completion_tokens=total_completion_tokens,
+        is_batch=was_batch_processed
+    )
+    
+    # Create standardized token usage log with enhanced metrics
     create_token_usage_log(
         logs_folder_path=logs_folder_path,
         script_name="metadata_creation",
@@ -479,14 +510,37 @@ def main():
         total_time=total_time,
         total_prompt_tokens=total_prompt_tokens,
         total_completion_tokens=total_completion_tokens,
-        total_cached_tokens=0
+        additional_metrics={
+            "Total script execution time": f"{script_duration:.2f}s",
+            "Processing time percentage": f"{(total_time/script_duration)*100:.1f}%" if script_duration > 0 else "0%",
+            "Items successfully processed": total_items - items_with_issues,
+            "Processing mode": "BATCH" if was_batch_processed else "INDIVIDUAL",
+            "Actual cost": f"${estimated_cost:.4f}",
+            "Average tokens per item": f"{total_tokens/total_items:.0f}" if total_items > 0 else "0"
+        }
     )
     
+    # Enhanced final summary with correct cost calculation
     print(f"\n🎉 STEP 1 COMPLETED!")
     print(f"✅ Successfully processed: {total_items - items_with_issues}/{total_items} CDs")
-    print(f"Results saved to {full_output_path}")
-    print(f"Total execution time: {total_execution_time:.2f} seconds")
-    print(f"Total tokens used: {total_tokens:,}")
+    print(f"❌ Items with issues: {items_with_issues}")
+    print(f"⏱️  Total script time: {script_duration:.1f}s ({script_duration/60:.1f} minutes)")
+    print(f"⏱️  Processing time: {total_time:.1f}s")
+    print(f"🎯 Total tokens: {total_tokens:,} (Input: {total_prompt_tokens:,}, Output: {total_completion_tokens:,})")
+    print(f"🤖 Processing mode: {'BATCH' if was_batch_processed else 'INDIVIDUAL'}")
+    print(f"💰 Actual cost: ${estimated_cost:.4f}")
     
+    # Show batch savings if applicable
+    if was_batch_processed:
+        regular_cost = calculate_cost(model_name, total_prompt_tokens, total_completion_tokens, is_batch=False)
+        savings = regular_cost - estimated_cost
+        savings_percentage = (savings / regular_cost) * 100 if regular_cost > 0 else 0
+        print(f"💰 Regular API cost would have been: ${regular_cost:.4f}")
+        print(f"💰 Batch savings: ${savings:.4f} ({savings_percentage:.1f}%)")
+    
+    print(f"📄 Results saved to: {full_output_path}")
+    print(f"📊 Token usage log saved to: {os.path.join(logs_folder_path, 'metadata_creation_token_usage_log.txt')}")
+    print(f"📝 Full responses log saved to: {os.path.join(logs_folder_path, 'metadata_creation_full_responses_log.txt')}")
+
 if __name__ == "__main__":
     main()

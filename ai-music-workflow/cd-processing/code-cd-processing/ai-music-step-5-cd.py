@@ -408,10 +408,10 @@ def create_low_confidence_review_spreadsheet(results_folder, step4_file, all_rec
     sheet_review.append(header_row)
     
     # Set column widths
-    sheet_review.column_dimensions['A'].width = 23  # Barcode
+    sheet_review.column_dimensions['A'].width = 20  # Barcode
     sheet_review.column_dimensions['B'].width = 50  # AI-Generated Metadata
-    sheet_review.column_dimensions['C'].width = 23  # OCLC Number Chosen
-    sheet_review.column_dimensions['D'].width = 30  # Other Potential Matches 
+    sheet_review.column_dimensions['C'].width = 18  # OCLC Number Chosen
+    sheet_review.column_dimensions['D'].width = 60  # Other Potential Matches 
     sheet_review.column_dimensions['E'].width = 15  # Confidence Score
     sheet_review.column_dimensions['F'].width = 60  # OCLC Record
     
@@ -702,9 +702,9 @@ def create_all_records_spreadsheet():
         sheet_new.append(header_row)
 
         # Set column widths
-        sheet_new.column_dimensions['A'].width = 23  # Barcode
+        sheet_new.column_dimensions['A'].width = 16  # Barcode
         sheet_new.column_dimensions['B'].width = 28  # Sort Group
-        sheet_new.column_dimensions['C'].width = 23  # OCLC Number
+        sheet_new.column_dimensions['C'].width = 12  # OCLC Number
         sheet_new.column_dimensions['D'].width = 50  # OCLC Title
         sheet_new.column_dimensions['E'].width = 50  # OCLC Author
         sheet_new.column_dimensions['F'].width = 20  # OCLC Date

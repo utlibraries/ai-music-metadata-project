@@ -19,9 +19,10 @@ import json
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from openai import OpenAI
 import tempfile
+from model_pricing import estimate_cost
 
 
 class BatchProcessor:
@@ -56,7 +57,7 @@ class BatchProcessor:
             return True
             
         # Check environment variable
-        use_batch_env = os.getenv('USE_BATCH_PROCESSING', 'true').lower()
+        use_batch_env = os.getenv('USE_BATCH_PROCESSING', 'auto').lower()
         
         if use_batch_env == 'true':
             return True
@@ -100,6 +101,68 @@ class BatchProcessor:
             batch_requests.append(batch_request)
             
         return batch_requests
+    
+    def estimate_batch_cost(self, batch_requests: List[Dict[str, Any]], model_name: str) -> Dict[str, float]:
+        """
+        Estimate the cost of processing a batch of requests.
+        
+        Args:
+            batch_requests: List of request dictionaries
+            model_name: Model name to use for pricing
+            
+        Returns:
+            Dictionary with cost estimates and savings information
+        """
+        # More sophisticated token estimation based on request content
+        total_estimated_prompt_tokens = 0
+        total_estimated_completion_tokens = 0
+        
+        for request in batch_requests:
+            # Estimate prompt tokens based on message content
+            prompt_text = ""
+            image_count = 0
+            
+            for message in request.get("messages", []):
+                content = message.get("content", "")
+                if isinstance(content, str):
+                    prompt_text += content
+                elif isinstance(content, list):
+                    # Handle multi-modal content (text + images)
+                    for item in content:
+                        if item.get("type") == "text":
+                            prompt_text += item.get("text", "")
+                        elif item.get("type") == "image_url":
+                            image_count += 1
+            
+            # Rough token estimation: ~4 characters per token
+            estimated_prompt_tokens = len(prompt_text) // 4
+            
+            # Images add significant tokens - rough estimate based on OpenAI pricing
+            # High-res images can be 1000+ tokens each
+            estimated_prompt_tokens += image_count * 1000
+            
+            # Add baseline for system messages and formatting
+            estimated_prompt_tokens += 100
+            
+            total_estimated_prompt_tokens += estimated_prompt_tokens
+            
+            # Estimate completion tokens based on max_tokens setting
+            max_tokens = request.get("max_tokens", 2000)
+            # Assume we'll use about 60% of max tokens on average
+            estimated_completion_tokens = int(max_tokens * 0.6)
+            total_estimated_completion_tokens += estimated_completion_tokens
+        
+        print(f"📊 Token Estimation:")
+        print(f"   Estimated prompt tokens: {total_estimated_prompt_tokens:,}")
+        print(f"   Estimated completion tokens: {total_estimated_completion_tokens:,}")
+        print(f"   Total estimated tokens: {total_estimated_prompt_tokens + total_estimated_completion_tokens:,}")
+        
+        return estimate_cost(
+            model_name=model_name,
+            estimated_prompt_tokens=total_estimated_prompt_tokens,
+            estimated_completion_tokens=total_estimated_completion_tokens,
+            is_batch=True
+        )
     
     def submit_batch(self, batch_requests: List[Dict[str, Any]], 
                     description: str = "") -> str:
@@ -400,92 +463,3 @@ class BatchProcessor:
                 "total_completion_tokens": total_completion_tokens
             }
         }
-    
-    def estimate_batch_cost(self, requests_data: List[Dict[str, Any]], 
-                          model: str = "gpt-4o-mini-2024-07-18") -> Dict[str, float]:
-        """
-        Estimate the cost of batch processing vs regular API calls.
-        
-        Args:
-            requests_data: List of request data
-            model: Model name for pricing
-            
-        Returns:
-            Dictionary with cost estimates
-        """
-        # Rough token estimation (this would need refinement for real use)
-        estimated_prompt_tokens = 0
-        estimated_completion_tokens = 0
-        
-        for req_data in requests_data:
-            # Rough estimation based on content length
-            messages = req_data.get("messages", [])
-            for msg in messages:
-                if isinstance(msg.get("content"), str):
-                    # Rough approximation: 4 chars per token
-                    estimated_prompt_tokens += len(msg["content"]) // 4
-                elif isinstance(msg.get("content"), list):
-                    # Handle vision API with images
-                    for content_item in msg["content"]:
-                        if content_item.get("type") == "text":
-                            estimated_prompt_tokens += len(content_item.get("text", "")) // 4
-                        elif content_item.get("type") == "image_url":
-                            # Vision API tokens vary by image size, rough estimate
-                            estimated_prompt_tokens += 1000
-            
-            # Estimate completion tokens based on max_tokens
-            estimated_completion_tokens += req_data.get("max_tokens", 2000) // 2
-        
-        # Calculate costs (prices for gpt-4o-mini-2024-07-18)
-        regular_cost = (
-            (estimated_prompt_tokens / 1_000_000) * 0.15 +
-            (estimated_completion_tokens / 1_000_000) * 0.60
-        )
-        
-        batch_cost = regular_cost * 0.5  # 50% discount for batch
-        savings = regular_cost - batch_cost
-        
-        return {
-            "estimated_prompt_tokens": estimated_prompt_tokens,
-            "estimated_completion_tokens": estimated_completion_tokens,
-            "regular_cost": regular_cost,
-            "batch_cost": batch_cost,
-            "savings": savings,
-            "savings_percentage": (savings / regular_cost) * 100 if regular_cost > 0 else 0
-        }
-
-
-def demo_batch_processing():
-    """Demonstration of batch processing capabilities."""
-    print("🚀 AI Music Metadata Batch Processing Demo")
-    print("=" * 50)
-    
-    processor = BatchProcessor()
-    
-    # Example batch requests (simplified)
-    sample_requests = [
-        {
-            "model": "gpt-4o-mini-2024-07-18",
-            "messages": [{"role": "user", "content": "What is 2+2?"}],
-            "max_tokens": 100
-        },
-        {
-            "model": "gpt-4o-mini-2024-07-18", 
-            "messages": [{"role": "user", "content": "What is the capital of France?"}],
-            "max_tokens": 100
-        }
-    ]
-    
-    # Check if batch processing should be used
-    use_batch = processor.should_use_batch(len(sample_requests))
-    print(f"Use batch processing: {use_batch}")
-    
-    # Estimate costs
-    cost_estimate = processor.estimate_batch_cost(sample_requests)
-    print(f"Cost estimate: ${cost_estimate['batch_cost']:.6f} (${cost_estimate['savings']:.6f} savings)")
-    print(f"Note: Actual CD processing costs are typically under $1 for 100 CDs")
-    print(f"      The main benefit is the 50% savings on large batches, not absolute cost")
-
-
-if __name__ == "__main__":
-    demo_batch_processing()

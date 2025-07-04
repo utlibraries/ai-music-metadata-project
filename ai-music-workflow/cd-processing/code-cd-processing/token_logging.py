@@ -1,52 +1,6 @@
 import os
 from datetime import datetime
-
-# Pricing data for OpenAI models (per 1M tokens)
-OPENAI_PRICING = {
-    "gpt-4o-2024-08-06": {
-        "input": 2.50,
-        "cached_input": 1.25,
-        "output": 10.00
-    },
-    "gpt-4o-mini-2024-07-18": {
-        "input": 0.15,
-        "cached_input": 0.075,
-        "output": 0.60
-    }
-}
-
-def calculate_cost(model, prompt_tokens, completion_tokens, cached_tokens=0):
-    """
-    Calculate estimated cost based on model and token usage.
-    
-    Args:
-        model (str): Model name (e.g., "gpt-4o-mini-2024-07-18", "gpt-4o-2024-08-06")
-        prompt_tokens (int): Number of prompt tokens
-        completion_tokens (int): Number of completion tokens
-        cached_tokens (int): Number of cached input tokens (optional)
-    
-    Returns:
-        dict: Cost breakdown with total, input_cost, output_cost, cached_cost
-    """
-    if model not in OPENAI_PRICING:
-        # Default to gpt-4o-mini pricing if model not found
-        pricing = OPENAI_PRICING["gpt-4o-mini-2024-07-18"]
-    else:
-        pricing = OPENAI_PRICING[model]
-    
-    # Calculate costs (convert to dollars from per-1M pricing)
-    regular_input_tokens = max(0, prompt_tokens - cached_tokens)
-    input_cost = (regular_input_tokens / 1000000) * pricing["input"]
-    cached_cost = (cached_tokens / 1000000) * pricing["cached_input"]
-    output_cost = (completion_tokens / 1000000) * pricing["output"]
-    total_cost = input_cost + cached_cost + output_cost
-    
-    return {
-        "total_cost": total_cost,
-        "input_cost": input_cost,
-        "output_cost": output_cost,
-        "cached_cost": cached_cost
-    }
+from model_pricing import calculate_cost, get_model_info
 
 def create_token_usage_log(logs_folder_path, script_name, model_name, total_items, items_with_issues, 
                           total_time, total_prompt_tokens, total_completion_tokens, 
@@ -67,15 +21,44 @@ def create_token_usage_log(logs_folder_path, script_name, model_name, total_item
         additional_metrics (dict): Any additional metrics to include
     """
     total_tokens = total_prompt_tokens + total_completion_tokens
-    cost_breakdown = calculate_cost(model_name, total_prompt_tokens, total_completion_tokens, total_cached_tokens)
+    
+    # Determine if batch processing was used (from additional_metrics)
+    is_batch = False
+    if additional_metrics and "Processing mode" in additional_metrics:
+        is_batch = additional_metrics["Processing mode"] == "BATCH"
+    
+    # Calculate cost using centralized pricing
+    total_cost = calculate_cost(
+        model_name=model_name,
+        prompt_tokens=total_prompt_tokens,
+        completion_tokens=total_completion_tokens,
+        is_batch=is_batch
+    )
+    
+    # Get model info for display
+    model_info = get_model_info(model_name)
+    if not model_info:
+        # Fallback if model not found
+        model_info = {
+            "input_per_1k": 0.00015,
+            "output_per_1k": 0.0006,
+            "batch_discount": 0.5
+        }
+    
+    # Calculate individual cost components for display
+    input_cost = (total_prompt_tokens / 1000) * model_info["input_per_1k"]
+    output_cost = (total_completion_tokens / 1000) * model_info["output_per_1k"]
+    if is_batch:
+        input_cost *= model_info["batch_discount"]
+        output_cost *= model_info["batch_discount"]
     
     # Calculate averages
     successful_items = total_items - items_with_issues
     avg_time = total_time / total_items if total_items > 0 else 0
     avg_tokens = total_tokens / successful_items if successful_items > 0 else 0
-    avg_cost = cost_breakdown["total_cost"] / successful_items if successful_items > 0 else 0
+    avg_cost = total_cost / successful_items if successful_items > 0 else 0
     
-    log_file_path = os.path.join(logs_folder_path, f"token_usage_log_{script_name}.txt")
+    log_file_path = os.path.join(logs_folder_path, f"{script_name}_token_usage_log.txt")
     
     with open(log_file_path, "w") as log_file:
         log_file.write(f"OpenAI API Usage Log - {script_name.replace('_', ' ').title()}\n")
@@ -96,10 +79,10 @@ def create_token_usage_log(logs_folder_path, script_name, model_name, total_item
         log_file.write("MODEL INFORMATION:\n")
         log_file.write("-" * 30 + "\n")
         log_file.write(f"Model used: {model_name}\n")
-        log_file.write(f"Input token rate: ${OPENAI_PRICING.get(model_name, OPENAI_PRICING['gpt-4o-mini-2024-07-18'])['input']:.2f} per 1M tokens\n")
-        log_file.write(f"Output token rate: ${OPENAI_PRICING.get(model_name, OPENAI_PRICING['gpt-4o-mini-2024-07-18'])['output']:.2f} per 1M tokens\n")
-        if total_cached_tokens > 0:
-            log_file.write(f"Cached input rate: ${OPENAI_PRICING.get(model_name, OPENAI_PRICING['gpt-4o-mini-2024-07-18'])['cached_input']:.2f} per 1M tokens\n")
+        log_file.write(f"Input token rate: ${model_info['input_per_1k']:.5f} per 1K tokens\n")
+        log_file.write(f"Output token rate: ${model_info['output_per_1k']:.5f} per 1K tokens\n")
+        if is_batch:
+            log_file.write(f"Batch discount applied: {model_info['batch_discount']*100:.0f}%\n")
         log_file.write("\n")
         
         # Token Usage
@@ -115,12 +98,26 @@ def create_token_usage_log(logs_folder_path, script_name, model_name, total_item
         # Cost Breakdown
         log_file.write("COST BREAKDOWN:\n")
         log_file.write("-" * 30 + "\n")
-        log_file.write(f"Input token cost: ${cost_breakdown['input_cost']:.4f}\n")
-        log_file.write(f"Output token cost: ${cost_breakdown['output_cost']:.4f}\n")
-        if total_cached_tokens > 0:
-            log_file.write(f"Cached input cost: ${cost_breakdown['cached_cost']:.4f}\n")
-        log_file.write(f"Total estimated cost: ${cost_breakdown['total_cost']:.4f}\n")
-        log_file.write(f"Average cost per successful item: ${avg_cost:.4f}\n\n")
+        log_file.write(f"Input token cost: ${input_cost:.4f}")
+        if is_batch:
+            log_file.write(f" (batch discounted)\n")
+        else:
+            log_file.write(f"\n")
+        log_file.write(f"Output token cost: ${output_cost:.4f}")
+        if is_batch:
+            log_file.write(f" (batch discounted)\n")
+        else:
+            log_file.write(f"\n")
+        log_file.write(f"Total actual cost: ${total_cost:.4f}\n")
+        log_file.write(f"Average cost per successful item: ${avg_cost:.4f}\n")
+        
+        # Show savings if batch processing was used
+        if is_batch:
+            regular_cost = calculate_cost(model_name, total_prompt_tokens, total_completion_tokens, is_batch=False)
+            savings = regular_cost - total_cost
+            log_file.write(f"Regular API cost would have been: ${regular_cost:.4f}\n")
+            log_file.write(f"Batch processing savings: ${savings:.4f}\n")
+        log_file.write("\n")
         
         # Additional metrics if provided
         if additional_metrics:
@@ -134,12 +131,13 @@ def create_token_usage_log(logs_folder_path, script_name, model_name, total_item
         log_file.write("EFFICIENCY METRICS:\n")
         log_file.write("-" * 30 + "\n")
         tokens_per_second = total_tokens / total_time if total_time > 0 else 0
-        cost_per_minute = (cost_breakdown["total_cost"] / total_time) * 60 if total_time > 0 else 0
+        cost_per_minute = (total_cost / total_time) * 60 if total_time > 0 else 0
         log_file.write(f"Tokens processed per second: {tokens_per_second:.1f}\n")
         log_file.write(f"Cost per minute of processing: ${cost_per_minute:.4f}\n")
         
         if successful_items > 0:
-            log_file.write(f"Items processed per minute: {(successful_items / total_time) * 60:.1f}\n" if total_time > 0 else "Items processed per minute: 0\n")
+            items_per_minute = (successful_items / total_time) * 60 if total_time > 0 else 0
+            log_file.write(f"Items processed per minute: {items_per_minute:.1f}\n")
 
 def log_individual_response(logs_folder_path, script_name, row_number, barcode, response_text, 
                            model_name, prompt_tokens, completion_tokens, processing_time, 
@@ -161,9 +159,16 @@ def log_individual_response(logs_folder_path, script_name, row_number, barcode, 
         additional_info (dict): Any additional information to log
     """
     total_tokens = prompt_tokens + completion_tokens + cached_tokens
-    cost_breakdown = calculate_cost(model_name, prompt_tokens, completion_tokens, cached_tokens)
     
-    log_file_path = os.path.join(logs_folder_path, f"full_responses_log_{script_name}.txt")
+    # Calculate cost for individual call (assume not batch for individual logging)
+    individual_cost = calculate_cost(
+        model_name=model_name,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        is_batch=False  # Individual calls are not batch
+    )
+    
+    log_file_path = os.path.join(logs_folder_path, f"{script_name}_full_responses_log.txt")
     
     # Check if this is the first entry (create header)
     file_exists = os.path.exists(log_file_path)
@@ -182,7 +187,7 @@ def log_individual_response(logs_folder_path, script_name, row_number, barcode, 
         if cached_tokens > 0:
             log_file.write(f", Cached: {cached_tokens:,}")
         log_file.write(")\n")
-        log_file.write(f"ESTIMATED COST: ${cost_breakdown['total_cost']:.4f}\n")
+        log_file.write(f"ESTIMATED COST: ${individual_cost:.4f}\n")
         
         if additional_info:
             for key, value in additional_info.items():

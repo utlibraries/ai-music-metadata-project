@@ -8,7 +8,8 @@ from openpyxl.styles import Alignment
 from datetime import datetime
 import re
 from token_logging import create_token_usage_log, log_individual_response
-from batch_processor import BatchProcessor  # Add this import
+from batch_processor import BatchProcessor 
+from model_pricing import calculate_cost, estimate_cost, get_model_info
 
 def find_latest_results_folder(prefix):
     # Get the parent directory of the prefix
@@ -621,7 +622,7 @@ def process_skipped_rows(sheet, temp_sheet):
     return total_rows
 
 def main():
-    model_name = "gpt-4o-mini-2024-07-18"
+    model_name = "01-mini"  
     
     # Start timing the entire script execution
     script_start_time = time.time()
@@ -660,6 +661,16 @@ def main():
     wb = openpyxl.load_workbook(workbook_path)
     sheet = wb.active
     
+    # Show model pricing info at start
+    model_info = get_model_info(model_name)
+    if model_info:
+        print(f"🧠 STEP 3: AI ANALYSIS OF OCLC MATCHES")
+        print(f"Using model: {model_name}")
+        print(f"Pricing: ${model_info['input_per_1k']:.5f}/1K input, ${model_info['output_per_1k']:.5f}/1K output")
+        print(f"Batch discount: {model_info['batch_discount']*100:.0f}%")
+        print(f"Total rows to analyze: {sheet.max_row - 1}")
+        print("-" * 50)
+    
     # Create a temporary workbook for frequent saving (no images)
     temp_wb = openpyxl.Workbook()
     temp_sheet = temp_wb.active
@@ -686,7 +697,7 @@ def main():
         "Total Rows Processed", "Total API Calls", "Failed API Calls",
         "Total Processing Time (s)", "API Time (s)", "Average Time per Call (s)",
         "Total Prompt Tokens", "Total Completion Tokens", "Total Tokens",
-        "Average Tokens per Call", "Estimated Cost ($0.003/1K)", "Date Completed"
+        "Average Tokens per Call", "Estimated Cost", "Date Completed"
     ]
     summary_sheet.append(summary_headers)
     temp_summary_sheet.append(summary_headers)
@@ -745,11 +756,6 @@ def main():
     temp_sheet.column_dimensions[PROMPT_TOKENS_COLUMN].width = 15
     temp_sheet.column_dimensions[COMPLETION_TOKENS_COLUMN].width = 18
     temp_sheet.column_dimensions[TOTAL_TOKENS_COLUMN].width = 15
-
-    print(f"\n🧠 STEP 3: AI ANALYSIS OF OCLC MATCHES")
-    print(f"Using model: {model_name}")
-    print(f"Total rows to analyze: {sheet.max_row - 1}")
-    print("-" * 50)
     
     # Process with batch or individual logic
     (total_rows, successful_calls, failed_calls, total_api_time, 
@@ -760,7 +766,17 @@ def main():
     script_duration = time.time() - script_start_time
     avg_call_time = total_api_time / successful_calls if successful_calls > 0 else 0
     avg_tokens_per_call = total_tokens / successful_calls if successful_calls > 0 else 0
-    estimated_cost = (total_tokens / 1000) * 0.003  # Estimate based on $0.003 per 1K tokens
+    
+    # Determine if batch processing was used (check if we have many successful calls but zero API time)
+    was_batch_processed = successful_calls > 10 and total_api_time == 0
+    
+    # Calculate actual cost using the model pricing
+    estimated_cost = calculate_cost(
+        model_name=model_name,
+        prompt_tokens=total_prompt_tokens,
+        completion_tokens=total_completion_tokens,
+        is_batch=was_batch_processed
+    )
 
     # Add summary data
     summary_sheet.append([
@@ -794,7 +810,9 @@ def main():
             "Total script execution time": f"{script_duration:.2f}s",
             "API time percentage": f"{(total_api_time/script_duration)*100:.1f}%" if script_duration > 0 else "0%",
             "Rows with valid data": successful_calls,
-            "Rows skipped (no data)": total_rows - successful_calls - failed_calls
+            "Rows skipped (no data)": total_rows - successful_calls - failed_calls,
+            "Processing mode": "BATCH" if was_batch_processed else "INDIVIDUAL",
+            "Actual cost": f"${estimated_cost:.4f}"
         }
     )
 
@@ -817,14 +835,23 @@ def main():
     print(f"Token usage log saved to {os.path.join(logs_folder_path, 'metadata_analysis_token_usage_log.txt')}")
     print(f"Full responses log saved to {os.path.join(logs_folder_path, 'metadata_analysis_full_responses_log.txt')}")
 
-    # Enhanced final summary
+    # Enhanced final summary with correct cost calculation
     print(f"\n🎉 STEP 3 COMPLETED!")
     print(f"✅ Successfully analyzed: {successful_calls} records")
     print(f"❌ Failed calls: {failed_calls}")
     print(f"⏱️  Total script time: {script_duration:.1f}s ({script_duration/60:.1f} minutes)")
     print(f"⏱️  Total API time: {total_api_time:.1f}s")
-    print(f"🎯 Total tokens: {total_tokens:,}")
-    print(f"💰 Estimated cost: ${(total_tokens/1000)*0.003:.4f}")
+    print(f"🎯 Total tokens: {total_tokens:,} (Input: {total_prompt_tokens:,}, Output: {total_completion_tokens:,})")
+    print(f"🤖 Processing mode: {'BATCH' if was_batch_processed else 'INDIVIDUAL'}")
+    print(f"💰 Actual cost: ${estimated_cost:.4f}")
+    
+    # Show batch savings if applicable
+    if was_batch_processed:
+        regular_cost = calculate_cost(model_name, total_prompt_tokens, total_completion_tokens, is_batch=False)
+        savings = regular_cost - estimated_cost
+        savings_percentage = (savings / regular_cost) * 100 if regular_cost > 0 else 0
+        print(f"💰 Regular API cost would have been: ${regular_cost:.4f}")
+        print(f"💰 Batch savings: ${savings:.4f} ({savings_percentage:.1f}%)")
 
 if __name__ == "__main__":
     main()
