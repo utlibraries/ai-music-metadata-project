@@ -27,7 +27,7 @@ def run_script(script_name, step_number, step_description):
     
     # Check if the script exists
     if not os.path.exists(script_path):
-        print(f"❌ STEP {step_number} FAILED")
+        print(f"STEP {step_number} FAILED")
         print(f"Error: Could not find script '{script_name}' in directory '{script_dir}'")
         print(f"Looking for: {script_path}")
         print("Make sure all script files are in the same directory as this runner.")
@@ -48,23 +48,23 @@ def run_script(script_name, step_number, step_description):
         duration = end_time - start_time
         
         if result.returncode == 0:
-            print(f"\n✅ STEP {step_number} COMPLETED SUCCESSFULLY")
+            print(f"\nSTEP {step_number} COMPLETED SUCCESSFULLY")
             print(f"Duration: {duration:.2f} seconds")
             return True
         else:
-            print(f"\n❌ STEP {step_number} FAILED")
+            print(f"\nSTEP {step_number} FAILED")
             print(f"Duration: {duration:.2f} seconds")
             print(f"Error code: {result.returncode}")
             return False
         
     except FileNotFoundError:
-        print(f"\n❌ STEP {step_number} FAILED")
+        print(f"\nSTEP {step_number} FAILED")
         print(f"Error: Could not find script '{script_name}'")
         print("Make sure all script files are in the same directory as this runner.")
         return False
     
     except Exception as e:
-        print(f"\n❌ STEP {step_number} FAILED")
+        print(f"\n STEP {step_number} FAILED")
         print(f"Unexpected error: {str(e)}")
         return False
 
@@ -78,12 +78,12 @@ def check_environment():
             missing_vars.append(var)
     
     if missing_vars:
-        print(f"❌ ENVIRONMENT CHECK FAILED")
+        print(f"ENVIRONMENT CHECK FAILED")
         print(f"Missing required environment variables: {', '.join(missing_vars)}")
         print(f"Please set these environment variables before running the workflow.")
         return False
     
-    print(f"✅ ENVIRONMENT CHECK PASSED")
+    print(f"ENVIRONMENT CHECK PASSED")
     print(f"All required environment variables are set.")
     return True
 
@@ -115,23 +115,23 @@ def main():
     
     # Run each step
     for script_name, step_number, description in steps:
-        print(f"\n🚀 STARTING STEP {step_number}")
+        print(f"\nSTARTING STEP {step_number}")
         print(f"Progress: {successful_steps}/{total_steps} steps completed")
         
         success = run_script(script_name, step_number, description)
         
         if success:
             successful_steps += 1
-            print(f"\n✅ Step {step_number} completed successfully!")
+            print(f"\nStep {step_number} completed successfully!")
             print(f"Overall progress: {successful_steps}/{total_steps} steps completed")
         else:
-            print(f"\n🛑 PROCESSING STOPPED")
+            print(f"\nPROCESSING STOPPED")
             print(f"Step {step_number} failed. Cannot continue to next step.")
             break
         
         # Brief pause between steps
         if step_number < total_steps:
-            print(f"\n⏸️  Pausing 2 seconds before next step...")
+            print(f"\nPausing 2 seconds before next step...")
             time.sleep(2)
     
     # Final summary
@@ -145,10 +145,10 @@ def main():
     print(f"Steps completed: {successful_steps}/{total_steps}")
     
     if successful_steps == total_steps:
-        print(f"🎉 PROCESSING COMPLETED SUCCESSFULLY!")
+        print(f"PROCESSING COMPLETED SUCCESSFULLY!")
         print(f"All CD processing steps finished. Check the results folder for output files.")
     else:
-        print(f"⚠️ PROCESSING INCOMPLETE")
+        print(f"PROCESSING INCOMPLETE")
         print(f"Only {successful_steps} out of {total_steps} steps completed successfully.")
     
     print(f"\nProcessing finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

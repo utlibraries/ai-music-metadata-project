@@ -40,7 +40,7 @@ Temporary Items
 # Project-specific directories
 ai-music-workflow/on-demand-processing-vinyl/
 ai-music-workflow/cd-processing/cd-output-folders/
-ai-music-workflow/cd-processing/cd-image-folders/cd-scans-500/
+ai-music-workflow/cd-processing/local-cd-image-folders/
 
 # Project-specific files
 *.docx
@@ -49,3 +49,5 @@ move-jpeg-files.sh
 *.txt
 CLAUDE.local.md
 CLAUDE.md
+
+.vscode/

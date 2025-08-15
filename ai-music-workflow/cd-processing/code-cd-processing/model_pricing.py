@@ -51,30 +51,6 @@ MODEL_PRICING = {
         "input_per_1k": 0.0004,
         "output_per_1k": 0.0016,
         "batch_discount": 0.5
-    },
-    
-    # o1-mini models - try for analysis, doesn't support images
-    "o1-mini": {
-        "input_per_1k": 0.0011,
-        "output_per_1k": 0.0044,
-        "batch_discount": 0.5
-    },
-    "o1-mini-2024-09-12": {
-        "input_per_1k": 0.0011,
-        "output_per_1k": 0.0044,
-        "batch_discount": 0.5
-    },
-    
-    # o4-mini models - try for analysis, doesn't support images 
-    "o4-mini": {
-        "input_per_1k": 0.0011,
-        "output_per_1k": 0.0044,
-        "batch_discount": 0.5
-    },
-    "o4-mini-2025-04-16": {
-        "input_per_1k": 0.0011,
-        "output_per_1k": 0.0044,
-        "batch_discount": 0.5
     }
 }
 

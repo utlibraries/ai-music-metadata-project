@@ -9,7 +9,7 @@ from datetime import datetime
 import re
 from token_logging import create_token_usage_log, log_individual_response
 from batch_processor import BatchProcessor 
-from model_pricing import calculate_cost, estimate_cost, get_model_info
+from model_pricing import calculate_cost, get_model_info
 
 def find_latest_results_folder(prefix):
     # Get the parent directory of the prefix
@@ -90,19 +90,24 @@ def prepare_batch_requests(sheet, model_name):
     OCLC Results: {oclc_results}
     ''')
         
-        # Create request data
+        # Create request data in the correct format for OpenAI's batch API
         request_data = {
-            "model": model_name,
-            "messages": [
-                {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and also have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
-                {"role": "user", "content": prompt}
-            ],
-            "max_tokens": 1500,
-            "temperature": 0.5
+            "custom_id": f"oclc_analysis_{i}",
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and also have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 1500,
+                "temperature": 0.5
+            }
         }
         
         batch_requests.append(request_data)
-        custom_id_mapping[f"req_{i}"] = {
+        custom_id_mapping[f"oclc_analysis_{i}"] = {
             "barcode": barcode,
             "row_number": row,
             "metadata": metadata,
@@ -145,7 +150,7 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
     if use_batch and total_valid_rows > 0:
         print(f"📦 Preparing {total_valid_rows} requests for batch processing...")
         
-        # Prepare batch requests
+        # Prepare batch requests (now in correct format)
         batch_requests, custom_id_mapping, valid_rows = prepare_batch_requests(sheet, model_name)
         
         # Estimate costs
@@ -156,8 +161,8 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
         print(f"   Batch API: ${cost_estimate['batch_cost']:.4f}")
         print(f"   Savings: ${cost_estimate['savings']:.4f} ({cost_estimate['savings_percentage']:.1f}%)")
         
-        # Convert to batch format
-        formatted_requests = processor.create_batch_requests(batch_requests, "oclc_analysis")
+        # DON'T call create_batch_requests - the requests are already in the correct format
+        formatted_requests = batch_requests
         
         # Submit batch
         batch_id = processor.submit_batch(
@@ -186,13 +191,12 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
                 if custom_id.startswith("oclc_analysis_"):
                     # Extract the index from custom_id
                     index = int(custom_id.split("_")[2])
-                    mapping_key = f"req_{index}"
                     
-                    if mapping_key in custom_id_mapping:
-                        barcode = custom_id_mapping[mapping_key]["barcode"]
-                        row = custom_id_mapping[mapping_key]["row_number"]
-                        metadata = custom_id_mapping[mapping_key]["metadata"]
-                        oclc_results = custom_id_mapping[mapping_key]["oclc_results"]
+                    if custom_id in custom_id_mapping:
+                        barcode = custom_id_mapping[custom_id]["barcode"]
+                        row = custom_id_mapping[custom_id]["row_number"]
+                        metadata = custom_id_mapping[custom_id]["metadata"]
+                        oclc_results = custom_id_mapping[custom_id]["oclc_results"]
                         
                         if result_data["success"]:
                             analysis_result = result_data["content"]
@@ -622,7 +626,7 @@ def process_skipped_rows(sheet, temp_sheet):
     return total_rows
 
 def main():
-    model_name = "01-mini"  
+    model_name = "gpt-4o-mini"  
     
     # Start timing the entire script execution
     script_start_time = time.time()

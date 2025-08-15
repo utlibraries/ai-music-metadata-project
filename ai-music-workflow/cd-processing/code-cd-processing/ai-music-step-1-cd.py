@@ -13,7 +13,7 @@ from openai import OpenAI
 from collections import defaultdict
 from token_logging import create_token_usage_log, log_individual_response
 from batch_processor import BatchProcessor  
-from model_pricing import calculate_cost, estimate_cost, get_model_info
+from model_pricing import calculate_cost, get_model_info
 
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
