@@ -168,14 +168,14 @@ def log_individual_response(logs_folder_path, script_name, row_number, barcode, 
         is_batch=False  # Individual calls are not batch
     )
     
-    log_file_path = os.path.join(logs_folder_path, f"{script_name}_full_responses_log.txt")
+    log_file_path = os.path.join(logs_folder_path, f"{script_name}_llm_response_log.txt")
     
     # Check if this is the first entry (create header)
     file_exists = os.path.exists(log_file_path)
     
     with open(log_file_path, "a") as log_file:
         if not file_exists:
-            log_file.write(f"LLM Full Responses Log - {script_name.replace('_', ' ').title()}\n")
+            log_file.write(f"LLM Response Log - {script_name.replace('_', ' ').title()}\n")
             log_file.write(f"Created at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             log_file.write("="*80 + "\n\n")
         

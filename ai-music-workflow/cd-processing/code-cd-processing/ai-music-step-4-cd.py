@@ -3,20 +3,18 @@ import glob
 import re
 import openpyxl
 from openpyxl.styles import Alignment
-from datetime import datetime
+import datetime
 from difflib import SequenceMatcher
 
-def find_latest_results_folder(prefix):
-    base_dir = os.path.dirname(prefix)
-    pattern = os.path.join(base_dir, "results-*")
-    
-    matching_folders = glob.glob(pattern)
-    if not matching_folders:
-        return None
-
-    latest_folder = max(matching_folders)
-    
-    return latest_folder
+from json_workflow import (
+    update_record_step4, log_error, log_processing_metrics
+)
+from shared_utilities import (
+    find_latest_results_folder, get_workflow_json_path, create_batch_summary
+)
+from cd_workflow_config import (
+    get_file_path_config, get_threshold_config, get_current_timestamp
+)
 
 def extract_tracks_from_metadata(metadata_str):
     """Extract track listings from metadata string."""
@@ -430,7 +428,7 @@ def extract_and_normalize_year(text, is_oclc=False):
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             year = match.group(1)
-            if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
+            if year.isdigit() and 1900 <= int(year) <= datetime.datetime.now().year:
                 return year
     
     # Look for copyright or phonogram year markers
@@ -439,7 +437,7 @@ def extract_and_normalize_year(text, is_oclc=False):
         matches = re.findall(marker, text, re.IGNORECASE)
         if matches:
             for year in matches:
-                if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
+                if year.isdigit() and 1900 <= int(year) <= datetime.datetime.now().year:
                     return year
     
     # Look for standalone 4-digit years - BUT ONLY IF WE'RE LOOKING AT OCLC DATA
@@ -447,7 +445,7 @@ def extract_and_normalize_year(text, is_oclc=False):
     if is_oclc:
         year_pattern = r'(?<!\d)(\d{4})(?!\d)'
         matches = re.findall(year_pattern, text)
-        valid_years = [y for y in matches if 1900 <= int(y) <= datetime.now().year]
+        valid_years = [y for y in matches if 1900 <= int(y) <= datetime.datetime.now().year]
         if valid_years:
             # Return the most frequently occurring year
             from collections import Counter
@@ -494,7 +492,7 @@ def extract_year_from_oclc_by_number(oclc_results, oclc_number):
             match = re.search(pattern, section_text, re.IGNORECASE)
             if match:
                 year = match.group(1)
-                if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
+                if year.isdigit() and 1900 <= int(year) <= datetime.datetime.now().year:
                     return year
         
         # Look for specific date patterns in this section (original patterns)
@@ -521,7 +519,7 @@ def extract_year_from_oclc_by_number(oclc_results, oclc_number):
             match = re.search(pattern, section_text, re.IGNORECASE)
             if match:
                 year = match.group(1)
-                if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
+                if year.isdigit() and 1900 <= int(year) <= datetime.datetime.now().year:
                     return year
         
         # Look for copyright or phonogram year markers
@@ -536,7 +534,7 @@ def extract_year_from_oclc_by_number(oclc_results, oclc_number):
         for marker in year_markers:
             matches = re.findall(marker, section_text, re.IGNORECASE)
             for year in matches:
-                if year.isdigit() and 1900 <= int(year) <= datetime.now().year:
+                if year.isdigit() and 1900 <= int(year) <= datetime.datetime.now().year:
                     years_found.append(int(year))
         
         if years_found:
@@ -546,7 +544,7 @@ def extract_year_from_oclc_by_number(oclc_results, oclc_number):
         # Look for standalone 4-digit years
         year_pattern = r'(?<!\d)(\d{4})(?!\d)'
         matches = re.findall(year_pattern, section_text)
-        valid_years = [int(y) for y in matches if 1900 <= int(y) <= datetime.now().year]
+        valid_years = [int(y) for y in matches if 1900 <= int(y) <= datetime.datetime.now().year]
         if valid_years:
             # Return the most frequently occurring year
             from collections import Counter
@@ -617,17 +615,21 @@ def check_other_matches_held_by_ixa(other_matches_text):
     return 'N/A'
 
 def main():
-    # Specify the folder prefix based on output location
-    base_dir_prefix = "ai-music-workflow/cd-processing/cd-output-folders/results-"
+    # Get configuration
+    file_paths = get_file_path_config()
+    threshold_config = get_threshold_config("verification")
     
-    # Find the latest results folder using the prefix
-    results_folder = find_latest_results_folder(base_dir_prefix)
+    # Find latest results folder using new utility
+    results_folder = find_latest_results_folder(file_paths["results_prefix"])
     if not results_folder:
         print("No results folder found! Run the previous scripts first.")
         exit()
         
     print(f"Using results folder: {results_folder}")
     
+    # Initialize workflow JSON path
+    workflow_json_path = get_workflow_json_path(results_folder)
+
     # Look for step 3 files in the results folder
     step3_files = [f for f in os.listdir(results_folder) 
                if f.startswith('cd-metadata-ai-') and f.endswith('.xlsx')]
@@ -685,6 +687,7 @@ def main():
             confidence_score = sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value
             explanation = sheet[f'{EXPLANATION_COLUMN}{row}'].value
             other_potential_matches = sheet[f'{OTHER_POTENTIAL_MATCHES_COLUMN}{row}'].value
+            barcode = sheet[f'D{row}'].value  # Extract barcode for JSON logging
             
             # Check and populate IXA holdings status regardless of other processing
             if oclc_number and str(oclc_number).strip() != "" and oclc_number != "Not found" and oclc_results:
@@ -863,6 +866,32 @@ def main():
                 new_confidence = 79
                 sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value = new_confidence
                 
+                # Update JSON workflow with Step 4 results
+                try:
+                    update_record_step4(
+                        json_path=workflow_json_path,
+                        barcode=str(barcode) if barcode else f"row_{row}",
+                        track_similarity=track_similarity if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 else 0.0,
+                        track_details=verification_result if 'verification_result' in locals() else "No track data",
+                        year_match_status="mismatch" if metadata_year and oclc_year and metadata_year != oclc_year else "match_or_incomplete",
+                        year_details=year_verification_result,
+                        ixa_selected=ixa_holding_status if 'ixa_holding_status' in locals() else 'N/A',
+                        ixa_alternatives=other_ixa_status if 'other_ixa_status' in locals() else 'N/A',
+                        confidence_adjusted=True,
+                        adjustment_reason='; '.join(adjustment_reasons),
+                        previous_confidence=float(old_confidence),
+                        new_confidence=float(new_confidence)
+                    )
+                except Exception as json_error:
+                    print(f"   JSON logging error for {barcode}: {json_error}")
+                    log_error(
+                        results_folder_path=results_folder,
+                        step="step4_verification",
+                        barcode=str(barcode) if barcode else f"row_{row}",
+                        error_type="json_update_error",
+                        error_message=str(json_error)
+                    )
+                    
                 note = f"\n\n[AUTOMATIC REVIEW: Confidence reduced due to: {'; '.join(adjustment_reasons)}. Please verify manually.]"
                 
                 # Add track comparison details if needed
@@ -930,6 +959,24 @@ def main():
                     
                     sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = year_verification_result + action_text
             else:
+                # No confidence adjustment - still log Step 4 data
+                try:
+                    update_record_step4(
+                        json_path=workflow_json_path,
+                        barcode=str(barcode) if barcode else f"row_{row}",
+                        track_similarity=track_similarity if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 else 0.0,
+                        track_details=verification_result if 'verification_result' in locals() else "No track data",
+                        year_match_status="match" if metadata_year and oclc_year and metadata_year == oclc_year else "incomplete_or_match",
+                        year_details=year_verification_result,
+                        ixa_selected=ixa_holding_status if 'ixa_holding_status' in locals() else 'N/A',
+                        ixa_alternatives=other_ixa_status if 'other_ixa_status' in locals() else 'N/A',
+                        confidence_adjusted=False,
+                        adjustment_reason=None,
+                        previous_confidence=float(confidence_score),
+                        new_confidence=float(confidence_score)
+                    )
+                except Exception as json_error:
+                    print(f"   JSON logging error for {barcode}: {json_error}")
                 if sheet[f'{VERIFICATION_COLUMN}{row}'].value:
                     sheet[f'{VERIFICATION_COLUMN}{row}'].value += "\nAction: None (similarity is acceptable)"
                 
@@ -955,16 +1002,57 @@ def main():
             sheet[f'{VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
             sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = f"Error: {str(e)}"
             sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].alignment = Alignment(wrap_text=True)
+            
+            # Log error to JSON workflow
+            try:
+                log_error(
+                    results_folder_path=results_folder,
+                    step="step4_verification",
+                    barcode=str(barcode) if 'barcode' in locals() and barcode else f"row_{row}",
+                    error_type="processing_error",
+                    error_message=str(e)
+                )
+            except Exception as json_error:
+                print(f"JSON error logging failed: {json_error}")
+                
+    # Save in-place to maintain file continuity
+    wb.save(workbook_path)
+    print(f"\nResults updated in {workbook_path}")
     
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    output_file = f"cd-metadata-ai-{current_date}.xlsx"
-    full_output_path = os.path.join(results_folder, output_file)
-    
-    wb.save(full_output_path)
-    print(f"\nResults saved to {full_output_path}")
+    # Log final Step 4 processing metrics
+    try:
+        step4_metrics = create_batch_summary(
+            total_items=records_processed,
+            successful_items=records_processed - len([r for r in range(2, sheet.max_row + 1) if sheet[f'{VERIFICATION_COLUMN}{r}'].value and "Error:" in str(sheet[f'{VERIFICATION_COLUMN}{r}'].value)]),
+            failed_items=len([r for r in range(2, sheet.max_row + 1) if sheet[f'{VERIFICATION_COLUMN}{r}'].value and "Error:" in str(sheet[f'{VERIFICATION_COLUMN}{r}'].value)]),
+            total_time=0,  # Step 4 doesn't track detailed timing
+            total_tokens=0,
+            estimated_cost=0,
+            processing_mode="VERIFICATION"
+        )
+        
+        # Add step-specific metrics
+        step4_metrics.update({
+            "records_adjusted_tracks": records_adjusted_tracks,
+            "records_adjusted_years": records_adjusted_years,
+            "records_skipped": records_skipped,
+            "records_main_match_at_ixa": records_main_match_at_ixa,
+            "records_other_matches_at_ixa": records_other_matches_at_ixa,
+            "step": "step4_verification"
+        })
+        
+        log_processing_metrics(
+            results_folder_path=results_folder,
+            step="step4_verification", 
+            batch_metrics=step4_metrics
+        )
+        
+    except Exception as metrics_error:
+        print(f"Warning: Could not log Step 4 processing metrics: {metrics_error}")
+        
     # Updated summary statistics
     print(f"Summary:")
-    print(f"  - Processed: {records_processed} records with confidence ≥ 80% and track listings mentioned")
+    print(f"  - Processed: {records_processed} records with confidence >= 80% and track listings mentioned")
     print(f"  - Adjusted for tracks: {records_adjusted_tracks} records due to low track similarity (< 80% match)")
     print(f"  - Adjusted for years: {records_adjusted_years} records due to publication year mismatch (any difference when both years present)")
     print(f"  - Skipped: {records_skipped} records (low confidence or no track listings)")

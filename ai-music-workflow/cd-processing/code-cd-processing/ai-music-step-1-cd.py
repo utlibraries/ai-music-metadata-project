@@ -1,8 +1,7 @@
 import os
 import base64
-import re
 import time
-from datetime import datetime
+import datetime
 from io import BytesIO
 from PIL import Image as PILImage
 from openpyxl import Workbook
@@ -10,10 +9,20 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from openpyxl.drawing.image import Image
 from openai import OpenAI
-from collections import defaultdict
+
+# Import custom modules
 from token_logging import create_token_usage_log, log_individual_response
 from batch_processor import BatchProcessor  
 from model_pricing import calculate_cost, get_model_info
+from json_workflow import (
+    initialize_workflow_json, update_record_step1, 
+    log_error, log_processing_metrics
+)
+from shared_utilities import (
+    get_workflow_json_path, extract_metadata_fields,
+    group_images_by_barcode, create_batch_summary
+)
+from cd_workflow_config import get_current_timestamp
 
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
@@ -29,7 +38,7 @@ Title Information:
 Publishers:
   - Name: [Publisher Name - please list all publisher, label, series, and distributor names visible on the disc]
   - Place: [Place of publication if available]
-  - Numbers: [UPC/EAN/ISBN]
+  - Numbers: [UPC/EAN/ISBN/Catalog Numbers. Bear in mind that numbers may at times be vertically oriented]
 Dates:
   - publicationDate: [Record all dates as printed on the disc - separate multiple dates with commas]
 Language:
@@ -59,32 +68,6 @@ Notes:
 ***Important: These are images of CD's that were donated by a university radio station to our library. Handwritten information on white stickers should be ignored.  When in doubt, mark fields in the metadata as 'Not visible'*** 
  
 Analyze the provided images and return metadata formatted exactly as above. Pay special attention to capturing only text that is clearly legible."""
-
-def group_images_by_barcode(folder_path):
-    """Group image files by their barcode number."""
-    image_groups = defaultdict(list)
-    
-    for filename in os.listdir(folder_path):
-        if filename.lower().endswith(('.jpg', '.jpeg', '.png')):  
-            # Extract barcode number (everything before the letter)
-            match = re.match(r'(\d+)[abc]\.png', filename.lower())
-            if match:
-                barcode = match.group(1)
-                image_groups[barcode].append(os.path.join(folder_path, filename))
-            else:
-                # Try matching for jpg/jpeg format as fallback
-                match = re.match(r'(\d+)[abc]\.jpe?g', filename.lower())
-                if match:
-                    barcode = match.group(1)
-                    image_groups[barcode].append(os.path.join(folder_path, filename))
-                else:
-                    print(f"Filename does not match pattern: {filename}")
-    
-    # Sort files within each group by the letter (a, b, c)
-    for barcode in image_groups:
-        image_groups[barcode].sort(key=lambda x: os.path.basename(x).lower()[-5])  # Sort by the letter before extension
-        
-    return image_groups
 
 def prepare_batch_requests(image_groups, model_name):
     """Prepare all requests for batch processing."""
@@ -158,7 +141,7 @@ def prepare_batch_requests(image_groups, model_name):
     
     return batch_requests, custom_id_mapping
 
-def process_folder_with_batch(folder_path, wb, results_folder_path):
+def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_json_path):
     """Process folder using batch processing when appropriate."""
     model_name = "gpt-4o"
     ws = wb.active
@@ -176,10 +159,11 @@ def process_folder_with_batch(folder_path, wb, results_folder_path):
     if not os.path.exists(logs_folder_path):
         os.makedirs(logs_folder_path)
 
+    # Group images by barcode
     image_groups = group_images_by_barcode(folder_path)
     total_items = len(image_groups)
     
-    print(f"\n🎯 STEP 1: METADATA EXTRACTION")
+    print(f"\nSTEP 1: METADATA EXTRACTION")
     print(f"Found {total_items} CD image groups to process")
     print(f"Starting metadata extraction using {model_name}...")
     print("-" * 50)
@@ -188,16 +172,16 @@ def process_folder_with_batch(folder_path, wb, results_folder_path):
     processor = BatchProcessor()
     use_batch = processor.should_use_batch(total_items)
     
-    print(f"🤖 Processing mode: {'BATCH' if use_batch else 'INDIVIDUAL'}")
+    print(f"Processing mode: {'BATCH' if use_batch else 'INDIVIDUAL'}")
     
     if use_batch:
-        print(f"📦 Preparing {total_items} requests for batch processing...")
+        print(f"Preparing {total_items} requests for batch processing...")
         
         # Estimate costs
         batch_requests, custom_id_mapping = prepare_batch_requests(image_groups, model_name)
         cost_estimate = processor.estimate_batch_cost(batch_requests, model_name)
         
-        print(f"💰 Cost estimate:")
+        print(f"Cost estimate:")
         print(f"   Regular API: ${cost_estimate['regular_cost']:.4f}")
         print(f"   Batch API: ${cost_estimate['batch_cost']:.4f}")
         print(f"   Savings: ${cost_estimate['savings']:.4f} ({cost_estimate['savings_percentage']:.1f}%)")
@@ -218,7 +202,7 @@ def process_folder_with_batch(folder_path, wb, results_folder_path):
             # Process batch results
             processed_results = processor.process_batch_results(results, custom_id_mapping)
             
-            print(f"📊 Processing batch results...")
+            print(f"Processing batch results...")
             items_with_issues = 0
             
             # Add results to spreadsheet
@@ -240,7 +224,7 @@ def process_folder_with_batch(folder_path, wb, results_folder_path):
                             # Log individual response
                             log_individual_response(
                                 logs_folder_path=logs_folder_path,
-                                script_name="metadata_creation",
+                                script_name="step1",
                                 row_number=row_number,
                                 barcode=barcode,
                                 response_text=metadata_output,
@@ -249,6 +233,27 @@ def process_folder_with_batch(folder_path, wb, results_folder_path):
                                 completion_tokens=usage.get("completion_tokens", 0),
                                 processing_time=0  # Batch processing doesn't track individual timing
                             )
+                            
+                            try:
+                                extracted_fields = extract_metadata_fields(metadata_output)
+                                update_record_step1(
+                                    json_path=workflow_json_path,
+                                    barcode=barcode,
+                                    raw_metadata=metadata_output,
+                                    extracted_fields=extracted_fields,
+                                    model=model_name,
+                                    prompt_tokens=usage.get("prompt_tokens", 0),
+                                    completion_tokens=usage.get("completion_tokens", 0),
+                                    processing_time=0
+                                )
+                            except Exception as json_error:
+                                log_error(
+                                    results_folder_path=results_folder_path,
+                                    step="step1",
+                                    barcode=barcode,
+                                    error_type="json_update_error",
+                                    error_message=str(json_error)
+                                )
                         else:
                             metadata_output = f"Error: {result_data['error']}"
                             items_with_issues += 1
@@ -256,7 +261,7 @@ def process_folder_with_batch(folder_path, wb, results_folder_path):
                             # Log error
                             log_individual_response(
                                 logs_folder_path=logs_folder_path,
-                                script_name="metadata_creation",
+                                script_name="step1",
                                 row_number=row_number,
                                 barcode=barcode,
                                 response_text=metadata_output,
@@ -292,14 +297,14 @@ def process_folder_with_batch(folder_path, wb, results_folder_path):
                    summary["total_prompt_tokens"] + summary["total_completion_tokens"])
         
         else:
-            print("❌ Batch processing failed, falling back to individual processing...")
+            print("Batch processing failed, falling back to individual processing...")
             use_batch = False
     
     # Fall back to individual processing if batch fails or isn't used
     if not use_batch:
-        return process_folder_individual(image_groups, ws, logs_folder_path, model_name, total_items)
+        return process_folder_individual(image_groups, ws, logs_folder_path, model_name, total_items, workflow_json_path, results_folder_path)
 
-def process_folder_individual(image_groups, ws, logs_folder_path, model_name, total_items):
+def process_folder_individual(image_groups, ws, logs_folder_path, model_name, total_items, workflow_json_path, results_folder_path):
     """Process using individual API calls (original logic)."""
     items_with_issues = 0
     processed_items = 0
@@ -313,7 +318,7 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
         item_start_time = time.time()
         row_number = processed_items + 1
 
-        print(f"\n📀 Processing CD {processed_items}/{total_items}")
+        print(f"\nProcessing CD {processed_items}/{total_items}")
         print(f"   Barcode: {barcode}")
         print(f"   Progress: {(processed_items/total_items)*100:.1f}%")
 
@@ -339,7 +344,7 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
             prompt = prompt_text + "\n" + uploaded_files_info
 
             try:
-                print(f"   🤖 Calling OpenAI API...")
+                print(f"Calling OpenAI API...")
                 
                 base64_images = []
                 for img_path in image_paths:
@@ -388,11 +393,11 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
 
                 metadata_output = response.choices[0].message.content.strip()
                 
-                print(f"   ✅ API call successful! Tokens: {total_item_tokens:,}")
+                print(f"API call successful! Tokens: {total_item_tokens:,}")
                 
                 log_individual_response(
                     logs_folder_path=logs_folder_path,
-                    script_name="metadata_creation",
+                    script_name="step1",
                     row_number=row_number,
                     barcode=barcode,
                     response_text=metadata_output,
@@ -401,7 +406,29 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
                     completion_tokens=completion_tokens,
                     processing_time=api_duration
                 )
-                
+                try:
+                    # Extract structured metadata fields
+                    extracted_fields = extract_metadata_fields(metadata_output)
+                    
+                    # Update workflow JSON with Step 1 results
+                    update_record_step1(
+                        json_path=workflow_json_path,
+                        barcode=barcode,
+                        raw_metadata=metadata_output,
+                        extracted_fields=extracted_fields,
+                        model=model_name,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        processing_time=api_duration
+                    )
+                except Exception as json_error:
+                    log_error(
+                        results_folder_path=results_folder_path,
+                        step="step1",
+                        barcode=barcode,
+                        error_type="json_update_error",
+                        error_message=str(json_error)
+                    )
                 row_data = ['', '', '', barcode, metadata_output]
                 ws.append(row_data)
 
@@ -421,13 +448,13 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
                     cell.alignment = Alignment(vertical='top', wrap_text=True)
 
             except Exception as e:
-                print(f"   ❌ API call failed: {str(e)}")
+                print(f"API call failed: {str(e)}")
                 error_message = f"Error: {str(e)}"
                 ws.append(['', '', '', barcode, error_message])
                 items_with_issues += 1
 
         except Exception as e:
-            print(f"   ❌ Processing failed: {str(e)}")
+            print(f"Processing failed: {str(e)}")
             error_message = f"Error: {str(e)}"
             ws.append(['', '', '', barcode, error_message])
             items_with_issues += 1
@@ -444,15 +471,19 @@ def main():
     script_start_time = time.time()
     
     base_dir = "ai-music-workflow/cd-processing"
-    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-5")
+    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-10")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    results_folder_name = f"results-{current_date}"
+    current_timestamp = get_current_timestamp()
+    results_folder_name = f"results-{current_timestamp}"
     results_folder_path = os.path.join(base_dir_outputs, results_folder_name)
 
     if not os.path.exists(results_folder_path):
         os.makedirs(results_folder_path)
+    workflow_json_path = get_workflow_json_path(results_folder_path)
+    if not os.path.exists(workflow_json_path):
+        initialize_workflow_json(results_folder_path)
+        print(f"Initialized workflow JSON: {workflow_json_path}")
     
     logs_folder_path = os.path.join(results_folder_path, "logs")
     if not os.path.exists(logs_folder_path):
@@ -465,7 +496,7 @@ def main():
     # Show model pricing info at start
     model_info = get_model_info(model_name)
     if model_info:
-        print(f"🧠 STEP 1: METADATA EXTRACTION")
+        print(f"STEP 1: METADATA EXTRACTION")
         print(f"Using model: {model_name}")
         print(f"Pricing: ${model_info['input_per_1k']:.5f}/1K input, ${model_info['output_per_1k']:.5f}/1K output")
         print(f"Batch discount: {model_info['batch_discount']*100:.0f}%")
@@ -473,7 +504,7 @@ def main():
         print("-" * 50)
     
     wb = Workbook()
-    total_items, items_with_issues, total_time, total_prompt_tokens, total_completion_tokens, total_tokens = process_folder_with_batch(images_folder, wb, results_folder_path)
+    total_items, items_with_issues, total_time, total_prompt_tokens, total_completion_tokens, total_tokens = process_folder_with_batch(images_folder, wb, results_folder_path, workflow_json_path)
 
     # Apply formatting to all cells
     for row in wb.active.iter_rows():
@@ -482,7 +513,7 @@ def main():
 
     wb.active.freeze_panes = 'A2'
 
-    output_file = f"cd-metadata-ai-{current_date}.xlsx"
+    output_file = f"cd-metadata-ai-{current_timestamp}.xlsx"
     full_output_path = os.path.join(results_folder_path, output_file)
     wb.save(full_output_path)
     
@@ -503,7 +534,7 @@ def main():
     # Create standardized token usage log with enhanced metrics
     create_token_usage_log(
         logs_folder_path=logs_folder_path,
-        script_name="metadata_creation",
+        script_name="step1",
         model_name=model_name,
         total_items=total_items,
         items_with_issues=items_with_issues,
@@ -520,27 +551,46 @@ def main():
         }
     )
     
-    # Enhanced final summary with correct cost calculation
-    print(f"\n🎉 STEP 1 COMPLETED!")
-    print(f"✅ Successfully processed: {total_items - items_with_issues}/{total_items} CDs")
-    print(f"❌ Items with issues: {items_with_issues}")
-    print(f"⏱️  Total script time: {script_duration:.1f}s ({script_duration/60:.1f} minutes)")
-    print(f"⏱️  Processing time: {total_time:.1f}s")
-    print(f"🎯 Total tokens: {total_tokens:,} (Input: {total_prompt_tokens:,}, Output: {total_completion_tokens:,})")
-    print(f"🤖 Processing mode: {'BATCH' if was_batch_processed else 'INDIVIDUAL'}")
-    print(f"💰 Actual cost: ${estimated_cost:.4f}")
+    # Log full responses if configured
+    print(f"\nSTEP 1 COMPLETED!")
+    print(f"Successfully processed: {total_items - items_with_issues}/{total_items} CDs")
+    print(f"Items with issues: {items_with_issues}")
+    print(f"Total script time: {script_duration:.1f}s ({script_duration/60:.1f} minutes)")
+    print(f"Processing time: {total_time:.1f}s")
+    print(f"Total tokens: {total_tokens:,} (Input: {total_prompt_tokens:,}, Output: {total_completion_tokens:,})")
+    print(f"Processing mode: {'BATCH' if was_batch_processed else 'INDIVIDUAL'}")
+    print(f"Actual cost: ${estimated_cost:.4f}")
     
     # Show batch savings if applicable
     if was_batch_processed:
         regular_cost = calculate_cost(model_name, total_prompt_tokens, total_completion_tokens, is_batch=False)
         savings = regular_cost - estimated_cost
         savings_percentage = (savings / regular_cost) * 100 if regular_cost > 0 else 0
-        print(f"💰 Regular API cost would have been: ${regular_cost:.4f}")
-        print(f"💰 Batch savings: ${savings:.4f} ({savings_percentage:.1f}%)")
+        print(f"Regular API cost would have been: ${regular_cost:.4f}")
+        print(f"Batch savings: ${savings:.4f} ({savings_percentage:.1f}%)")
     
-    print(f"📄 Results saved to: {full_output_path}")
-    print(f"📊 Token usage log saved to: {os.path.join(logs_folder_path, 'metadata_creation_token_usage_log.txt')}")
-    print(f"📝 Full responses log saved to: {os.path.join(logs_folder_path, 'metadata_creation_full_responses_log.txt')}")
+    print(f"Results saved to: {full_output_path}")
+    print(f"Token usage log saved to: {os.path.join(logs_folder_path, 'step1_token_usage_log.txt')}")
+    print(f"Full responses log saved to: {os.path.join(logs_folder_path, 'step1_llm_responses_log.txt')}")
+    
+    try:
+        batch_summary = create_batch_summary(
+            total_items=total_items,
+            successful_items=total_items - items_with_issues,
+            failed_items=items_with_issues,
+            total_time=total_time,
+            total_tokens=total_tokens,
+            estimated_cost=estimated_cost,
+            processing_mode="BATCH" if was_batch_processed else "INDIVIDUAL"
+        )
+        
+        log_processing_metrics(
+            results_folder_path=results_folder_path,
+            step="step1_metadata_extraction",
+            batch_metrics=batch_summary
+        )
+    except Exception as metrics_error:
+        print(f"Warning: Could not log processing metrics: {metrics_error}")
 
 if __name__ == "__main__":
     main()

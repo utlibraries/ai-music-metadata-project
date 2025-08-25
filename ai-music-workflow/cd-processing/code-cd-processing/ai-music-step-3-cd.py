@@ -5,24 +5,25 @@ import time
 from openai import OpenAI
 import openpyxl
 from openpyxl.styles import Alignment
-from datetime import datetime
+import datetime
 import re
 from token_logging import create_token_usage_log, log_individual_response
 from batch_processor import BatchProcessor 
 from model_pricing import calculate_cost, get_model_info
 
-def find_latest_results_folder(prefix):
-    # Get the parent directory of the prefix
-    base_dir = os.path.dirname(prefix)
-    pattern = os.path.join(base_dir, "results-*")
-    
-    matching_folders = glob.glob(pattern)
-    if not matching_folders:
-        return None
-
-    latest_folder = max(matching_folders)
-    
-    return latest_folder
+# Import new modules
+from json_workflow import (
+    initialize_workflow_json, update_record_step3, log_error, log_processing_metrics
+)
+from shared_utilities import (
+    find_latest_results_folder, get_workflow_json_path, 
+    extract_confidence_and_explanation, safe_float_convert, safe_int_convert,
+    create_batch_summary
+)
+from cd_workflow_config import (
+    get_model_config, get_file_path_config, get_threshold_config,
+    FILE_NAMING, LOGGING_CONFIG, get_step_config, get_current_timestamp
+)
 
 # Load the API key from environment variable
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
@@ -116,7 +117,7 @@ def prepare_batch_requests(sheet, model_name):
     
     return batch_requests, custom_id_mapping, valid_rows
 
-def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_folder):
+def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_folder, workflow_json_path):
     """Process using batch processing when appropriate."""
     
     # Define the columns
@@ -144,11 +145,11 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
     
     use_batch = processor.should_use_batch(total_valid_rows)
     
-    print(f"🤖 Processing mode: {'BATCH' if use_batch else 'INDIVIDUAL'}")
-    print(f"📊 Valid rows to process: {total_valid_rows}")
+    print(f"Processing mode: {'BATCH' if use_batch else 'INDIVIDUAL'}")
+    print(f"Valid rows to process: {total_valid_rows}")
     
     if use_batch and total_valid_rows > 0:
-        print(f"📦 Preparing {total_valid_rows} requests for batch processing...")
+        print(f"Preparing {total_valid_rows} requests for batch processing...")
         
         # Prepare batch requests (now in correct format)
         batch_requests, custom_id_mapping, valid_rows = prepare_batch_requests(sheet, model_name)
@@ -156,7 +157,7 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
         # Estimate costs
         cost_estimate = processor.estimate_batch_cost(batch_requests, model_name)
         
-        print(f"💰 Cost estimate:")
+        print(f"Cost estimate:")
         print(f"   Regular API: ${cost_estimate['regular_cost']:.4f}")
         print(f"   Batch API: ${cost_estimate['batch_cost']:.4f}")
         print(f"   Savings: ${cost_estimate['savings']:.4f} ({cost_estimate['savings_percentage']:.1f}%)")
@@ -167,7 +168,7 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
         # Submit batch
         batch_id = processor.submit_batch(
             formatted_requests, 
-            f"OCLC Analysis - {total_valid_rows} items - {datetime.now().strftime('%Y-%m-%d')}"
+            f"OCLC Analysis - {total_valid_rows} items - {datetime.datetime.now().strftime('%Y-%m-%d')}"
         )
         
         # Wait for completion
@@ -177,7 +178,7 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
             # Process batch results
             processed_results = processor.process_batch_results(results, custom_id_mapping)
             
-            print(f"📊 Processing batch results...")
+            print(f"Processing batch results...")
             
             # Initialize counters
             successful_calls = 0
@@ -217,10 +218,33 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
                                 analysis_result, oclc_results
                             )
                             
+                            # Update JSON workflow with Step 3 results
+                            try:
+                                # Extract alternative matches list
+                                alternative_oclc_numbers = []
+                                if other_matches and "OCLC:" in other_matches:
+                                    import re
+                                    alternative_oclc_numbers = re.findall(r'OCLC:\s*(\d+)', other_matches)
+                                
+                                update_record_step3(
+                                    json_path=workflow_json_path,
+                                    barcode=barcode,
+                                    selected_oclc=str(oclc_number) if oclc_number != "Not found" else "",
+                                    initial_confidence=float(confidence_score),
+                                    explanation=explanation,
+                                    alternative_matches=alternative_oclc_numbers,
+                                    model=model_name,
+                                    prompt_tokens=prompt_tokens,
+                                    completion_tokens=completion_tokens,
+                                    processing_time=0  # Batch processing doesn't track individual timing
+                                )
+                            except Exception as json_error:
+                                print(f"   JSON logging error for {barcode}: {json_error}")
+                            
                             # Log individual response
                             log_individual_response(
                                 logs_folder_path=logs_folder_path,
-                                script_name="metadata_analysis",
+                                script_name="step3",
                                 row_number=row,
                                 barcode=barcode,
                                 response_text=analysis_result,
@@ -242,7 +266,7 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
                             # Log error
                             log_individual_response(
                                 logs_folder_path=logs_folder_path,
-                                script_name="metadata_analysis",
+                                script_name="step3",
                                 row_number=row,
                                 barcode=barcode,
                                 response_text=f"ERROR: {result_data['error']}",
@@ -266,14 +290,14 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
                    total_prompt_tokens, total_completion_tokens, total_tokens)
         
         else:
-            print("❌ Batch processing failed, falling back to individual processing...")
+            print("Batch processing failed, falling back to individual processing...")
             use_batch = False
     
     # Fall back to individual processing if batch fails or isn't used
     if not use_batch:
-        return process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_folder)
+        return process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_folder, workflow_json_path)
 
-def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_folder):
+def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_folder, workflow_json_path):
     """Process using individual API calls (original logic)."""
     
     # Define the columns
@@ -301,13 +325,13 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
         oclc_results = sheet[f'{OCLC_RESULTS_COLUMN}{row}'].value
         barcode = sheet[f'{BARCODE_COLUMN}{row}'].value
 
-        print(f"\n🔍 Analyzing Row {row}/{sheet.max_row}")
+        print(f"\nAnalyzing Row {row}/{sheet.max_row}")
         print(f"   Barcode: {barcode}")
         print(f"   Progress: {((row-1)/(sheet.max_row-1))*100:.1f}%")
 
         # Skip rows with missing data or "No matching records" message
         if not metadata or not oclc_results or oclc_results == "No matching records found" or oclc_results.strip() == "":
-            print(f"   ⏭️  Skipping: Missing data or no OCLC results")
+            print(f"   Skipping: Missing data or no OCLC results")
             # Mark these rows as skipped in the results
             update_workbook_row(sheet, temp_sheet, row, "No OCLC data to process", 0, 
                               "Skipped: No valid OCLC results to analyze", "", 0, 0, 0, 0)
@@ -323,15 +347,15 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
         
         # Only rows with valid data will reach this point
         total_rows += 1
-        print(f"   📝 Valid data found - proceeding with analysis")
+        print(f"   Valid data found - proceeding with analysis")
         
         # Show OCLC results summary
         if oclc_results:
             oclc_record_count = oclc_results.count("OCLC Number:")
-            print(f"   📚 Found {oclc_record_count} OCLC records to analyze")
+            print(f"   Found {oclc_record_count} OCLC records to analyze")
             
         prompt = (
-    f'''Analyze the following OCLC results based on the given metadata and determine which result is the best match. Methodically go through each record, choose the top 3, then consider them again and choose the record that matches the most elements in the metadata. If two or more records tie for best match, prioritize records that have more holdings and that are held by IXA. If there is no likely match, write "No matching records found".
+    f'''Analyze the following OCLC results based on the given metadata and determine which result is the best match. Methodically go through each record, choose the top 3, then consider them again and choose the record that matches the most elements in the metadata. Only if two or more records tie for best match, and neither is a better match than the other, prioritize records that have more holdings and/or that are held by IXA. If there is no likely match, write "No matching records found".
 
     **Important Instructions**:
     1. Confidence Score: 0% indicates no confidence, and 100% indicates high confidence that we have found the correct OCLC number. If the confidence is below 79%, the record will be checked by a cataloger. 
@@ -367,7 +391,7 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
     OCLC Results: {oclc_results}
     ''')
         try:
-            print(f"   🤖 Calling OpenAI API for analysis...")
+            print(f"   Calling OpenAI API for analysis...")
             
             # Time the API call
             api_call_start = time.time()
@@ -397,14 +421,14 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
 
             analysis_result = response.choices[0].message.content.strip()
             
-            print(f"   ✅ API call successful!")
-            print(f"   ⏱️  API time: {api_call_duration:.2f}s")
-            print(f"   🎯 Tokens: {tokens_used:,} (P:{prompt_tokens:,}, C:{completion_tokens:,})")
+            print(f"   API call successful!")
+            print(f"   API time: {api_call_duration:.2f}s")
+            print(f"   Tokens: {tokens_used:,} (P:{prompt_tokens:,}, C:{completion_tokens:,})")
             
             # Log individual response
             log_individual_response(
                 logs_folder_path=logs_folder_path,
-                script_name="metadata_analysis",
+                script_name="step3",
                 row_number=row,
                 barcode=barcode,
                 response_text=analysis_result,
@@ -423,8 +447,39 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
             row_duration = time.time() - row_start_time
             processed_rows += 1
             
-            print(f"   🎯 Selected OCLC: {oclc_number}")
-            print(f"   📊 Confidence: {confidence_score}%")
+            print(f"Selected OCLC: {oclc_number}")
+            print(f"Confidence: {confidence_score}%")
+            
+            # Update JSON workflow with Step 3 results
+            try:
+                # Extract alternative matches list
+                alternative_oclc_numbers = []
+                if other_matches and "OCLC:" in other_matches:
+                    import re
+                    alternative_oclc_numbers = re.findall(r'OCLC:\s*(\d+)', other_matches)
+                
+                update_record_step3(
+                    json_path=workflow_json_path,
+                    barcode=barcode,
+                    selected_oclc=str(oclc_number) if oclc_number != "Not found" else "",
+                    initial_confidence=float(confidence_score),
+                    explanation=explanation,
+                    alternative_matches=alternative_oclc_numbers,
+                    model=model_name,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    processing_time=api_call_duration
+                )
+            except Exception as json_error:
+                print(f"   JSON logging error: {json_error}")
+                # Log the error but continue processing
+                log_error(
+                    results_folder_path=results_folder,
+                    step="step3",
+                    barcode=barcode,
+                    error_type="json_update_error",
+                    error_message=str(json_error)
+                )
             
             # Update workbooks
             update_workbook_row(sheet, temp_sheet, row, oclc_number, confidence_score, 
@@ -445,12 +500,12 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
 
         except Exception as e:
             failed_calls += 1
-            print(f"   ❌ API call failed: {str(e)}")
+            print(f"   API call failed: {str(e)}")
             
             # Log errors
             log_individual_response(
                 logs_folder_path=logs_folder_path,
-                script_name="metadata_analysis",
+                script_name="step3",
                 row_number=row,
                 barcode=barcode,
                 response_text=f"ERROR: {str(e)}",
@@ -459,7 +514,23 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
                 completion_tokens=0,
                 processing_time=0
             )
-                
+            
+            # Log error to JSON workflow
+            try:
+                log_error(
+                    results_folder_path=results_folder,
+                    step="step3",
+                    barcode=barcode,
+                    error_type="api_error",
+                    error_message=str(e),
+                    additional_context={
+                        "metadata_available": bool(metadata),
+                        "oclc_results_available": bool(oclc_results)
+                    }
+                )
+            except Exception as json_error:
+                print(f"JSON error logging failed: {json_error}")
+
             # Update both workbooks to show the error
             update_workbook_row(sheet, temp_sheet, row, "Error processing", 0, 
                               f"Error: {str(e)}", "", 0, 0, 0, 0)
@@ -473,32 +544,23 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
 
 def parse_analysis_result(analysis_result, oclc_results):
     """Parse the AI analysis result into structured components."""
+    # Use the shared utility function for consistent parsing
+    confidence_score, explanation, alternative_matches = extract_confidence_and_explanation(analysis_result)
+    
+    # Extract OCLC number
     oclc_number = "Not found"
-    confidence_score = 0
-    explanation = "Could not parse response"
-    other_matches = ""
-
     try:
-        # Parse the results and show key findings
         if "OCLC number:" in analysis_result:
             oclc_part = analysis_result.split("OCLC number:")[1].split("\n")[0].strip()
             oclc_number = ''.join(char for char in oclc_part if char.isdigit())
-
-        if "Confidence score:" in analysis_result:
-            confidence_part = analysis_result.split("Confidence score:")[1].split("%")[0].strip()
-            try:
-                confidence_score = int(float(confidence_part))
-                confidence_score = min(100, max(0, confidence_score))
-            except ValueError:
-                confidence_score = 0
-
-        if "Explanation:" in analysis_result:
-            explanation_parts = analysis_result.split("Explanation:")[1].split("Other potential good matches:")
-            explanation = explanation_parts[0].strip()
-            if explanation.endswith("4."):
-                explanation = explanation[:-2].strip()
-            explanation = re.sub(r'\s+\d+\.\s*$', '', explanation)
-
+            if not oclc_number:
+                oclc_number = "Not found"
+    except Exception as e:
+        print(f"Error parsing OCLC number: {e}")
+    
+    # Format other matches with holdings info
+    other_matches = ""
+    try:
         if "Other potential good matches:" in analysis_result:
             other_matches_part = analysis_result.split("Other potential good matches:")[1].strip()
             if other_matches_part and oclc_results:
@@ -551,9 +613,8 @@ def parse_analysis_result(analysis_result, oclc_results):
                     other_matches = "No structured matches found.\n\nOriginal LLM response:\n" + other_matches_part
             else:
                 other_matches = other_matches_part
-    
     except Exception as parsing_error:
-        print(f"   ⚠️  Error parsing response: {parsing_error}")
+        print(f"Error parsing other matches: {parsing_error}")
         
     return oclc_number, confidence_score, explanation, other_matches
 
@@ -626,21 +687,28 @@ def process_skipped_rows(sheet, temp_sheet):
     return total_rows
 
 def main():
-    model_name = "gpt-4o-mini"  
+    # Get configuration
+    step3_config = get_step_config("step3")
+    model_config = get_model_config("step3")
+    file_paths = get_file_path_config()
+    threshold_config = get_threshold_config("confidence")
+    
+    model_name = model_config.get("model", "gpt-4o-mini")
     
     # Start timing the entire script execution
     script_start_time = time.time()
     
-    # Specify the folder prefix (adjust if needed)
-    base_dir_prefix = "ai-music-workflow/cd-processing/cd-output-folders/results-"
+    # Find latest results folder using new utility
+    results_folder = find_latest_results_folder(file_paths["results_prefix"])
 
-    # Find the latest results folder using the prefix.
-    results_folder = find_latest_results_folder(base_dir_prefix)
     if not results_folder:
         print("No results folder found! Run the first script first.")
         exit()
         
     print(f"Using results folder: {results_folder}")
+    
+    # Initialize workflow JSON path
+    workflow_json_path = get_workflow_json_path(results_folder)
 
     # Create logs folder within the results folder
     logs_folder_path = os.path.join(results_folder, "logs")
@@ -668,7 +736,7 @@ def main():
     # Show model pricing info at start
     model_info = get_model_info(model_name)
     if model_info:
-        print(f"🧠 STEP 3: AI ANALYSIS OF OCLC MATCHES")
+        print(f"STEP 3: AI ANALYSIS OF OCLC MATCHES")
         print(f"Using model: {model_name}")
         print(f"Pricing: ${model_info['input_per_1k']:.5f}/1K input, ${model_info['output_per_1k']:.5f}/1K output")
         print(f"Batch discount: {model_info['batch_discount']*100:.0f}%")
@@ -764,7 +832,7 @@ def main():
     # Process with batch or individual logic
     (total_rows, successful_calls, failed_calls, total_api_time, 
      total_prompt_tokens, total_completion_tokens, total_tokens) = process_with_batch(
-        sheet, temp_sheet, logs_folder_path, model_name, results_folder)
+        sheet, temp_sheet, logs_folder_path, model_name, results_folder, workflow_json_path)
 
     # Calculate script metrics
     script_duration = time.time() - script_start_time
@@ -795,13 +863,13 @@ def main():
         total_tokens,
         round(avg_tokens_per_call, 2),
         round(estimated_cost, 4),
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ])
 
     # Create standardized token usage log
     create_token_usage_log(
         logs_folder_path=logs_folder_path,
-        script_name="metadata_analysis",
+        script_name="step3",
         model_name=model_name,
         total_items=total_rows,
         items_with_issues=failed_calls,
@@ -820,11 +888,9 @@ def main():
         }
     )
 
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    output_file = f"cd-metadata-ai-{current_date}.xlsx"
-    full_output_path = os.path.join(results_folder, output_file)
-        
-    wb.save(full_output_path)
+    # Save in-place to maintain file continuity
+    wb.save(workbook_path)
+    print(f"\nResults updated in {workbook_path}")
 
     # Clean up temporary file
     temp_output_path = os.path.join(results_folder, "temp_cd_metadata_progress.xlsx")
@@ -835,27 +901,56 @@ def main():
     except Exception as remove_error:
         print(f"Warning: Could not remove temporary progress file: {remove_error}")
 
-    print(f"\nResults saved to {full_output_path}")
-    print(f"Token usage log saved to {os.path.join(logs_folder_path, 'metadata_analysis_token_usage_log.txt')}")
-    print(f"Full responses log saved to {os.path.join(logs_folder_path, 'metadata_analysis_full_responses_log.txt')}")
+    print(f"Processing complete - results saved in-place")
+    print(f"Token usage log saved to {os.path.join(logs_folder_path, 'step3_token_usage_log.txt')}")
+    print(f"Full responses log saved to {os.path.join(logs_folder_path, 'step3_llm_responses_log.txt')}")
 
-    # Enhanced final summary with correct cost calculation
-    print(f"\n🎉 STEP 3 COMPLETED!")
-    print(f"✅ Successfully analyzed: {successful_calls} records")
-    print(f"❌ Failed calls: {failed_calls}")
-    print(f"⏱️  Total script time: {script_duration:.1f}s ({script_duration/60:.1f} minutes)")
-    print(f"⏱️  Total API time: {total_api_time:.1f}s")
-    print(f"🎯 Total tokens: {total_tokens:,} (Input: {total_prompt_tokens:,}, Output: {total_completion_tokens:,})")
-    print(f"🤖 Processing mode: {'BATCH' if was_batch_processed else 'INDIVIDUAL'}")
-    print(f"💰 Actual cost: ${estimated_cost:.4f}")
+    print(f"\nSTEP 3 COMPLETED!")
+    print(f"Successfully analyzed: {successful_calls} records")
+    print(f"Failed calls: {failed_calls}")
+    print(f"Total script time: {script_duration:.1f}s ({script_duration/60:.1f} minutes)")
+    print(f"Total API time: {total_api_time:.1f}s")
+    print(f"Total tokens: {total_tokens:,} (Input: {total_prompt_tokens:,}, Output: {total_completion_tokens:,})")
+    print(f"Processing mode: {'BATCH' if was_batch_processed else 'INDIVIDUAL'}")
+    print(f"Actual cost: ${estimated_cost:.4f}")
     
     # Show batch savings if applicable
     if was_batch_processed:
         regular_cost = calculate_cost(model_name, total_prompt_tokens, total_completion_tokens, is_batch=False)
         savings = regular_cost - estimated_cost
         savings_percentage = (savings / regular_cost) * 100 if regular_cost > 0 else 0
-        print(f"💰 Regular API cost would have been: ${regular_cost:.4f}")
-        print(f"💰 Batch savings: ${savings:.4f} ({savings_percentage:.1f}%)")
+        print(f"Regular API cost would have been: ${regular_cost:.4f}")
+        print(f"Batch savings: ${savings:.4f} ({savings_percentage:.1f}%)")
+    
+    # Log final Step 3 processing metrics
+    try:
+        step3_metrics = create_batch_summary(
+            total_items=total_rows,
+            successful_items=successful_calls,
+            failed_items=failed_calls,
+            total_time=script_duration,
+            total_tokens=total_tokens,
+            estimated_cost=estimated_cost,
+            processing_mode="BATCH" if was_batch_processed else "INDIVIDUAL"
+        )
+        
+        # Add step-specific metrics
+        step3_metrics.update({
+            "average_confidence_score": "calculated_in_step4",  # Will be calculated in step 4
+            "high_confidence_records": "calculated_in_step4",
+            "low_confidence_records": "calculated_in_step4",
+            "api_calls_made": successful_calls,
+            "step": "step3_ai_analysis"
+        })
+        
+        log_processing_metrics(
+            results_folder_path=results_folder,
+            step="step3_ai_analysis", 
+            batch_metrics=step3_metrics
+        )
+        
+    except Exception as metrics_error:
+        print(f"Warning: Could not log Step 3 processing metrics: {metrics_error}")
 
 if __name__ == "__main__":
     main()

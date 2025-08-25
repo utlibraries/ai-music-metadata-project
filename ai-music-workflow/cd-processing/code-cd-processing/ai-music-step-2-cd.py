@@ -3,25 +3,29 @@ import glob
 import json
 import requests
 import time
-from datetime import datetime
+import datetime
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Alignment
 import re
 
+# Import custom modules
+from json_workflow import (
+    initialize_workflow_json, update_record_step1, update_record_step2, 
+    update_record_step3, update_record_step4, update_record_step5,
+    log_oclc_data, log_oclc_api_search, log_error, log_processing_metrics
+)
+from shared_utilities import (
+    find_latest_results_folder, get_workflow_json_path, extract_metadata_fields,
+    parse_alternative_matches, extract_confidence_and_explanation, 
+    safe_float_convert, safe_int_convert, normalize_oclc_number,
+    group_images_by_barcode, create_batch_summary
+)
+from cd_workflow_config import (
+    get_model_config, get_file_path_config, get_threshold_config,
+    FILE_NAMING, LOGGING_CONFIG, get_current_timestamp
+)
+    
 api_calls = {'count': 0, 'reset_time': time.time()}
-
-def find_latest_results_folder(prefix):
-    # Get the parent directory of the prefix
-    base_dir = os.path.dirname(prefix)
-    pattern = os.path.join(base_dir, "results-*")
-    
-    matching_folders = glob.glob(pattern)
-    if not matching_folders:
-        return None
-
-    latest_folder = max(matching_folders)
-    
-    return latest_folder
 
 def get_access_token(client_id, client_secret):
     token_url = "https://oauth.oclc.org/token"
@@ -577,6 +581,7 @@ def query_oclc_api(metadata, barcode, limit=10):
 
     query_log = ["Attempted Queries:"]
     attempted_queries = []
+    raw_api_responses = []
     
     # Track unique OCLC numbers to avoid duplicates
     seen_oclc_numbers = set()
@@ -608,6 +613,14 @@ def query_oclc_api(metadata, barcode, limit=10):
             api_calls['count'] += 1
             response.raise_for_status()
             data = response.json()
+            
+            raw_api_responses.append({
+                "query_number": idx,
+                "query_text": query,
+                "api_response": data,  # Raw JSON from OCLC
+                "total_records": data.get("numberOfRecords", 0),
+                "timestamp": datetime.datetime.now().isoformat()
+            })
             
             total_records = data.get("numberOfRecords", 0)
             if total_records > 1000:
@@ -658,6 +671,13 @@ def query_oclc_api(metadata, barcode, limit=10):
         except requests.RequestException as e:
             api_calls['count'] += 1
             query_log.append(f"Query failed: {str(e)}")
+            raw_api_responses.append({
+                "query_number": idx,
+                "query_text": query,
+                "api_response": None,
+                "error": str(e),
+                "timestamp": datetime.datetime.now().isoformat()
+            })
 
     # Combine all accumulated results with a single count at the top
     if accumulated_results:
@@ -687,11 +707,17 @@ def query_oclc_api(metadata, barcode, limit=10):
                     record_count += 1
         
         combined_results = total_header + "\n\n" + "\n".join(limited_results)
-        return combined_results, "\n".join(query_log)
+        return combined_results, "\n".join(query_log), raw_api_responses
     else:
-        return "No matching records with CD format found after trying all queries", "\n".join(query_log)
+        return "No matching records with CD format found after trying all queries", "\n".join(query_log), raw_api_responses
        
-def process_metadata_file(input_file, results_folder_path):
+def process_metadata_file(input_file, results_folder_path, workflow_json_path):
+    items_with_issues = 0
+    total_rows = 0
+    processed_rows = 0
+    total_queries_sent = 0
+    total_records_found_across_all = 0
+    start_time = time.time()
     wb = load_workbook(input_file)
     ws = wb.active
 
@@ -748,15 +774,16 @@ def process_metadata_file(input_file, results_folder_path):
                 raise ValueError("Invalid metadata format")
             
             queries = construct_queries_from_metadata(metadata_fields)
-            results, query_log = query_oclc_api({"Queries": queries}, barcode)
+            results, query_log, raw_api_responses = query_oclc_api({"Queries": queries}, barcode)
+
             
-            # Update main workbook
+            # Update main workbook with results
             ws.cell(row=row, column=6, value=query_log)
             ws.cell(row=row, column=7, value=results)
             ws.cell(row=row, column=6).alignment = Alignment(vertical='top', wrap_text=True)
             ws.cell(row=row, column=7).alignment = Alignment(vertical='top', wrap_text=True)
             
-            # Update temp workbook
+            # Update temp workbook with results
             temp_ws.cell(row=row, column=6, value=query_log)
             temp_ws.cell(row=row, column=7, value=results)
             temp_ws.cell(row=row, column=6).alignment = Alignment(vertical='top', wrap_text=True)
@@ -768,6 +795,77 @@ def process_metadata_file(input_file, results_folder_path):
                 temp_cell = temp_ws.cell(row=row, column=col_idx, value=cell_value)
                 if ws.cell(row=row, column=col_idx).alignment:
                     temp_cell.alignment = Alignment(vertical='top', wrap_text=True)
+            
+            # Now do JSON logging
+            # Now do JSON logging
+            try:
+                # Count queries attempted and records found
+                queries_attempted = len(queries)
+
+                # Parse total records from results
+                total_records_found = 0
+                if "Total CD Format Records Found:" in results:
+                    match = re.search(r'Total CD Format Records Found:\s*(\d+)', results)
+                    if match:
+                        total_records_found = int(match.group(1))
+
+                # Update workflow JSON with comprehensive Step 2 results
+                update_record_step2(
+                    json_path=workflow_json_path,
+                    barcode=barcode,
+                    queries_attempted=queries_attempted,
+                    total_records_found=total_records_found
+                )
+
+                # Also log the detailed OCLC data to the main workflow JSON
+                from json_workflow import load_workflow_json, save_workflow_json
+                workflow_data = load_workflow_json(workflow_json_path)
+                
+                if barcode in workflow_data["records"]:
+                    # Add detailed query and result information to the main workflow
+                    workflow_data["records"][barcode]["step2_detailed_data"] = {
+                        "constructed_queries": queries,
+                        "query_execution_log": query_log,
+                        "formatted_oclc_results": results,
+                        "raw_api_responses_count": len(raw_api_responses),
+                        "processing_summary": {
+                            "unique_queries_generated": len(queries),
+                            "api_calls_made": len([r for r in raw_api_responses if r.get("api_response") is not None]),
+                            "api_errors": len([r for r in raw_api_responses if r.get("error") is not None]),
+                            "total_oclc_records_found": total_records_found
+                        }
+                    }
+                    
+                    # Update the timestamp
+                    workflow_data["records"][barcode]["updated_at"] = datetime.datetime.now().isoformat()
+                    
+                    # Save the updated workflow data
+                    save_workflow_json(workflow_json_path, workflow_data)
+
+                # Log comprehensive OCLC API search data
+                log_oclc_api_search(
+                    results_folder_path=results_folder_path,
+                    barcode=barcode,
+                    queries=queries,
+                    raw_api_responses=raw_api_responses,
+                    formatted_results=results,  # What goes in Excel
+                    query_log=query_log,
+                    queries_attempted=queries_attempted,
+                    total_records_found=total_records_found
+                )
+                # Log metrics
+                total_queries_sent += queries_attempted
+                total_records_found_across_all += total_records_found
+                processed_rows += 1
+                
+            except Exception as json_error:
+                log_error(
+                    results_folder_path=results_folder_path,
+                    step="step2",
+                    barcode=barcode,
+                    error_type="json_update_error",
+                    error_message=str(json_error)
+                )
             
             processed_rows += 1
             print(f"Processed row {row}/{total_rows}")
@@ -783,8 +881,20 @@ def process_metadata_file(input_file, results_folder_path):
             time.sleep(0.1)
 
         except Exception as e:
-            error_message = f"Error processing row {row}: {str(e)}"
-            print(error_message)
+            print(f"   Error processing row {row}: {str(e)}")
+            error_message = f"Error: {str(e)}"
+            ws.append(['', '', '', barcode, error_message])
+            items_with_issues += 1
+            processed_rows += 1
+            log_error(
+                results_folder_path=results_folder_path,
+                step="step2",
+                barcode=barcode,
+                error_type="oclc_api_error",
+                error_message=str(e),
+                additional_context={"queries_attempted": len(queries) if 'queries' in locals() else 0}
+            )
+            
             
             # Update both workbooks with error
             ws.cell(row=row, column=6, value="Error processing")
@@ -806,6 +916,7 @@ def process_metadata_file(input_file, results_folder_path):
             
             processed_rows += 1
 
+            
     # Clean up temporary file
     try:
         if os.path.exists(temp_output_path):
@@ -814,14 +925,45 @@ def process_metadata_file(input_file, results_folder_path):
     except Exception as remove_error:
         print(f"Warning: Could not remove temporary progress file: {remove_error}")
 
+    # Calculate final metrics
+    end_time = time.time()
+    total_processing_time = end_time - start_time
+    
+    # Log Step 2 processing metrics
+    try:
+        step2_metrics = {
+            "total_items": total_rows - 1,  # Subtract 1 for header row
+            "successful_items": processed_rows - items_with_issues,
+            "failed_items": items_with_issues,
+            "success_rate": ((processed_rows - items_with_issues) / processed_rows * 100) if processed_rows > 0 else 0,
+            "total_time_seconds": total_processing_time,
+            "total_time_minutes": total_processing_time / 60,
+            "average_time_per_item": total_processing_time / processed_rows if processed_rows > 0 else 0,
+            "total_queries_sent": total_queries_sent,
+            "average_queries_per_item": total_queries_sent / processed_rows if processed_rows > 0 else 0,
+            "total_oclc_records_found": total_records_found_across_all,
+            "average_records_found_per_item": total_records_found_across_all / processed_rows if processed_rows > 0 else 0,
+            "processing_mode": "INDIVIDUAL",
+            "api_calls_made": api_calls['count'],  # Track API usage
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        
+        log_processing_metrics(
+            results_folder_path=results_folder_path,
+            step="step2_oclc_search",
+            batch_metrics=step2_metrics
+        )
+        
+    except Exception as metrics_error:
+        print(f"Warning: Could not log Step 2 processing metrics: {metrics_error}")
+
     return wb
 
 def main():
-    # Instead of specifying the full folder name, just provide the prefix.
-    base_dir_prefix = "ai-music-workflow/cd-processing/cd-output-folders/results-"
+    file_paths = get_file_path_config()
+    results_folder = find_latest_results_folder(file_paths["results_prefix"])
+    workflow_json_path = get_workflow_json_path(results_folder)
     
-    # Find the latest results folder using the prefix.
-    results_folder = find_latest_results_folder(base_dir_prefix)
     if not results_folder:
         print("No results folder found! Run the first script first.")
         return
@@ -840,15 +982,11 @@ def main():
     input_file = os.path.join(results_folder, latest_file)
     
     print(f"Processing file: {input_file}")
-    wb = process_metadata_file(input_file, results_folder)
+    wb = process_metadata_file(input_file, results_folder, workflow_json_path)
     
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    output_file = f"cd-metadata-ai-{current_date}.xlsx"
-    full_output_path = os.path.join(results_folder, output_file)
-    
-    wb.save(full_output_path)
-    print(f"Results saved to {full_output_path}")
-    print("Summary: Process completed.")
+    # Save back to the same file (in-place modification)
+    wb.save(input_file)
+    print(f"Results saved to {input_file}")
 
 if __name__ == "__main__":
     main()

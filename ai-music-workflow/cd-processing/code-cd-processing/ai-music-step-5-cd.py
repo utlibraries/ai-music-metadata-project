@@ -9,13 +9,15 @@ from difflib import SequenceMatcher
 from openpyxl.styles import Alignment
 from openpyxl import load_workbook
 
-def find_latest_results_folder(prefix):
-    base_dir = os.path.dirname(prefix)
-    pattern = os.path.join(base_dir, "results-*")
-    matching_folders = glob.glob(pattern)
-    if not matching_folders:
-        return None
-    return max(matching_folders)
+from json_workflow import (
+    update_record_step5, log_error, log_processing_metrics
+)
+from shared_utilities import (
+    find_latest_results_folder, get_workflow_json_path, create_batch_summary
+)
+from cd_workflow_config import (
+    get_file_path_config, get_threshold_config, get_current_timestamp, get_step_config, FILE_NAMING
+)
 
 def find_latest_cd_metadata_file(results_folder):
     # Find files starting with "cd-metadata-ai-" and ending with ".xlsx"
@@ -368,11 +370,11 @@ def calculate_title_similarity(title1, title2):
     """Calculate similarity between two titles using SequenceMatcher."""
     return SequenceMatcher(None, title1.lower(), title2.lower()).ratio()
 
-def create_low_confidence_review_spreadsheet(results_folder, step4_file, all_records, access_token, current_date):
+def create_low_confidence_review_text_log(results_folder, step4_file, all_records, access_token, current_date):
     """
-    Create a review spreadsheet for unique low confidence matches with detailed information.
+    Create a review text log for unique low confidence matches with detailed information.
     """
-    print("Creating low confidence review spreadsheet...")
+    print("Creating low confidence review text log...")
     
     # Filter for unique low confidence matches (including those without OCLC numbers)
     low_confidence_records = [record for record in all_records 
@@ -399,102 +401,95 @@ def create_low_confidence_review_spreadsheet(results_folder, step4_file, all_rec
             }
             barcode_to_source[barcode] = row_data
     
-    # Create new workbook for review
-    wb_review = openpyxl.Workbook()
-    sheet_review = wb_review.active
-    
-    # Set header row
-    header_row = ["Barcode", "AI-Generated Metadata", "OCLC Number Chosen", "Other Potential Matches", "Confidence Score", "OCLC Record"]
-    sheet_review.append(header_row)
-    
-    # Set column widths
-    sheet_review.column_dimensions['A'].width = 20  # Barcode
-    sheet_review.column_dimensions['B'].width = 50  # AI-Generated Metadata
-    sheet_review.column_dimensions['C'].width = 18  # OCLC Number Chosen
-    sheet_review.column_dimensions['D'].width = 60  # Other Potential Matches 
-    sheet_review.column_dimensions['E'].width = 15  # Confidence Score
-    sheet_review.column_dimensions['F'].width = 60  # OCLC Record
-    
-    # Set column A to text format
-    from openpyxl.styles import NamedStyle
-    text_style = NamedStyle(name="text_style")
-    text_style.number_format = '@'  # Text format
-    
-    # Process each low confidence record
-    processed_count = 0
-    for record in low_confidence_records:
-        barcode = record["barcode"]
-        oclc_number = record["oclc_number"]
-        
-        print(f"Processing low confidence review record {processed_count + 1}/{len(low_confidence_records)} - Barcode: {barcode}")
-        
-        # Get source data
-        source_data = barcode_to_source.get(barcode, {})
-        metadata = source_data.get("metadata", "No AI-generated metadata available")
-        other_oclc_numbers = source_data.get("other_oclc_numbers", "No other candidates")
-        
-        # Get detailed OCLC record information
-        if oclc_number and record["has_valid_oclc"]:
-            oclc_data = get_bib_info(oclc_number, access_token)
-            formatted_info = format_bib_info(oclc_data)
-            
-            # Add holdings information
-            holdings_info = get_holdings_info(oclc_number, access_token)
-            holdings_text = f"\nTotal Institutions Holding: {holdings_info.get('total_holdings', 0)}\nHeld by IXA: {'Yes' if holdings_info.get('held_by_ixa', False) else 'No'}"
-            formatted_info += holdings_text
-            
-            # Small delay to avoid API rate limits
-            time.sleep(0.5)
-        else:
-            formatted_info = "No OCLC record available - no valid OCLC number found"
-        
-        # Add row to spreadsheet
-        new_row = [
-            barcode,
-            metadata if metadata else "No AI-generated metadata available",
-            oclc_number if oclc_number else "No OCLC number",
-            other_oclc_numbers if other_oclc_numbers else "No other candidates",
-            record.get("confidence_score", "No confidence score"),
-            formatted_info
-        ]
-        sheet_review.append(new_row)
-        
-        # Format the newly added row
-        current_row = sheet_review.max_row
-        
-        # Set column A (Barcode) to text format
-        barcode_cell = sheet_review.cell(row=current_row, column=1)
-        barcode_cell.number_format = '@'  # Text format
-        
-        # Set text wrapping for column B (metadata)
-        metadata_cell = sheet_review.cell(row=current_row, column=2)
-        metadata_cell.alignment = Alignment(wrap_text=True, vertical='top')
-        
-        # Set text wrapping for column D (Other Potential Matches)
-        other_matches_cell = sheet_review.cell(row=current_row, column=4)
-        other_matches_cell.alignment = Alignment(wrap_text=True, vertical='top')
-        
-        # Set text wrapping for column F (OCLC record) 
-        oclc_record_cell = sheet_review.cell(row=current_row, column=6)
-        oclc_record_cell.alignment = Alignment(wrap_text=True, vertical='top')
-        
-        processed_count += 1
-        
-        # Only add delay if we made API calls
-        if oclc_number and record["has_valid_oclc"]:
-            # Small delay to avoid API rate limits
-            time.sleep(0.5)
-    
-    # Also format the header row for column A to text
-    header_barcode_cell = sheet_review.cell(row=1, column=1)
-    header_barcode_cell.number_format = '@'
-    
-    # Save the review spreadsheet
-    review_file = f"low-confidence-review-{current_date}.xlsx"
+    # Create text log file
+    review_file = f"low-confidence-review-{current_date}.txt"
     review_path = os.path.join(results_folder, review_file)
-    wb_review.save(review_path)
     
-    print(f"Low confidence review spreadsheet created with {len(low_confidence_records)} records: {review_path}")
+    # Process each low confidence record and write to text file
+    processed_count = 0
+    with open(review_path, 'w', encoding='utf-8') as f:
+        # Write header
+        f.write("=" * 80 + "\n")
+        f.write("LOW CONFIDENCE REVIEW LOG\n")
+        f.write(f"Generated: {current_date}\n")
+        f.write(f"Total Records: {len(low_confidence_records)}\n")
+        f.write("=" * 80 + "\n\n")
+        
+        for record in low_confidence_records:
+            barcode = record["barcode"]
+            oclc_number = record["oclc_number"]
+            
+            print(f"Processing low confidence review record {processed_count + 1}/{len(low_confidence_records)} - Barcode: {barcode}")
+            
+            # Get source data
+            source_data = barcode_to_source.get(barcode, {})
+            metadata = source_data.get("metadata", "No AI-generated metadata available")
+            other_oclc_numbers = source_data.get("other_oclc_numbers", "No other candidates")
+            
+            # Write record header
+            f.write("-" * 60 + "\n")
+            f.write(f"RECORD {processed_count + 1}\n")
+            f.write("-" * 60 + "\n")
+            f.write(f"Barcode: {barcode}\n")
+            f.write(f"OCLC Number Chosen: {oclc_number if oclc_number else 'No OCLC number'}\n")
+            f.write(f"Confidence Score: {record.get('confidence_score', 'No confidence score')}\n")
+            f.write("\n")
+            
+            # Write AI-generated metadata
+            f.write("AI-Generated Metadata:\n")
+            if metadata and metadata.strip():
+                # Format metadata with proper line breaks
+                metadata_lines = metadata.replace('\n', '\n  ')
+                f.write(f"  {metadata_lines}\n")
+            else:
+                f.write("  No AI-generated metadata available\n")
+            f.write("\n")
+            
+            # Write other potential matches
+            f.write("Other Potential Matches:\n")
+            if other_oclc_numbers and other_oclc_numbers.strip():
+                other_lines = other_oclc_numbers.replace('\n', '\n  ')
+                f.write(f"  {other_lines}\n")
+            else:
+                f.write("  No other candidates\n")
+            f.write("\n")
+            
+            # Get detailed OCLC record information
+            if oclc_number and record["has_valid_oclc"]:
+                f.write("OCLC Record Details:\n")
+                oclc_data = get_bib_info(oclc_number, access_token)
+                formatted_info = format_bib_info(oclc_data)
+                
+                # Add holdings information
+                holdings_info = get_holdings_info(oclc_number, access_token)
+                holdings_text = f"\nTotal Institutions Holding: {holdings_info.get('total_holdings', 0)}\nHeld by IXA: {'Yes' if holdings_info.get('held_by_ixa', False) else 'No'}"
+                formatted_info += holdings_text
+                
+                # Format OCLC info with proper indentation
+                formatted_lines = formatted_info.replace('\n', '\n  ')
+                f.write(f"  {formatted_lines}\n")
+                
+                # Small delay to avoid API rate limits
+                time.sleep(0.5)
+            else:
+                f.write("OCLC Record Details:\n")
+                f.write("  No OCLC record available - no valid OCLC number found\n")
+            
+            f.write("\n")
+            processed_count += 1
+            
+            # Only add delay if we made API calls
+            if oclc_number and record["has_valid_oclc"]:
+                # Small delay to avoid API rate limits
+                time.sleep(0.5)
+        
+        # Write summary footer
+        f.write("=" * 80 + "\n")
+        f.write("END OF REVIEW LOG\n")
+        f.write(f"Total Records Processed: {processed_count}\n")
+        f.write("=" * 80 + "\n")
+    
+    print(f"Low confidence review text log created with {len(low_confidence_records)} records: {review_path}")
     return review_path
 
 def find_duplicate_groups(all_records, similarity_threshold=0.9, confidence_threshold=80):
@@ -663,12 +658,21 @@ def determine_sort_group(record, confidence_threshold=80):
         return "Alma Batch Upload (High Confidence)"
 
 def create_all_records_spreadsheet():
-    # Set the folder prefix 
-    base_dir_prefix = "ai-music-workflow/cd-processing/cd-output-folders/results-"
-    results_folder = find_latest_results_folder(base_dir_prefix)
+    # Get configuration
+    file_paths = get_file_path_config()
+    step5_config = get_step_config("step5")
+    threshold_config = get_threshold_config("confidence")
+    
+    # Find latest results folder using new utility
+    results_folder = find_latest_results_folder(file_paths["results_prefix"])
     if not results_folder:
         print("No results folder found! Please run the previous scripts first.")
         return None
+        
+    print(f"Using results folder: {results_folder}")
+    
+    # Initialize workflow JSON path
+    workflow_json_path = get_workflow_json_path(results_folder)
     
     step4_file = find_latest_cd_metadata_file(results_folder)
     if not step4_file:
@@ -823,7 +827,7 @@ def create_all_records_spreadsheet():
                     # Records without valid OCLC numbers are always low confidence
                     record["sort_group"] = "Cataloger Review (Low Confidence)"
         
-        # Add all records to spreadsheet
+        # Add all records to spreadsheet and log to JSON workflow
         for record in all_records:
             sheet_new.append([
                 record["barcode"],
@@ -834,6 +838,29 @@ def create_all_records_spreadsheet():
                 record["publication_date"],
                 record["confidence_score"]
             ])
+            
+            # Update JSON workflow with Step 5 results
+            try:
+                is_duplicate = record["sort_group"] == "Duplicate"
+                update_record_step5(
+                    json_path=workflow_json_path,
+                    barcode=str(record["barcode"]),
+                    sort_group=record["sort_group"],
+                    final_oclc_number=record["oclc_number"],
+                    is_duplicate=is_duplicate,
+                    oclc_title=record["title"],
+                    oclc_author=record["author"],
+                    oclc_date=record["publication_date"]
+                )
+            except Exception as json_error:
+                print(f"   JSON logging error for {record['barcode']}: {json_error}")
+                log_error(
+                    results_folder_path=results_folder,
+                    step="step5_final_classification",
+                    barcode=str(record["barcode"]),
+                    error_type="json_update_error",
+                    error_message=str(json_error)
+                )
         
         # Save the all records spreadsheet
         current_date = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -857,8 +884,8 @@ def create_all_records_spreadsheet():
         unique_matches = [record for record in all_records 
                          if record["sort_group"] == "Alma Batch Upload (High Confidence)"]
         
-        # Create pipe-delimited text file for Alma processing
-        text_file = f"batch-upload-alma-cd-{current_date}.txt"
+        current_timestamp = get_current_timestamp()
+        text_file = FILE_NAMING["batch_upload_alma"].format(timestamp=current_timestamp)
         text_path = os.path.join(results_folder, text_file)
         
         with open(text_path, 'w', newline='', encoding='utf-8') as f:
@@ -869,10 +896,40 @@ def create_all_records_spreadsheet():
         print(f"Pipe-delimited text file for Alma processing created: {text_path}")
         
         # Create low confidence review spreadsheet
-        review_path = create_low_confidence_review_spreadsheet(
+        review_path = create_low_confidence_review_text_log(
             results_folder, step4_file, all_records, access_token, current_date
         )
         
+        # Log final Step 5 processing metrics
+        try:
+            step5_metrics = create_batch_summary(
+                total_items=len(all_records),
+                successful_items=len([r for r in all_records if r["sort_group"] != ""]),
+                failed_items=len([r for r in all_records if r["sort_group"] == ""]),
+                total_time=0,  # Step 5 doesn't track detailed timing
+                total_tokens=0,
+                estimated_cost=0,
+                processing_mode="CLASSIFICATION"
+            )
+            
+            # Add step-specific metrics
+            step5_metrics.update({
+                "sort_group_counts": sort_group_counts,
+                "unique_matches_count": len(unique_matches),
+                "duplicate_groups_found": len(duplicate_groups) if 'duplicate_groups' in locals() else 0,
+                "records_with_valid_oclc": len([r for r in all_records if r["has_valid_oclc"]]),
+                "step": "step5_final_classification"
+            })
+            
+            log_processing_metrics(
+                results_folder_path=results_folder,
+                step="step5_final_classification", 
+                batch_metrics=step5_metrics
+            )
+            
+        except Exception as metrics_error:
+            print(f"Warning: Could not log Step 5 processing metrics: {metrics_error}")
+            
         return {
             "all_records_path": all_records_path,
             "text_file_path": text_path,
@@ -884,6 +941,19 @@ def create_all_records_spreadsheet():
         
     except Exception as e:
         print(f"Error creating all records spreadsheet: {str(e)}")
+        
+        # Log error to JSON workflow
+        try:
+            log_error(
+                results_folder_path=results_folder,
+                step="step5_final_classification",
+                barcode="unknown",
+                error_type="processing_error",
+                error_message=str(e)
+            )
+        except Exception as json_error:
+            print(f"JSON error logging failed: {json_error}")
+        
         return None
 
 def main():
