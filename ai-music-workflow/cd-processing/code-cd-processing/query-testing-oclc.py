@@ -1,3 +1,11 @@
+"""
+OCLC API Testing and Query Module
+
+Interactive testing tool for querying OCLC WorldCat API with automatic
+holdings information enrichment. Primarily used for development and
+debugging of music catalog searches with IXA holdings verification.
+"""
+
 import os
 import requests
 import json

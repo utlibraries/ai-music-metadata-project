@@ -1,7 +1,15 @@
+"""
+Shared Utilities for AI Music Metadata Project
+
+Common functions used across the 6-step CD processing workflow including
+file operations, data parsing, validation, and batch processing helpers.
+Core utilities for metadata extraction, OCLC number normalization,
+and workflow state management.
+"""
+
 import os
 import glob
 import re
-import json
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 

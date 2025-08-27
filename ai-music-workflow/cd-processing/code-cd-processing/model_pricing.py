@@ -1,4 +1,3 @@
-# model_pricing.py
 """
 Centralized model pricing configuration for OpenAI models.
 Updated as of July 2025 - verify current pricing at https://openai.com/pricing

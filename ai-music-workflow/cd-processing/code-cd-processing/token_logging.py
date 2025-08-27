@@ -1,5 +1,15 @@
+"""
+Token Usage and Cost Tracking for AI Music Metadata Project
+
+Standardized logging system for OpenAI API usage across all relevant workflow steps.
+Tracks token consumption, processing time, costs, and batch vs individual
+processing modes with detailed breakdowns and efficiency metrics.
+"""
+
 import os
 from datetime import datetime
+
+# Custom module
 from model_pricing import calculate_cost, get_model_info
 
 def create_token_usage_log(logs_folder_path, script_name, model_name, total_items, items_with_issues, 

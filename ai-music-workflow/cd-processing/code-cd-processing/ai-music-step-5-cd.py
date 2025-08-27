@@ -1,23 +1,17 @@
+# Create simplified spreadsheet with key fields and formatted OCLC results
 import os
-import glob
 import datetime
 import re
 import openpyxl
 import requests
 import time
 from difflib import SequenceMatcher
-from openpyxl.styles import Alignment
 from openpyxl import load_workbook
 
-from json_workflow import (
-    update_record_step5, log_error, log_processing_metrics
-)
-from shared_utilities import (
-    find_latest_results_folder, get_workflow_json_path, create_batch_summary
-)
-from cd_workflow_config import (
-    get_file_path_config, get_threshold_config, get_current_timestamp, get_step_config, FILE_NAMING
-)
+# Custom modules
+from json_workflow import update_record_step5, log_error, log_processing_metrics
+from shared_utilities import find_latest_results_folder, get_workflow_json_path, create_batch_summary
+from cd_workflow_config import get_file_path_config, get_threshold_config, get_current_timestamp, get_step_config, FILE_NAMING
 
 def find_latest_cd_metadata_file(results_folder):
     # Find files starting with "cd-metadata-ai-" and ending with ".xlsx"

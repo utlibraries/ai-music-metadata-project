@@ -1,59 +1,78 @@
-#!/usr/bin/env python3
+# Use GPT-4o to analyze OCLC results and assign confidence scores
 import os
-import glob
 import time
 from openai import OpenAI
+import json
 import openpyxl
 from openpyxl.styles import Alignment
 import datetime
 import re
+
+# Custom modules
 from token_logging import create_token_usage_log, log_individual_response
 from batch_processor import BatchProcessor 
 from model_pricing import calculate_cost, get_model_info
+from json_workflow import update_record_step3, log_error, log_processing_metrics
+from shared_utilities import find_latest_results_folder, get_workflow_json_path, extract_confidence_and_explanation, create_batch_summary
+from cd_workflow_config import get_model_config, get_file_path_config, get_threshold_config, get_step_config
 
-# Import new modules
-from json_workflow import (
-    initialize_workflow_json, update_record_step3, log_error, log_processing_metrics
-)
-from shared_utilities import (
-    find_latest_results_folder, get_workflow_json_path, 
-    extract_confidence_and_explanation, safe_float_convert, safe_int_convert,
-    create_batch_summary
-)
-from cd_workflow_config import (
-    get_model_config, get_file_path_config, get_threshold_config,
-    FILE_NAMING, LOGGING_CONFIG, get_step_config, get_current_timestamp
-)
+def load_workflow_data_from_json(workflow_json_path, barcode):
+    """Load extracted_fields and formatted_oclc_results from JSON workflow file."""
+    try:
+        with open(workflow_json_path, 'r', encoding='utf-8') as f:
+            workflow_data = json.load(f)
+        
+        if barcode in workflow_data.get("records", {}):
+            record = workflow_data["records"][barcode]
+            
+            # Get extracted_fields from step1
+            extracted_fields = record.get('step1_metadata_extraction', {}).get('extracted_fields', {})
+            
+            # Get formatted_oclc_results from step2
+            formatted_oclc_results = record.get('step2_detailed_data', {}).get('formatted_oclc_results', '')
+            
+            return extracted_fields, formatted_oclc_results
+        else:
+            print(f"Warning: Barcode {barcode} not found in workflow JSON")
+            return {}, ""
+            
+    except Exception as e:
+        print(f"Error loading workflow data for {barcode}: {e}")
+        return {}, ""
 
 # Load the API key from environment variable
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
-def prepare_batch_requests(sheet, model_name):
+def prepare_batch_requests(sheet, model_name, workflow_json_path):
     """Prepare all requests for batch processing."""
     batch_requests = []
     custom_id_mapping = {}
     
     # Define the columns
     BARCODE_COLUMN = 'D'  
-    METADATA_COLUMN = 'E'
     OCLC_RESULTS_COLUMN = 'G'
     
     valid_rows = []
     
     # First pass: collect all valid rows
     for row in range(2, sheet.max_row + 1):
-        metadata = sheet[f'{METADATA_COLUMN}{row}'].value
-        oclc_results = sheet[f'{OCLC_RESULTS_COLUMN}{row}'].value
         barcode = sheet[f'{BARCODE_COLUMN}{row}'].value
+        oclc_results = sheet[f'{OCLC_RESULTS_COLUMN}{row}'].value
         
         # Skip rows with missing data or "No matching records" message
-        if (metadata and oclc_results and 
+        if (barcode and oclc_results and 
             oclc_results != "No matching records found" and 
             oclc_results.strip() != ""):
-            valid_rows.append((row, metadata, oclc_results, barcode))
+            
+            # Load data from JSON instead of Excel
+            extracted_fields, formatted_oclc_results = load_workflow_data_from_json(workflow_json_path, barcode)
+            
+            # Only proceed if we have JSON data
+            if extracted_fields and formatted_oclc_results:
+                valid_rows.append((row, extracted_fields, formatted_oclc_results, barcode))
     
     # Second pass: create batch requests for valid rows
-    for i, (row, metadata, oclc_results, barcode) in enumerate(valid_rows):
+    for i, (row, extracted_fields, formatted_oclc_results, barcode) in enumerate(valid_rows):
         prompt = (
     f'''Analyze the following OCLC results based on the given metadata and determine which result is the best match. Methodically go through each record, choose the top 3, then consider them again and choose the record that matches the most elements in the metadata. If two or more records tie for best match, prioritize records that have more holdings and that are held by IXA. If there is no likely match, write "No matching records found".
 
@@ -86,9 +105,9 @@ def prepare_batch_requests(sheet, model_name):
     
     Once you have responded, go back through the response that you wrote and carefully verify each piece of information. If you find a mistake, look for a better record. If there isn't one, reduce the confidence score to 79% or lower. If there is one, once again carefully verify all the facts that support your choice. If you still can't find a match, write "No matching records found" and set the confidence score as 0.
 
-    Metadata: {metadata}
+    Metadata: {extracted_fields}
 
-    OCLC Results: {oclc_results}
+    OCLC Results: {formatted_oclc_results}
     ''')
         
         # Create request data in the correct format for OpenAI's batch API
@@ -111,8 +130,8 @@ def prepare_batch_requests(sheet, model_name):
         custom_id_mapping[f"oclc_analysis_{i}"] = {
             "barcode": barcode,
             "row_number": row,
-            "metadata": metadata,
-            "oclc_results": oclc_results
+            "extracted_fields": extracted_fields,
+            "formatted_oclc_results": formatted_oclc_results
         }
     
     return batch_requests, custom_id_mapping, valid_rows
@@ -136,12 +155,13 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
     # Count valid rows for batch decision
     total_valid_rows = 0
     for row in range(2, sheet.max_row + 1):
-        metadata = sheet[f'E{row}'].value
+        barcode = sheet[f'D{row}'].value
         oclc_results = sheet[f'G{row}'].value
-        if (metadata and oclc_results and 
-            oclc_results != "No matching records found" and 
-            oclc_results.strip() != ""):
-            total_valid_rows += 1
+        if barcode and oclc_results and oclc_results != "No matching records found" and oclc_results.strip() != "":
+            # Check if we have JSON data available
+            extracted_fields, formatted_oclc_results = load_workflow_data_from_json(workflow_json_path, barcode)
+            if extracted_fields and formatted_oclc_results:
+                total_valid_rows += 1
     
     use_batch = processor.should_use_batch(total_valid_rows)
     
@@ -152,7 +172,8 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
         print(f"Preparing {total_valid_rows} requests for batch processing...")
         
         # Prepare batch requests (now in correct format)
-        batch_requests, custom_id_mapping, valid_rows = prepare_batch_requests(sheet, model_name)
+        batch_requests, custom_id_mapping, valid_rows = prepare_batch_requests(sheet, model_name, workflow_json_path)
+
         
         # Estimate costs
         cost_estimate = processor.estimate_batch_cost(batch_requests, model_name)
@@ -196,8 +217,8 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
                     if custom_id in custom_id_mapping:
                         barcode = custom_id_mapping[custom_id]["barcode"]
                         row = custom_id_mapping[custom_id]["row_number"]
-                        metadata = custom_id_mapping[custom_id]["metadata"]
-                        oclc_results = custom_id_mapping[custom_id]["oclc_results"]
+                        extracted_fields = custom_id_mapping[custom_id]["extracted_fields"]
+                        formatted_oclc_results = custom_id_mapping[custom_id]["formatted_oclc_results"]
                         
                         if result_data["success"]:
                             analysis_result = result_data["content"]
@@ -321,20 +342,23 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
     
     for row in range(2, sheet.max_row + 1):  # Row 1 is the header
         row_start_time = time.time()
-        metadata = sheet[f'{METADATA_COLUMN}{row}'].value
-        oclc_results = sheet[f'{OCLC_RESULTS_COLUMN}{row}'].value
         barcode = sheet[f'{BARCODE_COLUMN}{row}'].value
+        oclc_results = sheet[f'{OCLC_RESULTS_COLUMN}{row}'].value
 
         print(f"\nAnalyzing Row {row}/{sheet.max_row}")
         print(f"   Barcode: {barcode}")
         print(f"   Progress: {((row-1)/(sheet.max_row-1))*100:.1f}%")
 
+        # Load data from JSON instead of Excel
+        extracted_fields, formatted_oclc_results = load_workflow_data_from_json(workflow_json_path, barcode)
+
         # Skip rows with missing data or "No matching records" message
-        if not metadata or not oclc_results or oclc_results == "No matching records found" or oclc_results.strip() == "":
+        if (not barcode or not oclc_results or not extracted_fields or not formatted_oclc_results or 
+            oclc_results == "No matching records found" or oclc_results.strip() == ""):
             print(f"   Skipping: Missing data or no OCLC results")
             # Mark these rows as skipped in the results
             update_workbook_row(sheet, temp_sheet, row, "No OCLC data to process", 0, 
-                              "Skipped: No valid OCLC results to analyze", "", 0, 0, 0, 0)
+                            "Skipped: No valid OCLC results to analyze", "", 0, 0, 0, 0)
             
             # Copy data from other columns to temp sheet
             for col in range(1, 8):  # Columns A-G
@@ -350,17 +374,18 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
         print(f"   Valid data found - proceeding with analysis")
         
         # Show OCLC results summary
-        if oclc_results:
-            oclc_record_count = oclc_results.count("OCLC Number:")
+        if formatted_oclc_results:
+            oclc_record_count = formatted_oclc_results.count("OCLC Number:")
             print(f"   Found {oclc_record_count} OCLC records to analyze")
             
         prompt = (
-    f'''Analyze the following OCLC results based on the given metadata and determine which result is the best match. Methodically go through each record, choose the top 3, then consider them again and choose the record that matches the most elements in the metadata. Only if two or more records tie for best match, and neither is a better match than the other, prioritize records that have more holdings and/or that are held by IXA. If there is no likely match, write "No matching records found".
+    f'''Analyze the following OCLC results based on the given metadata and determine which result is the best match. Methodically go through each record, choose the top 3, then consider them again and choose the record that matches the most elements in the metadata. If two or more records are equally good matches, prioritize records that have more holdings and/or that are held by IXA. If there is no likely match, write "No matching records found".
 
-    **Important Instructions**:
+    **Matching Instructions**:
     1. Confidence Score: 0% indicates no confidence, and 100% indicates high confidence that we have found the correct OCLC number. If the confidence is below 79%, the record will be checked by a cataloger. 
     2. ***Key Fields in order of importance***:
-    - UPC/Product Code (a match is HIGHEST priority if available in both metadata and OCLC record - if not available in one or the other, skip this field.  Occasionally, the UPC is partially obscured in the metadata - if some of the numbers in a UPC are incorrect but other fields are matching, it is still a match)
+    - UPC/Product Code (a match is HIGHEST priority if available in both metadata and OCLC record)
+    - Format
     - Title 
     - Artist/Performer
     - Contributors (some matching - not all need to match)
@@ -368,27 +393,27 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
     - Physical Description (should make sense for a CD)
     - Content (track listings - these should be mostly similar, with small differences in spelling or punctuation)
     - Year (Should be an exact match if present in both the metadata and oclc record. If there are two years written in a record, the latter of the years is the reissue date, which is what we want to match)
-    3. ***Notes on Matching Special Cases***:
-    - Titles in non-Latin scripts that match in meaning or transliteration should also be considered equivalent.
-    - If a field is marked as partially obscured, lessen the importance of that field in the matching process.
-    - Different releases in different regions (e.g., Japanese release vs. US release) should be treated as different records even if title and content match.
-    4. When information is not visible in the metadata, DO NOT use that field in your consideration of a match. It may be written in the metadata as 'not visible' or 'not available', etc.
-    5. If there is a publisher in the OCLC record but it cannot be found anywhere in the metadata, the OCLC record or the CD may be a reissue - mark it as 79 because that way it will be checked by a cataloger. 
-    6. The publisher should have at least one match between the metadata and OCLC record.  This may be a partial match, but it needs to be at least a fuzzy match.  No corporate relationships or associations unless explicitly mentioned in both the metadata and the OCLC record.  If the publisher is not visible in the metadata, do not use this field in your consideration of a match.
+    3. ***Special Cases***:
+    - Non-Latin scripts: titles that match in meaning or transliteration should be considered equivalent.
+    - Partially obscured text: If a field is marked as partially obscured, lessen the importance of that field in the matching process.
+    - Regional releases: releases in different regions (e.g., Japanese release vs. US release) are different records even if other fields match.
+    4. Not visible or Not available: When information is not visible in the metadata, DO NOT use that field in your consideration of a match.
+    5. Publisher: If there is a publisher in the OCLC record but it cannot be found anywhere in the metadata, the CD may be a reissue - mark it as 79 because that way it will be checked by a cataloger.
+    6. Publisher: even if not in the publisher field, the publisher should have at least one match between the metadata and OCLC record.  At least a fuzzy or partial match.  Corporate relationships or associations do not count unless explicitly mentioned in both the metadata and the OCLC record.  
     7. If there is no likely match, write "No matching records found" and set the confidence score as 0.
 
     Format for Response:
     - Your response must follow this format exactly:
     1. OCLC number: [number or 'No matching records found']
     2. Confidence score: [%]
-    3. Explanation: [List of things that match as key value pairs. If there are multiple records that could be a match, explain why you chose the one you did. If there are no matches, explain why.]
+    3. Explanation: [List of matching key-value pairs. If there are multiple records that could be a match, explain why you chose the one you did. If there are no matches, explain why.]
     4. Other potential good matches: [List of other OCLC numbers that could be good matches and a one sentence explanation for each match as key value pairs. If there are no other potential matches, write 'No other potential good matches.']
     
-    Once you have responded, go back through the response that you wrote and carefully verify each piece of information. If you find a mistake, look for a better record. If there isn't one, reduce the confidence score to 79% or lower. If there is one, once again carefully verify all the facts that support your choice. If you still can't find a match, write "No matching records found" and set the confidence score as 0.
+    Verify your work by double checking it and carefully verifying each piece of information. If you find a mistake, look for a better record. If there isn't one, reduce the confidence score to 79% or lower. If there is one, once again carefully verify all the facts that support your choice. If you still can't find a match, write "No matching records found" and set the confidence score as 0.
 
-    Metadata: {metadata}
+    Metadata: {extracted_fields}
 
-    OCLC Results: {oclc_results}
+    OCLC Results: {formatted_oclc_results}
     ''')
         try:
             print(f"   Calling OpenAI API for analysis...")
@@ -398,11 +423,11 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
             response = client.chat.completions.create(
                 model=model_name,
                 messages=[
-                    {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and also have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
+                    {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=1500,
-                temperature=0.5
+                max_tokens=2000,
+                temperature=0.3
             )
             api_call_duration = time.time() - api_call_start
             total_api_time += api_call_duration
@@ -524,8 +549,8 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
                     error_type="api_error",
                     error_message=str(e),
                     additional_context={
-                        "metadata_available": bool(metadata),
-                        "oclc_results_available": bool(oclc_results)
+                        "extracted_fields_available": bool(extracted_fields),
+                        "formatted_oclc_results_available": bool(formatted_oclc_results)
                     }
                 )
             except Exception as json_error:

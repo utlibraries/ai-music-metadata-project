@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 OpenAI Batch Processing Module for AI Music Metadata Project
 
@@ -6,12 +5,6 @@ This module provides batch processing capabilities for OpenAI API calls,
 offering significant cost savings (50% discount) and higher rate limits
 for large-scale CD metadata processing.
 
-Usage:
-    from batch_processor import BatchProcessor
-    
-    processor = BatchProcessor()
-    batch_id = processor.submit_batch(requests)
-    results = processor.wait_for_completion(batch_id)
 """
 
 import os
@@ -22,6 +15,8 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 import tempfile
+
+# Custom module
 from model_pricing import estimate_cost
 
 

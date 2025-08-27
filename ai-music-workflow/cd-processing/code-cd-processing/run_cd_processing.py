@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 AI Music CD Processing Workflow runner script.
 Executes all 6 steps of the CD processing workflow in sequence.
@@ -111,26 +110,25 @@ def main():
     # Track overall progress
     workflow_start_time = time.time()
     successful_steps = 0
-    total_steps = len(steps)
     
     # Run each step
     for script_name, step_number, description in steps:
         print(f"\nSTARTING STEP {step_number}")
-        print(f"Progress: {successful_steps}/{total_steps} steps completed")
+        print(f"Progress: {successful_steps}/{len(steps)} steps completed")
         
         success = run_script(script_name, step_number, description)
         
         if success:
             successful_steps += 1
             print(f"\nStep {step_number} completed successfully!")
-            print(f"Overall progress: {successful_steps}/{total_steps} steps completed")
+            print(f"Overall progress: {successful_steps}/{len(steps)} steps completed")
         else:
             print(f"\nPROCESSING STOPPED")
             print(f"Step {step_number} failed. Cannot continue to next step.")
             break
         
         # Brief pause between steps
-        if step_number < total_steps:
+        if step_number < len(steps):
             print(f"\nPausing 2 seconds before next step...")
             time.sleep(2)
     
@@ -142,14 +140,14 @@ def main():
     print(f"PROCESSING SUMMARY")
     print(f"{'='*60}")
     print(f"Total duration: {total_duration:.2f} seconds ({total_duration/60:.1f} minutes)")
-    print(f"Steps completed: {successful_steps}/{total_steps}")
-    
-    if successful_steps == total_steps:
+    print(f"Steps completed: {successful_steps}/{len(steps)} steps")
+
+    if successful_steps == len(steps):
         print(f"PROCESSING COMPLETED SUCCESSFULLY!")
         print(f"All CD processing steps finished. Check the results folder for output files.")
     else:
         print(f"PROCESSING INCOMPLETE")
-        print(f"Only {successful_steps} out of {total_steps} steps completed successfully.")
+        print(f"Only {successful_steps} out of {len(steps)} steps completed successfully.")
     
     print(f"\nProcessing finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 

@@ -1,3 +1,10 @@
+"""
+JSON Workflow Management for AI Music Metadata Project
+
+Manages structured logging and state tracking for the 6-step CD processing workflow.
+Maintains processing status, timestamps, results, and audit trails for each CD record.
+"""
+
 import json
 import os
 from datetime import datetime

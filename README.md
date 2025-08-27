@@ -50,7 +50,7 @@ CD images should be stored as pairs of either PNG or JPEG files, named following
 - Optional third image: `[barcode]c.jpeg`
 
 ### Processing Pipeline
-1. **Step 1**: Extract metadata from CD images using GPT-4o-mini ✅ *Supports batch processing*
+1. **Step 1**: Extract metadata from CD images using GPT-4o ✅ *Supports batch processing*
 2. **Step 1.5**: Clean up publication numbers and dates
 3. **Step 2**: Query OCLC API with the extracted metadata
 4. **Step 3**: Use GPT-4o to analyze OCLC results and assign confidence scores ✅ *Supports batch processing*

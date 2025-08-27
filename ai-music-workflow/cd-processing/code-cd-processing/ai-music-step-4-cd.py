@@ -1,20 +1,15 @@
+# Verify track listings and publication years to validate matches
 import os
-import glob
 import re
 import openpyxl
 from openpyxl.styles import Alignment
 import datetime
 from difflib import SequenceMatcher
 
-from json_workflow import (
-    update_record_step4, log_error, log_processing_metrics
-)
-from shared_utilities import (
-    find_latest_results_folder, get_workflow_json_path, create_batch_summary
-)
-from cd_workflow_config import (
-    get_file_path_config, get_threshold_config, get_current_timestamp
-)
+# Custom modules
+from json_workflow import update_record_step4, log_error, log_processing_metrics
+from shared_utilities import find_latest_results_folder, get_workflow_json_path, create_batch_summary
+from cd_workflow_config import get_file_path_config, get_threshold_config
 
 def extract_tracks_from_metadata(metadata_str):
     """Extract track listings from metadata string."""

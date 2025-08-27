@@ -1,5 +1,5 @@
+# Query OCLC API with the extracted metadata
 import os
-import glob
 import json
 import requests
 import time
@@ -8,22 +8,10 @@ from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Alignment
 import re
 
-# Import custom modules
-from json_workflow import (
-    initialize_workflow_json, update_record_step1, update_record_step2, 
-    update_record_step3, update_record_step4, update_record_step5,
-    log_oclc_data, log_oclc_api_search, log_error, log_processing_metrics
-)
-from shared_utilities import (
-    find_latest_results_folder, get_workflow_json_path, extract_metadata_fields,
-    parse_alternative_matches, extract_confidence_and_explanation, 
-    safe_float_convert, safe_int_convert, normalize_oclc_number,
-    group_images_by_barcode, create_batch_summary
-)
-from cd_workflow_config import (
-    get_model_config, get_file_path_config, get_threshold_config,
-    FILE_NAMING, LOGGING_CONFIG, get_current_timestamp
-)
+# Custom modules
+from json_workflow import update_record_step2, log_oclc_api_search, log_error, log_processing_metrics
+from shared_utilities import find_latest_results_folder, get_workflow_json_path, extract_metadata_fields
+from cd_workflow_config import get_file_path_config
     
 api_calls = {'count': 0, 'reset_time': time.time()}
 
@@ -38,79 +26,9 @@ def get_access_token(client_id, client_secret):
         return response.json()["access_token"]
     else:
         raise Exception(f"Failed to get access token: {response.text}")
-    
-def extract_metadata_fields(metadata_str):
-    # Initialize the same structure
-    fields = {
-        "Main Title": None,
-        "English Title": None,
-        "Subtitle": None,
-        "Primary Contributor": {"Artist/Performer": None},
-        "Publishers": [{"Name": None, "Numbers": None}],
-        "Contents": {"tracks": []}
-    }
-    
-    def clean_value(value):
-        """
-        Strip out placeholders like "not visible",
-        remove any leading field-label strings, etc.
-        """
-        if not value or any(x in str(value).lower() for x in ["not visible", "not available", "n/a", "unavailable", "unknown", "[none]", "none", "not present", "not listed", "not applicable"]):
-            return None
-        value = re.sub(r'^-\s*', '', value)
-        value = re.sub(r'^(Main Title:|English Title:|Subtitle:|Primary Contributor:|Artist/Performer:|Name:|Numbers:)\s*', '', value, flags=re.IGNORECASE)
-        return value.strip()
-
-    # Split metadata into individual lines
-    lines = metadata_str.splitlines()
-    
-    # Regex that detects the known fields.
-    pattern = re.compile(r'^\-\s*(Main Title|English Title|Subtitle|Primary Contributor|Artist/Performer|Name|Numbers):\s*(.*)$')
-    newer_pattern = re.compile(r'^\s*\-\s*(Main Title|English Title|Subtitle|Primary Contributor|Artist/Performer|Name|Numbers):\s*(.*)$')
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue  # skip blank lines
-
-        match = pattern.match(line) or newer_pattern.match(line)
-        if match:
-            field_name = match.group(1)  # e.g. "Main Title"
-            field_value = clean_value(match.group(2))
-
-            if not field_value:
-                continue
-
-            field_name_lower = field_name.lower()
-
-            if field_name_lower in ["main title", "english title", "subtitle"]:
-                fields[field_name.title()] = field_value  # "Main Title", "English Title", "Subtitle"
-            elif field_name_lower in ["primary contributor", "artist/performer"]:
-                fields["Primary Contributor"]["Artist/Performer"] = field_value
-            elif field_name_lower == "name":
-                fields["Publishers"][0]["Name"] = field_value
-            elif field_name_lower == "numbers":
-                fields["Publishers"][0]["Numbers"] = field_value
-
-    # Handle track titles - try both formats
-    track_matches_quoted = re.finditer(r'"title":\s*"([^"]+)"', metadata_str)
-    for match in track_matches_quoted:
-        track_title = clean_value(match.group(1))
-        if track_title:
-            fields["Contents"]["tracks"].append({"title": track_title})
-    
-    if not fields["Contents"]["tracks"]:
-        track_matches_unquoted = re.finditer(r'"title":\s*([^,\n]+)', metadata_str)
-        for match in track_matches_unquoted:
-            track_title = clean_value(match.group(1))
-            if track_title:
-                fields["Contents"]["tracks"].append({"title": track_title})
-
-    return fields
-
 
 def construct_queries_from_metadata(metadata):
-    """Generate all possible query combinations without limiting to just 5."""
+    """Generate all possible query combinations from the JSON structure without limiting to just 5."""
     def safe_get(value):
         if not value or not isinstance(value, str):
             return None
@@ -120,47 +38,60 @@ def construct_queries_from_metadata(metadata):
         cleaned = re.sub(r'^(Primary Contributor:|Artist/Performer:|Name:)\s', '', cleaned)
         return cleaned if cleaned else None
 
-    title = safe_get(metadata.get('Main Title'))
-    subtitle = safe_get(metadata.get('Subtitle'))
-    artist = safe_get(metadata.get('Primary Contributor', {}).get('Artist/Performer'))
-    publisher = safe_get(metadata.get('Publishers', [{}])[0].get('Name'))
-    pub_numbers = safe_get(metadata.get('Publishers', [{}])[0].get('Numbers'))
-    pub_year = metadata.get('Dates', {}).get('publicationDate')
+    # Extract from JSON structure
+    title_info = metadata.get('title_information', {})
+    title = safe_get(title_info.get('main_title'))
+    subtitle = safe_get(title_info.get('subtitle'))
+    artist = safe_get(title_info.get('primary_contributor'))
+    
+    publishers = metadata.get('publishers', {})
+    publisher = safe_get(publishers.get('name'))
+    pub_numbers = safe_get(publishers.get('numbers'))
+    
+    dates = metadata.get('dates', {})
+    
+    pub_year = safe_get(dates.get('publication_date'))
+    # Extract tracks from JSON structure
+    contents = metadata.get('contents', {})
+    tracks = contents.get('tracks', [])
+    
+    first_track = None
+    second_track = None
+    third_track = None
+    
+    if len(tracks) > 0:
+        first_track = safe_get(tracks[0].get('title'))
+    if len(tracks) > 1:
+        second_track = safe_get(tracks[1].get('title'))
+    if len(tracks) > 2:
+        third_track = safe_get(tracks[2].get('title'))
 
-    product_code = None
+    # Extract product codes - handle multiple codes
+    product_codes = []
     if isinstance(pub_numbers, str):
-        code_match = re.search(r'(UPC|EAN):\s*([^,\]]+)', pub_numbers, re.IGNORECASE)
-        if not code_match:
+        # Look for UPC/EAN labeled codes first
+        labeled_matches = re.finditer(r'(UPC|EAN):\s*([^,\]]+)', pub_numbers, re.IGNORECASE)
+        for match in labeled_matches:
+            potential_code = match.group(2).strip()
+            digits_only = re.sub(r'\D', '', potential_code)
+            if len(digits_only) in [12, 13]:
+                product_codes.append(digits_only)
+        
+        # If no labeled codes found, look for digit sequences
+        if not product_codes:
             code_candidates = re.findall(r'\d[\d\s-]{10,}\d', pub_numbers)
             for candidate in code_candidates:
                 digits_only = re.sub(r'\D', '', candidate)
                 if len(digits_only) in [12, 13]:
-                    code_match = re.match(r'(.*)', digits_only)
-                    break
-        
-        if code_match:
-            if isinstance(code_match.group(1), str) and code_match.group(1).upper() in ['UPC', 'EAN']:
-                potential_code = code_match.group(2).strip()
-            else:
-                potential_code = code_match.group(1).strip()
-                
-            digits_only = re.sub(r'\D', '', potential_code)
-            if len(digits_only) in [12, 13]:
-                product_code = digits_only
-
-    tracks = metadata.get('Contents', {}).get('tracks', [])
-    first_track = next((safe_get(track.get('title')) for track in tracks if track.get('title')), None)
-    
-    second_track = None
-    if len(tracks) > 1:
-        second_track = safe_get(tracks[1].get('title')) if tracks[1].get('title') else None
-    
-    third_track = None
-    if len(tracks) > 2:
-        third_track = safe_get(tracks[2].get('title')) if tracks[2].get('title') else None
+                    product_codes.append(digits_only)
 
     queries = []
 
+    # PRIORITY: Product codes first - each as separate query
+    for product_code in product_codes:
+        queries.append(f'{product_code}')
+
+    # Continue with existing query patterns
     if artist and first_track and second_track:
         queries.append(f'"{artist}" "{first_track}" "{second_track}"')
         
@@ -189,11 +120,13 @@ def construct_queries_from_metadata(metadata):
         if title and publisher:
             queries.append(f'"{title}" {publisher}')
 
-        if title and product_code:
-            queries.append(f'"{title}" {product_code}')
+        # Update this to use the first product code if available
+        if title and product_codes:
+            queries.append(f'"{title}" {product_codes[0]}')
         
-    if artist and publisher and product_code:
-        queries.append(f'"{artist}" {publisher} "{product_code}"')
+    # Update these to use the first product code
+    if artist and publisher and product_codes:
+        queries.append(f'"{artist}" {publisher} "{product_codes[0]}"')
 
     if artist and publisher and pub_year:
         queries.append(f'{artist} {publisher} {pub_year}')
@@ -201,20 +134,17 @@ def construct_queries_from_metadata(metadata):
     if artist and publisher and first_track:
         queries.append(f'{artist} {publisher} {first_track}')
         
-    if artist and third_track:
-        queries.append(f'{artist} {third_track}')
+    if artist and second_track:
+        queries.append(f'{artist} {second_track}')
     
     if first_track:
         queries.append(f'"{first_track}"')
-        
-    if third_track:
-        queries.append(f'"{third_track}"')
+
+    if second_track:
+        queries.append(f'"{second_track}"')
 
     if artist:
         queries.append(f'{artist}')
-
-    if product_code:
-        queries.append(f'{product_code}')
 
     seen = set()
     unique_queries = []
@@ -473,10 +403,10 @@ def format_oclc_api_response_for_accumulation(data, access_token, seen_oclc_numb
                                     
             formatted_results.append("-" * 40)
             
-        return "\n".join(formatted_results), filtered_total
+        return "\n".join(formatted_results), filtered_total, None
         
     except Exception as e:
-        return f"Error formatting results: {str(e)}", 0
+        return f"Error formatting results: {str(e)}", 0, None
     
 def get_holdings_info(oclc_number, access_token):
     global api_calls
@@ -550,19 +480,32 @@ def query_oclc_api(metadata, barcode, limit=10):
     client_secret = os.environ.get("OCLC_SECRET")
     
     if not client_id or not client_secret:
-        return "Error: OCLC_CLIENT_ID and OCLC_SECRET must be set in environment variables", {}
+        return (
+            "Error: OCLC_CLIENT_ID and OCLC_SECRET must be set in environment variables",
+            "Early exit before API call (missing credentials).",
+            []
+        )
 
     try:
         access_token = get_access_token(client_id, client_secret)
     except Exception as e:
-        return f"Error getting access token: {str(e)}", {}
+        return (
+            f"Error getting access token: {str(e)}",
+            "Early exit before API call (token retrieval failed).",
+            []
+        )
 
     base_url = "https://americas.discovery.api.oclc.org/worldcat/search/v2"
     endpoint = f"{base_url}/bibs"
 
     queries = metadata.get("Queries", [])
     if not isinstance(queries, list):
-        return "Error: Invalid query format", "Queries must be a list of strings"
+        return (
+            "Error: Invalid query format",
+            "Queries must be a list of strings",
+            []
+        )
+
 
     cleaned_queries = []
     for q in queries:
@@ -572,7 +515,12 @@ def query_oclc_api(metadata, barcode, limit=10):
                 cleaned_queries.append(cleaned)
 
     if not cleaned_queries:
-        return "No valid queries could be constructed", "Please check the metadata format"
+        return (
+            "No valid queries could be constructed",
+            "Please check the metadata format",
+            []
+        )
+
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -649,7 +597,7 @@ def query_oclc_api(metadata, barcode, limit=10):
                 
                 if current_oclc_numbers:
                     # We found new unique CD format records
-                    results, record_count = format_oclc_api_response_for_accumulation(data, access_token, seen_oclc_numbers)
+                    results, record_count, _ = format_oclc_api_response_for_accumulation(data, access_token, seen_oclc_numbers)
                     
                     if results and "No matching records with CD format found" not in results and "No records found" not in results:
                         accumulated_results.append(results)
@@ -770,10 +718,29 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
 
         try:
             metadata_fields = extract_metadata_fields(metadata_str)
-            if not isinstance(metadata_fields, dict):
-                raise ValueError("Invalid metadata format")
-            
+            # Prefer JSON 'extracted_fields' from the workflow; fallback to legacy text parser if not present
+            from json_workflow import load_workflow_json  # local import to avoid top-level changes
+
+            workflow_data = load_workflow_json(workflow_json_path)
+            barcode_str = str(barcode) if barcode is not None else ""
+
+            metadata_fields = {}
+            if isinstance(workflow_data, dict) and "records" in workflow_data and barcode_str in workflow_data["records"]:
+                metadata_fields = (
+                    workflow_data["records"][barcode_str]
+                    .get("step1_metadata_extraction", {})
+                    .get("extracted_fields", {}) or {}
+                )
+
+            # Fallback to legacy text parser when JSON fields are unavailable
+            if not isinstance(metadata_fields, dict) or not metadata_fields:
+                metadata_fields = extract_metadata_fields(metadata_str)
+
+            if not isinstance(metadata_fields, dict) or not metadata_fields:
+                raise ValueError("Invalid metadata format for query construction")
+
             queries = construct_queries_from_metadata(metadata_fields)
+
             results, query_log, raw_api_responses = query_oclc_api({"Queries": queries}, barcode)
 
             

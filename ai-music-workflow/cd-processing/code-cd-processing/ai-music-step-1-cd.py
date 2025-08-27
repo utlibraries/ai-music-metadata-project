@@ -1,3 +1,4 @@
+# Extract metadata from CD images using GPT-4o with batch processing support
 import os
 import base64
 import time
@@ -14,14 +15,8 @@ from openai import OpenAI
 from token_logging import create_token_usage_log, log_individual_response
 from batch_processor import BatchProcessor  
 from model_pricing import calculate_cost, get_model_info
-from json_workflow import (
-    initialize_workflow_json, update_record_step1, 
-    log_error, log_processing_metrics
-)
-from shared_utilities import (
-    get_workflow_json_path, extract_metadata_fields,
-    group_images_by_barcode, create_batch_summary
-)
+from json_workflow import initialize_workflow_json, update_record_step1, log_error, log_processing_metrics
+from shared_utilities import get_workflow_json_path, extract_metadata_fields, group_images_by_barcode, create_batch_summary
 from cd_workflow_config import get_current_timestamp
 
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
