@@ -713,7 +713,6 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
                 temp_cell = temp_ws.cell(row=row, column=col_idx, value=cell_value)
                 if ws.cell(row=row, column=col_idx).alignment:
                     temp_cell.alignment = Alignment(vertical='top', wrap_text=True)
-            processed_rows += 1
             continue
 
         try:
@@ -764,7 +763,6 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
                     temp_cell.alignment = Alignment(vertical='top', wrap_text=True)
             
             # Now do JSON logging
-            # Now do JSON logging
             try:
                 # Count queries attempted and records found
                 queries_attempted = len(queries)
@@ -811,7 +809,7 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
 
                 # Log comprehensive OCLC API search data
                 log_oclc_api_search(
-                    results_folder_path=results_folder_path,
+                    results_folder_path=results_folder,
                     barcode=barcode,
                     queries=queries,
                     raw_api_responses=raw_api_responses,
@@ -823,7 +821,6 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
                 # Log metrics
                 total_queries_sent += queries_attempted
                 total_records_found_across_all += total_records_found
-                processed_rows += 1
                 
             except Exception as json_error:
                 log_error(
@@ -833,26 +830,11 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
                     error_type="json_update_error",
                     error_message=str(json_error)
                 )
-            
-            processed_rows += 1
-            print(f"Processed row {row}/{total_rows}")
-            
-            # Save temporary workbook every 10 rows
-            if processed_rows % 10 == 0:
-                try:
-                    temp_wb.save(temp_output_path)
-                    print(f"Progress saved ({processed_rows}/{total_rows} rows)")
-                except Exception as save_error:
-                    print(f"Warning: Could not save temporary progress: {save_error}")
-                    
-            time.sleep(0.1)
 
         except Exception as e:
             print(f"   Error processing row {row}: {str(e)}")
             error_message = f"Error: {str(e)}"
-            ws.append(['', '', '', barcode, error_message])
             items_with_issues += 1
-            processed_rows += 1
             log_error(
                 results_folder_path=results_folder_path,
                 step="step2",
@@ -861,7 +843,6 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
                 error_message=str(e),
                 additional_context={"queries_attempted": len(queries) if 'queries' in locals() else 0}
             )
-            
             
             # Update both workbooks with error
             ws.cell(row=row, column=6, value="Error processing")
@@ -880,9 +861,20 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
                 temp_cell = temp_ws.cell(row=row, column=col_idx, value=cell_value)
                 if ws.cell(row=row, column=col_idx).alignment:
                     temp_cell.alignment = Alignment(vertical='top', wrap_text=True)
-            
-            processed_rows += 1
-
+        
+        # Single increment at end of each iteration
+        processed_rows += 1
+        print(f"Processed row {row}/{total_rows}")
+        
+        # Save temporary workbook every 10 rows
+        if processed_rows % 10 == 0:
+            try:
+                temp_wb.save(temp_output_path)
+                print(f"Progress saved ({processed_rows}/{total_rows-1} data rows)")
+            except Exception as save_error:
+                print(f"Warning: Could not save temporary progress: {save_error}")
+                
+    time.sleep(0.1)
             
     # Clean up temporary file
     try:
