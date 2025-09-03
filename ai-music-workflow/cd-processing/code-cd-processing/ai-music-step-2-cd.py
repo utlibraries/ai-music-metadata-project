@@ -809,7 +809,7 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
 
                 # Log comprehensive OCLC API search data
                 log_oclc_api_search(
-                    results_folder_path=results_folder,
+                    results_folder_path=results_folder_path,
                     barcode=barcode,
                     queries=queries,
                     raw_api_responses=raw_api_responses,

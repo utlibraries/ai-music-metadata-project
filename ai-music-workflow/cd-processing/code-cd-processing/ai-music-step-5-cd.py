@@ -170,7 +170,10 @@ def extract_publication_date_from_bib_info(data):
         return "No date available"
     
     if "date" in data and "publicationDate" in data["date"]:
-        return data["date"]["publicationDate"].replace("\u2117", "c")
+        pub_date = data["date"]["publicationDate"].replace("\u2117", "c")
+        # Remove brackets like from publication date
+        pub_date = re.sub(r'\[|\]', '', pub_date)
+        return pub_date
     
     return "No date available"
 
