@@ -466,7 +466,7 @@ def main():
     script_start_time = time.time()
     
     base_dir = "ai-music-workflow/cd-processing"
-    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-100")
+    images_folder = os.path.join(base_dir, "cd-image-folders/cd-scans-10")
     base_dir_outputs = os.path.join(base_dir, "cd-output-folders")
     
     current_timestamp = get_current_timestamp()

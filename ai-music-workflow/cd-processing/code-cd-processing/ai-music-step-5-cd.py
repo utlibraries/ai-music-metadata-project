@@ -489,6 +489,167 @@ def create_low_confidence_review_text_log(results_folder, step4_file, all_record
     print(f"Low confidence review text log created with {len(low_confidence_records)} records: {review_path}")
     return review_path
 
+def create_marc_format_text_log(results_folder, all_records, workflow_json_path, current_date):
+    """
+    Create a MARC-formatted text log from the original JSON metadata for low confidence records.
+    """
+    print("Creating MARC-formatted text log from original metadata...")
+    
+    # Filter for unique low confidence matches (including those without OCLC numbers)
+    low_confidence_records = [record for record in all_records 
+                             if record["sort_group"] == "Cataloger Review (Low Confidence)"]
+    
+    if not low_confidence_records:
+        print("No low confidence matches found for MARC formatting.")
+        return None
+    
+    # Load workflow JSON to get original metadata
+    import json
+    try:
+        with open(workflow_json_path, 'r', encoding='utf-8') as f:
+            workflow_data = json.load(f)
+    except Exception as e:
+        print(f"Error reading workflow JSON: {e}")
+        return None
+    
+    # Create MARC text log file
+    marc_file = f"low-confidence-marc-{current_date}.txt"
+    marc_path = os.path.join(results_folder, marc_file)
+    
+    def is_valid_field(value):
+        """Check if a field value is valid (not None, empty, or 'Not visible')"""
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return value.strip() and value.strip().lower() != 'not visible'
+        return bool(value)
+    
+    processed_count = 0
+    with open(marc_path, 'w', encoding='utf-8') as f:
+        # Write header
+        f.write("=" * 80 + "\n")
+        f.write("MARC FORMAT - LOW CONFIDENCE RECORDS\n")
+        f.write(f"Generated: {current_date}\n")
+        f.write(f"Total Records: {len(low_confidence_records)}\n")
+        f.write("Note: Only fields with visible/available data are included\n")
+        f.write("=" * 80 + "\n\n")
+        
+        for record in low_confidence_records:
+            barcode = record["barcode"]
+            
+            # Get original metadata from workflow JSON
+            workflow_record = workflow_data.get("records", {}).get(barcode)
+            if not workflow_record or "step1_metadata_extraction" not in workflow_record:
+                f.write(f"Record {processed_count + 1} - Barcode: {barcode}\n")
+                f.write("No original metadata available\n")
+                f.write("-" * 60 + "\n\n")
+                processed_count += 1
+                continue
+            
+            extracted_fields = workflow_record["step1_metadata_extraction"].get("extracted_fields", {})
+            
+            # Write record header
+            f.write(f"Record {processed_count + 1} - Barcode: {barcode}\n")
+            f.write("-" * 60 + "\n")
+            
+            # Get field values
+            title_info = extracted_fields.get("title_information", {})
+            main_title = title_info.get("main_title")
+            subtitle = title_info.get("subtitle") 
+            primary_contributor = title_info.get("primary_contributor")
+            
+            publishers = extracted_fields.get("publishers", {})
+            place = publishers.get("place")
+            publisher_name = publishers.get("name", "").replace("Name: ", "").strip()
+            publication_date = extracted_fields.get("dates", {}).get("publication_date")
+            
+            physical = extracted_fields.get("physical_description", {})
+            contents = extracted_fields.get("contents", {})
+            tracks = contents.get("tracks", [])
+            
+            # 100 - Main Entry (Primary contributor)
+            if is_valid_field(primary_contributor):
+                f.write(f"100 1  {primary_contributor}, $ecomposer, $eperformer.\n")
+            
+            # 245 - Title Statement (check this before 264)
+            if is_valid_field(main_title):
+                title_field = f"245 1 0 {main_title}"
+                if is_valid_field(subtitle):
+                    title_field += f" : $b{subtitle}"
+                title_field += f" / $c{primary_contributor}." if is_valid_field(primary_contributor) else "."
+                f.write(f"{title_field}\n")
+            elif is_valid_field(primary_contributor):
+                # If no title but we have contributor, create minimal title field
+                f.write(f"245 1 0 [Title not visible] / $c{primary_contributor}.\n")
+            else:
+                # If neither title nor contributor, note for cataloger
+                f.write("245 1 0 [Title and contributor not visible]\n")
+            
+            # 264 - Publication Statement
+            if is_valid_field(place) or is_valid_field(publisher_name) or is_valid_field(publication_date):
+                pub_field = "264  1 "
+                
+                # Handle place
+                if is_valid_field(place):
+                    if is_valid_field(publisher_name):
+                        pub_field += f"{place} : "  # Colon only if publisher follows
+                    else:
+                        pub_field += f"{place} "    # No colon if no publisher
+                
+                # Handle publisher
+                if is_valid_field(publisher_name):
+                    pub_field += f"$b{publisher_name}"
+                    if is_valid_field(publication_date):
+                        pub_field += ", "  # Comma only if date follows
+                    else:
+                        pub_field += "."   # Period if no date follows
+                
+                # Handle date
+                if is_valid_field(publication_date):
+                    # Clean up date - remove copyright symbols and extra text
+                    date_clean = publication_date.replace("©", "").replace("℗", "").strip()
+                    # Extract just the year if possible
+                    import re
+                    year_match = re.search(r'\b(19|20)\d{2}\b', date_clean)
+                    if year_match:
+                        date_clean = f"[{year_match.group()}]"
+                    pub_field += f"$c{date_clean}"
+                
+                # Remove any trailing comma and ensure proper punctuation
+                pub_field = pub_field.rstrip(', ') + "."
+                f.write(f"{pub_field}\n")
+            
+            # 300 - Physical Description
+            f.write("300    1 audio disc : $bdigital ; $c4 3/4 in.\n")
+            
+            # 500 - General Note
+            f.write("500    Compact disc.\n")
+            
+            # 505 - Contents Note (Track listing)
+            if tracks:
+                track_list = []
+                for track in tracks:
+                    track_title = track.get("title")
+                    if is_valid_field(track_title):
+                        # Filter out metadata that got mixed in with track titles
+                        if not any(x in track_title.lower() for x in ['standard cd', 'audio disc', '4.75', 'aluminum', 'polycarbonate']):
+                            track_list.append(track_title)
+                if track_list:
+                    contents_field = "505 0  " + " -- ".join(track_list) + "."
+                    f.write(f"{contents_field}\n")
+            
+            f.write("-" * 60 + "\n\n")
+            processed_count += 1
+        
+        # Write summary footer
+        f.write("=" * 80 + "\n")
+        f.write("END OF MARC FORMAT LOG\n") 
+        f.write(f"Total Records Processed: {processed_count}\n")
+        f.write("=" * 80 + "\n")
+    
+    print(f"MARC format text log created with {processed_count} records: {marc_path}")
+    return marc_path
+
 def find_duplicate_groups(all_records, similarity_threshold=0.9, confidence_threshold=80):
     """
     Find groups of duplicate records based on similar OCLC numbers or titles.
@@ -897,6 +1058,11 @@ def create_all_records_spreadsheet():
             results_folder, step4_file, all_records, access_token, current_date
         )
         
+        # Create MARC format text log for low confidence records
+        marc_path = create_marc_format_text_log(
+            results_folder, all_records, workflow_json_path, current_date
+        )
+        
         # Log final Step 5 processing metrics
         try:
             step5_metrics = create_batch_summary(
@@ -931,6 +1097,7 @@ def create_all_records_spreadsheet():
             "all_records_path": all_records_path,
             "text_file_path": text_path,
             "review_path": review_path,
+            "marc_path": marc_path,
             "total_records": len(all_records),
             "sort_group_counts": sort_group_counts,
             "unique_matches_count": len(unique_matches)
@@ -962,6 +1129,8 @@ def main():
         print(f"Alma processing file: {result['text_file_path']}")
         if result['review_path']:
             print(f"Low confidence review file: {result['review_path']}")
+        if result.get('marc_path'):
+            print(f"MARC format file: {result['marc_path']}")
         print(f"Unique high-confidence matches: {result['unique_matches_count']}")
         print("\nBreakdown by Sort Group:")
         for group, count in sorted(result['sort_group_counts'].items()):
