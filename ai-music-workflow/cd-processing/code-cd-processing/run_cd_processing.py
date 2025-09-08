@@ -88,7 +88,7 @@ def check_environment():
 
 def main():
     """Main function to run the entire CD processing workflow."""
-    print("AI MUSIC CD PROCESSING WORKFLOW")
+    print("AI MUSIC CD PROCESSING WORKFLOW") 
     print("=" * 60)
     print(f"Processing started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     

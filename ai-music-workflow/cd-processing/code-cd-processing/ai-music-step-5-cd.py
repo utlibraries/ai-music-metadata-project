@@ -524,11 +524,19 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
             return value.strip() and value.strip().lower() != 'not visible'
         return bool(value)
     
+    def safe_get(obj, key, default=""):
+        """Safely get a value from a dictionary, handling None values."""
+        if obj is None:
+            return default
+        value = obj.get(key, default)
+        return value if value is not None else default
+    
     processed_count = 0
     with open(marc_path, 'w', encoding='utf-8') as f:
         # Write header
         f.write("=" * 80 + "\n")
         f.write("MARC FORMAT - LOW CONFIDENCE RECORDS\n")
+        f.write("This is AI-Generated Metadata from Step 1 formatted in MARC to kickstart original cataloging\n")
         f.write(f"Generated: {current_date}\n")
         f.write(f"Total Records: {len(low_confidence_records)}\n")
         f.write("Note: Only fields with visible/available data are included\n")
@@ -552,20 +560,23 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
             f.write(f"Record {processed_count + 1} - Barcode: {barcode}\n")
             f.write("-" * 60 + "\n")
             
-            # Get field values
-            title_info = extracted_fields.get("title_information", {})
-            main_title = title_info.get("main_title")
-            subtitle = title_info.get("subtitle") 
-            primary_contributor = title_info.get("primary_contributor")
+            # Get field values with safe handling
+            title_info = extracted_fields.get("title_information", {}) or {}
+            main_title = safe_get(title_info, "main_title")
+            subtitle = safe_get(title_info, "subtitle") 
+            primary_contributor = safe_get(title_info, "primary_contributor")
             
-            publishers = extracted_fields.get("publishers", {})
-            place = publishers.get("place")
-            publisher_name = publishers.get("name", "").replace("Name: ", "").strip()
-            publication_date = extracted_fields.get("dates", {}).get("publication_date")
+            publishers = extracted_fields.get("publishers", {}) or {}
+            place = safe_get(publishers, "place")
+            publisher_name_raw = safe_get(publishers, "name")
+            publisher_name = publisher_name_raw.replace("Name: ", "").strip() if publisher_name_raw else ""
             
-            physical = extracted_fields.get("physical_description", {})
-            contents = extracted_fields.get("contents", {})
-            tracks = contents.get("tracks", [])
+            dates = extracted_fields.get("dates", {}) or {}
+            publication_date = safe_get(dates, "publication_date")
+            
+            physical = extracted_fields.get("physical_description", {}) or {}
+            contents = extracted_fields.get("contents", {}) or {}
+            tracks = contents.get("tracks", []) or []
             
             # 100 - Main Entry (Primary contributor)
             if is_valid_field(primary_contributor):
@@ -607,7 +618,7 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
                 # Handle date
                 if is_valid_field(publication_date):
                     # Clean up date - remove copyright symbols and extra text
-                    date_clean = publication_date.replace("©", "").replace("℗", "").strip()
+                    date_clean = (publication_date or "").replace("©", "").replace("℗", "").strip()
                     # Extract just the year if possible
                     import re
                     year_match = re.search(r'\b(19|20)\d{2}\b', date_clean)
@@ -626,14 +637,20 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
             f.write("500    Compact disc.\n")
             
             # 505 - Contents Note (Track listing)
-            if tracks:
+            if tracks and isinstance(tracks, list):
                 track_list = []
                 for track in tracks:
-                    track_title = track.get("title")
-                    if is_valid_field(track_title):
-                        # Filter out metadata that got mixed in with track titles
-                        if not any(x in track_title.lower() for x in ['standard cd', 'audio disc', '4.75', 'aluminum', 'polycarbonate']):
-                            track_list.append(track_title)
+                    if isinstance(track, dict):
+                        track_title = safe_get(track, "title")
+                        if is_valid_field(track_title):
+                            # Filter out metadata that got mixed in with track titles
+                            if not any(x in track_title.lower() for x in ['standard cd', 'audio disc', '4.75', 'aluminum', 'polycarbonate']):
+                                track_list.append(track_title)
+                    elif isinstance(track, str) and is_valid_field(track):
+                        # Handle case where tracks might be stored as strings
+                        if not any(x in track.lower() for x in ['standard cd', 'audio disc', '4.75', 'aluminum', 'polycarbonate']):
+                            track_list.append(track)
+                
                 if track_list:
                     contents_field = "505 0  " + " -- ".join(track_list) + "."
                     f.write(f"{contents_field}\n")
@@ -649,6 +666,99 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
     
     print(f"MARC format text log created with {processed_count} records: {marc_path}")
     return marc_path
+
+def create_cataloger_review_spreadsheet(results_folder, all_records, current_date):
+    """
+    Create a separate Excel workbook for catalogers to review low confidence matches.
+    """
+    print("Creating cataloger review spreadsheet...")
+    
+    # Filter for low confidence records only
+    low_confidence_records = [record for record in all_records 
+                             if record["sort_group"] == "Cataloger Review (Low Confidence)"]
+    
+    if not low_confidence_records:
+        print("No low confidence matches found for cataloger review.")
+        return None
+    
+    # Create new workbook
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font
+    from openpyxl.worksheet.datavalidation import DataValidation
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Cataloger Review"
+    
+    # Define headers
+    headers = [
+        "Barcode",
+        "Date AI Processed", 
+        "AI-Suggested OCLC Number",
+        "Title",
+        "Date Cataloger Checked",
+        "Status",
+        "Correct OCLC Number",
+        "Notes"
+    ]
+    
+    # Add headers
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = Font(bold=True)
+    
+    # Set column widths
+    ws.column_dimensions['A'].width = 16  # Barcode
+    ws.column_dimensions['B'].width = 18  # Date AI Processed
+    ws.column_dimensions['C'].width = 22  # AI Suggested OCLC
+    ws.column_dimensions['D'].width = 55  # Title
+    ws.column_dimensions['E'].width = 22  # Date Cataloger Checked
+    ws.column_dimensions['F'].width = 25  # Status
+    ws.column_dimensions['G'].width = 22  # Correct OCLC
+    ws.column_dimensions['H'].width = 40  # Notes
+    
+    # Add data rows
+    for row_num, record in enumerate(low_confidence_records, start=2):
+        ws.cell(row=row_num, column=1, value=record["barcode"])
+        ws.cell(row=row_num, column=2, value=current_date)
+        ws.cell(row=row_num, column=3, value=record["oclc_number"] if record["oclc_number"] else "None suggested")
+        ws.cell(row=row_num, column=4, value=record["title"])
+        # Columns 5, 6 left empty for cataloger input
+        # Column 7 (G) - Auto-populate formula for Correct OCLC Number
+        ws.cell(row=row_num, column=7, value=f'=IF(F{row_num}="Approved",C{row_num},"")')
+        # Column 8 (H) left empty for notes
+    
+    # Create dropdown validation for Status column - alternative approach
+    from openpyxl.worksheet.datavalidation import DataValidation
+    
+    dv = DataValidation(type="list", formula1='"Approved,Rejected - Different OCLC,Rejected - Needs Original Cataloging"')
+    dv.error ='Your entry is not in the list'
+    dv.errorTitle = 'Invalid Entry'
+    dv.prompt = 'Please pick from the list'
+    dv.promptTitle = 'List Selection'
+    
+    # Add validation to the Status column range
+    ws.add_data_validation(dv)
+    dv.add(f'F2:F{len(low_confidence_records) + 1}')
+    
+    # Apply conditional formatting for highlighting
+    from openpyxl.formatting.rule import FormulaRule
+    
+    # Create conditional formatting rule: highlight if Correct OCLC Number column is empty
+    highlight_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
+    formula_rule = FormulaRule(formula=[f'$G2=""'], fill=highlight_fill)
+    
+    # Apply conditional formatting to all data rows
+    data_range = f"A2:H{len(low_confidence_records) + 1}"
+    ws.conditional_formatting.add(data_range, formula_rule)
+    
+    # Save the workbook
+    review_file = f"cataloger-review-{current_date}.xlsx"
+    review_path = os.path.join(results_folder, review_file)
+    wb.save(review_path)
+    
+    print(f"Cataloger review spreadsheet created with {len(low_confidence_records)} records: {review_path}")
+    return review_path
 
 def find_duplicate_groups(all_records, similarity_threshold=0.9, confidence_threshold=80):
     """
@@ -1063,6 +1173,39 @@ def create_all_records_spreadsheet():
             results_folder, all_records, workflow_json_path, current_date
         )
         
+        # Create cataloger review spreadsheet
+        review_spreadsheet_path = create_cataloger_review_spreadsheet(
+            results_folder, all_records, current_date
+        )
+        
+        # Copy both guides to results folder
+        try:
+            import shutil
+            script_dir = os.path.dirname(__file__)
+            # Go up 3 levels: code-cd-processing -> cd-processing -> ai-music-workflow -> project root
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
+            
+            # Copy cataloger guide
+            cataloger_guide_source = os.path.join(project_root, "CATALOGER_GUIDE.txt")
+            if os.path.exists(cataloger_guide_source):
+                cataloger_guide_dest = os.path.join(results_folder, "CATALOGER_GUIDE.txt")
+                shutil.copy2(cataloger_guide_source, cataloger_guide_dest)
+                print(f"Cataloger guide copied to: {cataloger_guide_dest}")
+            else:
+                print("Warning: CATALOGER_GUIDE.txt not found in repository")
+            
+            # Copy technical guide
+            technical_guide_source = os.path.join(project_root, "TECHNICAL_GUIDE.txt")
+            if os.path.exists(technical_guide_source):
+                technical_guide_dest = os.path.join(results_folder, "TECHNICAL_GUIDE.txt")
+                shutil.copy2(technical_guide_source, technical_guide_dest)
+                print(f"Technical guide copied to: {technical_guide_dest}")
+            else:
+                print("Warning: TECHNICAL_GUIDE.txt not found in repository")
+                
+        except Exception as guide_error:
+            print(f"Warning: Could not copy guides: {guide_error}")
+            
         # Log final Step 5 processing metrics
         try:
             step5_metrics = create_batch_summary(
@@ -1098,6 +1241,8 @@ def create_all_records_spreadsheet():
             "text_file_path": text_path,
             "review_path": review_path,
             "marc_path": marc_path,
+            "review_spreadsheet_path": review_spreadsheet_path,
+            "guide_path": os.path.join(results_folder, "CATALOGER_GUIDE.txt"),
             "total_records": len(all_records),
             "sort_group_counts": sort_group_counts,
             "unique_matches_count": len(unique_matches)
@@ -1129,6 +1274,8 @@ def main():
         print(f"Alma processing file: {result['text_file_path']}")
         if result['review_path']:
             print(f"Low confidence review file: {result['review_path']}")
+        if result.get('review_spreadsheet_path'):
+            print(f"Cataloger review spreadsheet: {result['review_spreadsheet_path']}")
         if result.get('marc_path'):
             print(f"MARC format file: {result['marc_path']}")
         print(f"Unique high-confidence matches: {result['unique_matches_count']}")

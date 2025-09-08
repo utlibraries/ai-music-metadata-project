@@ -103,54 +103,65 @@ def extract_tracks_from_oclc(oclc_results, oclc_number):
     if oclc_section:
         section_text = oclc_section.group(0)
         
-        # Look for a Content section containing track listings
-        content_patterns = [
-            r'Content:\s*(.*?)(?:(?:\n\s*[A-Z][a-z]+:)|$)',
-            r'Description:.*?Content:\s*(.*?)(?:(?:\n\s*[A-Z][a-z]+:)|$)'
-        ]
+        # Look for Content sections - handle multiple content blocks
+        content_pattern = r'Content:\s*(.*?)(?=(?:\n\s*[A-Z][a-z]+:)|(?:\n\s*-)|(?:----------------------------------------)|$)'
+        content_matches = re.finditer(content_pattern, section_text, re.DOTALL)
         
-        content_text = None
-        for pattern in content_patterns:
-            content_match = re.search(pattern, section_text, re.DOTALL)
-            if content_match:
-                content_text = content_match.group(1).strip()
-                break
+        all_content_text = ""
+        for content_match in content_matches:
+            content_text = content_match.group(1).strip()
+            if content_text:
+                all_content_text += content_text + " "
         
-        if content_text:
-            if " -- " in content_text:
-                track_parts = content_text.split(" -- ")
+        if all_content_text:
+            # Parse track listings using multiple strategies
+            
+            # Strategy 1: Look for "Track N:" or "N." patterns
+            track_number_pattern = r'(?:^|\s)(?:Track\s+)?(\d{1,2})[\.\:\s]+([^-\(\n]+?)(?:\s*\(\d+:\d+\)|--|\n|$)'
+            track_matches = re.finditer(track_number_pattern, all_content_text, re.MULTILINE)
+            
+            for match in track_matches:
+                track_title = match.group(2).strip()
+                # Clean up the track title
+                track_title = re.sub(r'\s*\(\d+:\d+\).*$', '', track_title)  # Remove timing
+                track_title = re.sub(r'\s*--.*$', '', track_title)  # Remove everything after --
+                track_title = track_title.strip()
+                
+                if track_title and len(track_title) > 1 and track_title not in tracks:
+                    tracks.append(track_title)
+            
+            # Strategy 2: Split by " -- " if strategy 1 didn't work well
+            if len(tracks) < 3 and " -- " in all_content_text:
+                track_parts = all_content_text.split(" -- ")
                 for part in track_parts:
                     track_name = part.strip()
-                    if track_name.endswith('.'):
-                        track_name = track_name[:-1].strip()
-                    track_name = re.sub(r'\s*/\s*[^(]+', '', track_name)
-                    track_name = re.sub(r'\s*\(\d+[:\.]\d+\)\.?$', '', track_name)
-                    track_name = re.sub(r'\s*\([^)]*\)$', '', track_name)
+                    # Clean up track name
+                    track_name = re.sub(r'^\d+[\.\s]*', '', track_name)  # Remove leading numbers
+                    track_name = re.sub(r'\s*\(\d+:\d+\).*$', '', track_name)  # Remove timing
+                    track_name = re.sub(r'\s*/\s*[^(]+$', '', track_name)  # Remove slash and following text
+                    track_name = track_name.strip()
                     
-                    if track_name and track_name.lower() not in ["not visible", "n/a", "unavailable", "none"]:
-                        tracks.append(track_name.strip())
-            else:
-                for delimiter in ['\n', ';', ',']:
-                    if delimiter in content_text and not tracks:
-                        parts = content_text.split(delimiter)
-                        for part in parts:
-                            clean_part = part.strip()
-                            if clean_part.endswith('.'):
-                                clean_part = clean_part[:-1].strip()
-                            clean_part = re.sub(r'\s*/\s*[^(]+', '', clean_part)
-                            clean_part = re.sub(r'\s*\(\d+[:\.]\d+\)\.?$', '', clean_part)
-                            
-                            if clean_part and clean_part.lower() not in ["not visible", "n/a", "unavailable", "none"]:
-                                tracks.append(clean_part)
-        
-        if not tracks:
-            track_pattern = r'([^-\(\)]+?)\s*\(\d+[:\.]\d+\)'
-            track_matches = re.findall(track_pattern, section_text)
-            for match in track_matches:
-                clean_track = match.strip()
-                if clean_track and clean_track.lower() not in ["not visible", "n/a", "unavailable", "none"]:
-                    if clean_track not in tracks:
+                    if (track_name and len(track_name) > 1 and 
+                        track_name.lower() not in ["not visible", "n/a", "unavailable", "none"] and
+                        track_name not in tracks):
+                        tracks.append(track_name)
+            
+            # Strategy 3: Look for patterns like "Title (timing)"
+            if len(tracks) < 3:
+                timing_pattern = r'([^-\(\)\n]+?)\s*\(\d+[:\.]\d+\)'
+                timing_matches = re.findall(timing_pattern, all_content_text)
+                for match in timing_matches:
+                    clean_track = match.strip()
+                    clean_track = re.sub(r'^\d+[\.\s]*', '', clean_track)  # Remove leading numbers
+                    
+                    if (clean_track and len(clean_track) > 1 and 
+                        clean_track.lower() not in ["not visible", "n/a", "unavailable", "none"] and
+                        clean_track not in tracks):
                         tracks.append(clean_track)
+    
+    # Limit to reasonable number of tracks and filter out obvious non-tracks
+    tracks = [t for t in tracks if not any(word in t.lower() for word in 
+             ['chapter', 'disc', 'volume', 'part', 'movement']) and len(t.split()) <= 8][:20]
     
     return tracks
 
