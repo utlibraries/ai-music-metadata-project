@@ -2,3 +2,4 @@ openpyxl
 requests
 Pillow
 openai
+difflib

@@ -38,15 +38,16 @@ Temporary Items
 .apdisk
 
 # Project-specific directories
-ai-music-workflow/on-demand-processing-vinyl/
+ai-music-workflow/lp-processing/lp-output-folders/
+ai-music-workflow/lp-processing/local-lp-image-folders/
 ai-music-workflow/cd-processing/cd-output-folders/
 ai-music-workflow/cd-processing/local-cd-image-folders/
+ai-music-workflow/outdated-code
 
 # Project-specific files
 *.docx
 move-jpeg-files.sh
 *.xlsx
-*.txt
 CLAUDE.local.md
 CLAUDE.md
 

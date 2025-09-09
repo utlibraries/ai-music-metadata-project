@@ -1,0 +1,95 @@
+TECHNICAL DOCUMENTATION
+=======================
+
+WORKFLOW DATA TRACKING
+----------------------
+
+[cd/lp]-metadata-workflow-[date].json
+- Master JSON file tracking all processing steps for each barcode
+- Contains raw AI responses, API calls, confidence calculations, and error logs
+- Used for debugging, quality analysis, and workflow improvements
+- Structure: {"records": {"barcode": {"step1_metadata_extraction": {...}, "step2_oclc_search": {...}, etc.}}}
+
+logs/ folder contains:
+- Individual API response logs for each processing step
+- Token usage and cost tracking files  
+- Error logs with detailed debugging information
+- Processing metrics and batch summaries
+
+LOGS FOLDER STRUCTURE:
+- step1_llm_response_log.txt - Full LLM responses - metadata extraction 
+- step1_token_usage_log.txt - Cost and performance metrics
+- oclc_api_search_log.txt - All OCLC API queries and results (step 2) 
+- step3_llm_response_log.txt - Full LLM responses - analysis, OCLC # suggestions, and reasoning
+- step3_token_usage_log.txt - Analysis step metrics
+- error_log.txt - Error tracking across all steps
+- processing_metrics.json - Structured performance data
+
+WORKFLOW MONITORING
+-------------------
+
+Key metrics tracked in processing_metrics.json:
+- Success/failure rates for each step
+- API token consumption and costs
+- Processing times and bottlenecks
+- Confidence score distributions
+- OCLC API hit rates and error patterns
+
+Error categories logged:
+- API errors (OpenAI and OCLC)
+- Image processing errors
+- JSON update and parsing errors
+- File system errors
+- Batch processing errors
+- Rate limit errors
+- Data validation errors
+- Metadata cleaning errors
+- Token/authentication errors
+- Network/connection errors
+
+QUALITY ASSURANCE DATA
+----------------------
+
+Use [cd/lp]-metadata-workflow-[date].json to:
+- Audit AI decision-making for specific records
+- Track which OCLC queries were attempted/successful
+- Review confidence score calculations and adjustments
+- Analyze patterns in low-confidence matches
+- Identify systematic processing issues
+
+Sample points for analysis:
+- Records where confidence was reduced in step 4
+- Items with no OCLC matches despite multiple queries
+- High-confidence matches found to be incorrect or incorrect but close matches (for example same item and upc but different publication year)
+- API errors that affected final classifications
+
+SYSTEM MAINTENANCE
+------------------
+
+Regular monitoring tasks:
+- Check error_log.txt for recurring issues
+- Monitor OCLC API usage against quotas
+- Review processing times for performance degradation
+- Analyze confidence score patterns
+- Verify JSON data integrity for completed batches
+
+For batch reprocessing:
+- Use barcode lists from workflow JSON to identify specific items
+- Error logs contain sufficient detail for targeted re-runs
+- Processing metrics can help optimize future batch sizes
+
+INTEGRATION POINTS
+------------------
+
+Library Services Platform batch prep:
+- batch-upload-alma-[cd/lp]-[timestamp].txt contains pipe-delimited data
+- Format: OCLC_NUMBER|BARCODE|TITLE
+- Verify OCLC numbers against workflow JSON before import
+- Track import results back to original processing data
+
+Cataloger review feedback:
+- Compare cataloger decisions in review spreadsheet to AI selections
+- Use for tweaking oclc queries and LLM prompts
+- Document systematic AI errors for workflow refinement
+
+This workflow is intended to generate not just good results but also comprehensive audit trails for compliance, quality control, and continuous improvement of the AI-assisted cataloging process.
