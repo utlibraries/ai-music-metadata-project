@@ -631,7 +631,7 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
                 f.write(f"{pub_field}\n")
             
             # 300 - Physical Description
-            f.write("300    1 audio disc : $bdigital ; $c4 3/4 in.\n")
+            f.write("300    1 audio disc : $banalog ; $c12 in.\n")
             
             # 500 - General Note
             f.write("500    Compact disc.\n")
@@ -658,6 +658,9 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
             f.write("-" * 60 + "\n\n")
             processed_count += 1
         
+        # 650 - Subject Added Entry (Genre/Form)
+            f.write("650  0  $aMusic.\n")
+            
         # Write summary footer
         f.write("=" * 80 + "\n")
         f.write("END OF MARC FORMAT LOG\n") 
