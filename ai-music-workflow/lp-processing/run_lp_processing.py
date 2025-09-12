@@ -86,6 +86,73 @@ def check_environment():
     print(f"All required environment variables are set.")
     return True
 
+def validate_image_files():
+    """Run file validation and handle user confirmation for issues."""
+    print(f"\n{'='*60}")
+    print(f"PRE-PROCESSING: Validating image file formats")
+    print(f"{'='*60}")
+    
+    # Get the directory where this runner script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    validation_script = os.path.join(script_dir, "ai-music-step-.5-lp.py")
+    
+    if not os.path.exists(validation_script):
+        print(f"Warning: Could not find validation script 'ai-music-step-.5-lp.py'")
+        print(f"Skipping file validation...")
+        return True
+    
+    max_attempts = 3
+    attempt = 1
+    
+    while attempt <= max_attempts:
+        print(f"\nValidation attempt {attempt}/{max_attempts}")
+        print("-" * 40)
+        
+        try:
+            # Run the validation script and capture output
+            result = subprocess.run([
+                sys.executable, '-u', validation_script
+            ], 
+            env={**os.environ, 'PYTHONUNBUFFERED': '1'},
+            text=True,
+            capture_output=True)
+            
+            # Print the output
+            if result.stdout:
+                print(result.stdout)
+            if result.stderr:
+                print("Errors:", result.stderr)
+            
+            # Check if validation passed (return code 0 means no issues)
+            if result.returncode == 0:
+                print(f"\nFILE VALIDATION PASSED")
+                print(f"All image files are properly formatted.")
+                return True
+            else:
+                print(f"\nFILE VALIDATION FAILED")
+                print(f"Issues found with image file formatting.")
+                
+                if attempt < max_attempts:
+                    print(f"\nPlease fix the issues listed above, then press Enter to re-validate...")
+                    print(f"Or type 'skip' to continue anyway (not recommended):")
+                    
+                    user_input = input().strip().lower()
+                    if user_input == 'skip':
+                        print(f"Skipping validation - proceeding with potentially invalid files...")
+                        return True
+                    
+                    attempt += 1
+                else:
+                    print(f"\nValidation failed after {max_attempts} attempts.")
+                    print(f"Please fix the file formatting issues before running the workflow.")
+                    return False
+                    
+        except Exception as e:
+            print(f"Error running validation: {str(e)}")
+            return False
+    
+    return False
+
 def main():
     """Main function to run the entire LP processing workflow."""
     print("AI MUSIC LP PROCESSING WORKFLOW") 
@@ -95,6 +162,11 @@ def main():
     # Check environment variables
     if not check_environment():
         print(f"\nPlease fix environment issues and try again.")
+        return
+    
+    # Validate image files before starting processing
+    if not validate_image_files():
+        print(f"\nFile validation failed. Please fix issues and try again.")
         return
     
     # Define the workflow steps
