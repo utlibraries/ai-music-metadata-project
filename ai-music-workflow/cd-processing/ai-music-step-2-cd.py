@@ -388,51 +388,68 @@ def format_oclc_api_response_for_accumulation(data, access_token, seen_oclc_numb
                 formatted_results.append("Description:")
                 if 'physicalDescription' in record['description']:
                     formatted_results.append(f"  - Physical: {record['description']['physicalDescription']}")
+                
                 if 'contents' in record['description']:
                     for content in record['description']['contents']:
-                        if 'contentNote' in content:
-                            content_text = content['contentNote'].get('text', '')
+                        # Handle the titles array format from OCLC
+                        if 'titles' in content and isinstance(content['titles'], list):
+                            formatted_results.append("  - Content:")
+                            for i, title in enumerate(content['titles'], 1):
+                                formatted_results.append(f"    {i}. {title}")
+                        
+                        # Also handle contentNote format as fallback
+                        elif 'contentNote' in content and 'text' in content['contentNote']:
+                            content_text = content['contentNote']['text']
                             # Smart content handling for large multi-disc sets
-                    if len(content_text) > 1500:
-                        # Count structural elements
-                        disc_count = content_text.count('Disc ')
-                        chapter_count = content_text.count('Chapter ')
-                        track_patterns = len(re.findall(r'(?:--|\d+\.|\(\d+:\d+\))', content_text))
-                        
-                        # Determine if this is a large compilation
-                        is_large_compilation = (
-                            disc_count > 4 or 
-                            chapter_count > 20 or 
-                            track_patterns > 100 or
-                            len(content_text) > 5000
-                        )
-                        
-                        if is_large_compilation:
-                            # Extract sample tracks and artists
-                            track_pattern = r'([^-\n]+?)\s*(?:\(\d+:\d+\)|--)'
-                            sample_tracks = re.findall(track_pattern, content_text[:2000])
-                            sample_tracks = [t.strip() for t in sample_tracks[:10] if len(t.strip()) > 3]
-                            
-                            summary = f"LARGE MULTI-DISC COMPILATION: {disc_count} discs"
-                            if chapter_count > 0:
-                                summary += f", {chapter_count} chapters"
-                            summary += ". "
-                            
-                            if sample_tracks:
-                                summary += f"Sample tracks: {', '.join(sample_tracks)}. "
-                            
-                            summary += f"[Original: {len(content_text):,} characters - This is a large compilation/box set, not a single album]"
-                            content_text = summary
-                        else:
-                            # Regular truncation for smaller releases
-                            content_text = content_text[:1500]
-                            # Try to cut at a reasonable break point
-                            last_break = content_text.rfind(' -- ')
-                            if last_break > 1000:
-                                content_text = content_text[:last_break]
-                            content_text += "... [Content truncated for analysis]"
+                            if len(content_text) > 1500:
+                                # Count structural elements
+                                disc_count = content_text.count('Disc ')
+                                chapter_count = content_text.count('Chapter ')
+                                track_patterns = len(re.findall(r'(?:--|\d+\.|\(\d+:\d+\))', content_text))
+                                
+                                # Determine if this is a large compilation
+                                is_large_compilation = (
+                                    disc_count > 4 or 
+                                    chapter_count > 20 or 
+                                    track_patterns > 100 or
+                                    len(content_text) > 5000
+                                )
+                                
+                                if is_large_compilation:
+                                    # Extract sample tracks and artists
+                                    track_pattern = r'([^-\n]+?)\s*(?:\(\d+:\d+\)|--)'
+                                    sample_tracks = re.findall(track_pattern, content_text[:2000])
+                                    sample_tracks = [t.strip() for t in sample_tracks[:10] if len(t.strip()) > 3]
+                                    
+                                    summary = f"LARGE MULTI-DISC COMPILATION: {disc_count} discs"
+                                    if chapter_count > 0:
+                                        summary += f", {chapter_count} chapters"
+                                    summary += ". "
+                                    
+                                    if sample_tracks:
+                                        summary += f"Sample tracks: {', '.join(sample_tracks)}. "
+                                    
+                                    summary += f"[Original: {len(content_text):,} characters - This is a large compilation/box set, not a single album]"
+                                    content_text = summary
+                                else:
+                                    # Regular truncation for smaller releases
+                                    content_text = content_text[:1500]
+                                    # Try to cut at a reasonable break point
+                                    last_break = content_text.rfind(' -- ')
+                                    if last_break > 1000:
+                                        content_text = content_text[:last_break]
+                                    content_text += "... [Content truncated for analysis]"
                             
                             formatted_results.append(f"  - Content: {content_text}")
+            
+            if 'note' in record:
+                formatted_results.append("Notes:")
+                if isinstance(record['note'], dict):
+                    for key, value in record['note'].items():
+                        formatted_results.append(f"  - {key}: {value}")
+                elif isinstance(record['note'], list):
+                    for note in record['note']:
+                        formatted_results.append(f"  - {note}")
                 
             if 'note' in record:
                 formatted_results.append("Notes:")

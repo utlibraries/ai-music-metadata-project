@@ -24,7 +24,7 @@ MODEL_CONFIGS = {
 # File path configurations
 FILE_PATHS = {
     "base_dir": "ai-music-workflow/cd-processing",
-    "images_folder": "cd-image-folders/cd-scans-10",
+    "images_folder": "cd-image-folders/cd-scans-5",
     "output_folders": "cd-output-folders",
     "results_folder_prefix": "results-",
     "logs_subfolder": "logs"
@@ -39,14 +39,8 @@ PROCESSING_THRESHOLDS = {
     },
     "verification": {
         "track_similarity_threshold": 80,  # Track similarity percentage threshold
-        "year_match_required": False,      # Whether exact year match is required
         "track_count_ratio_threshold": 0.7 # Minimum ratio for track count comparison
     },
-    "duplicate_detection": {
-        "title_similarity_threshold": 0.9,  # Threshold for similar titles
-        "oclc_number_proximity": 5,         # OCLC numbers within this range considered similar
-        "confidence_threshold_for_duplicates": 80  # Only consider high confidence items for duplicate detection
-    }
 }
 
 # OCLC API configuration
@@ -63,47 +57,14 @@ OCLC_CONFIG = {
         "in_catalog_language": "eng",
         "default_limit": 10,
         "max_results_threshold": 1000,  # Skip queries with more results than this
-        "max_queries_per_item": 15      # Maximum search queries to attempt per item
-    },
-    "rate_limiting": {
-        "daily_limit": 50000,
-        "requests_per_second": 2,
-        "delay_between_requests": 0.1,
-        "delay_between_api_types": 0.5
     }
 }
 
 # Workflow file naming patterns
 FILE_NAMING = {
-    "main_output": "cd-metadata-ai-{timestamp}.xlsx",
-    "workflow_json": "cd-metadata-workflow-{timestamp}.json",
-    "oclc_data_json": "oclc-bibliographic-data-{timestamp}.json",
-    "search_queries_json": "search-queries-{timestamp}.json",
-    "error_log_json": "error-log-{timestamp}.json",
-    "processing_metrics_json": "processing-metrics-{timestamp}.json",
-    "low_confidence_review": "low-confidence-review-{timestamp}.xlsx",
     "sort_groups_all": "sort-groups-all-records-{timestamp}.xlsx",
     "batch_upload_alma": "batch-upload-alma-cd-{timestamp}.txt",
     "temp_progress": "temp_cd_metadata_progress.xlsx"
-}
-
-# Logging configuration
-LOGGING_CONFIG = {
-    "token_usage": {
-        "log_individual_responses": True,
-        "include_full_responses": True,
-        "track_processing_time": True
-    },
-    "error_logging": {
-        "include_stack_traces": True,
-        "log_context_data": True,
-        "max_error_message_length": 1000
-    },
-    "progress_tracking": {
-        "save_progress_every_n_items": 10,
-        "show_progress_bar": True,
-        "log_batch_summaries": True
-    }
 }
 
 # Excel formatting configuration
@@ -137,48 +98,10 @@ EXCEL_CONFIG = {
 STEP_CONFIGS = {
     "step1": {
         "max_images_per_item": 3,
-        "supported_image_formats": [".jpg", ".jpeg", ".png"],
         "image_types": {
             "a": "FRONT COVER",
             "b": "BACK COVER", 
             "c": "ADDITIONAL IMAGE"
-        }
-    },
-    "step2": {
-        "max_search_queries": 15,
-        "query_construction_priority": [
-            "upc_product_code",
-            "artist_and_tracks",
-            "title_and_artist",
-            "title_and_tracks",
-            "publisher_and_details"
-        ]
-    },
-    "step3": {
-        "analysis_criteria_priority": [
-            "upc_product_code_match",
-            "title_match",
-            "artist_performer_match",
-            "contributors_match",
-            "publisher_match",
-            "physical_description",
-            "content_tracks",
-            "publication_year"
-        ]
-    },
-    "step4": {
-        "track_verification": {
-            "minimum_tracks_for_verification": 3,
-            "normalization_rules": {
-                "remove_articles": True,
-                "normalize_punctuation": True,
-                "handle_multi_part_works": True
-            }
-        },
-        "year_verification": {
-            "allow_missing_years": True,
-            "exact_match_required": True,
-            "reissue_handling": "use_later_year"
         }
     },
     "step5": {
@@ -193,49 +116,6 @@ STEP_CONFIGS = {
             "include_headers": False,
             "encoding": "utf-8"
         }
-    }
-}
-
-# Validation rules
-VALIDATION_RULES = {
-    "barcode": {
-        "required": True,
-        "pattern": r"^\d+$",
-        "min_length": 1,
-        "max_length": 20
-    },
-    "oclc_number": {
-        "pattern": r"^\d{8,10}$",
-        "required_for_high_confidence": True
-    },
-    "confidence_score": {
-        "min_value": 0,
-        "max_value": 100,
-        "data_type": "float"
-    },
-    "metadata_fields": {
-        "required_for_processing": ["title_information", "contents"],
-        "optional_fields": ["publishers", "dates", "language", "format", "physical_description", "notes"]
-    }
-}
-
-# Performance monitoring
-PERFORMANCE_CONFIG = {
-    "benchmarks": {
-        "step1_seconds_per_item": 30,
-        "step2_seconds_per_item": 15,
-        "step3_seconds_per_item": 25,
-        "step4_seconds_per_item": 5,
-        "step5_seconds_per_item": 10
-    },
-    "memory_limits": {
-        "max_batch_size": 100,
-        "max_concurrent_requests": 5
-    },
-    "monitoring": {
-        "track_api_response_times": True,
-        "track_file_operations": True,
-        "log_performance_warnings": True
     }
 }
 

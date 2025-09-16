@@ -145,7 +145,7 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
             fields["title_information"]["primary_contributor"] = clean_value(title_info.get("Primary Contributor"))
             
             additional = title_info.get("Additional Contributors")
-            if additional and clean_value(additional):
+            if additional and clean_value(str(additional)):
                 if isinstance(additional, list):
                     fields["title_information"]["additional_contributors"] = [clean_value(c) for c in additional if clean_value(c)]
                 else:
@@ -187,21 +187,33 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
             fields["physical_description"]["physical_condition"] = clean_value(phys_info.get("physicalCondition"))
             fields["physical_description"]["special_features"] = clean_value(phys_info.get("specialFeatures"))
         
+        # Fixed track parsing logic
         if "Contents" in parsed_json:
             content_info = parsed_json["Contents"]
             tracks = content_info.get("tracks")
             if tracks and isinstance(tracks, list):
                 for track in tracks:
-                    if isinstance(track, dict) and "number" in track and "title" in track:
+                    if isinstance(track, dict):
                         track_title = clean_value(track.get("title"))
-                        if track_title:
+                        track_number = track.get("number")
+                        
+                        # Ensure we have both number and title, and title is valid
+                        if track_title and track_number is not None:
                             try:
-                                track_num = int(track.get("number", 0))
-                                fields["contents"]["tracks"].append({
-                                    "number": track_num,
-                                    "title": track_title
-                                })
+                                # Convert number to int, handling various input types
+                                if isinstance(track_number, str):
+                                    track_num = int(track_number)
+                                else:
+                                    track_num = int(track_number)
+                                
+                                # Only add valid tracks (positive track numbers)
+                                if track_num > 0:
+                                    fields["contents"]["tracks"].append({
+                                        "number": track_num,
+                                        "title": track_title
+                                    })
                             except (ValueError, TypeError):
+                                # Skip tracks with invalid numbers
                                 continue
         
         if "Notes" in parsed_json:
@@ -220,26 +232,7 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
         # Fall back to regex parsing for non-JSON format
         pass
     
-    # Original regex-based parsing as fallback
-    def clean_value(value: str) -> Optional[str]:
-        """Clean extracted values and return None for invalid entries."""
-        if not value:
-            return None
-        
-        # Remove leading/trailing whitespace and dashes
-        cleaned = value.strip().lstrip('-').strip()
-        
-        # Check for invalid values
-        invalid_indicators = [
-            "not visible", "not available", "n/a", "unavailable", 
-            "unknown", "[none]", "none", "not present", "not listed", 
-            "not applicable", "unclear", "partially visible"
-        ]
-        
-        if cleaned.lower() in invalid_indicators:
-            return None
-            
-        return cleaned if cleaned else None
+    # Fallback regex-based parsing for non-JSON format (keep existing regex logic)
     
     # Extract title information
     title_match = re.search(r'Main Title:\s*(.+)', metadata_str, re.IGNORECASE)
@@ -258,7 +251,6 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
     if additional_match:
         additional_text = clean_value(additional_match.group(1))
         if additional_text:
-            # Split by common delimiters and clean up
             contributors = []
             for c in re.split(r'[,;]', additional_text):
                 cleaned_contrib = c.strip()
@@ -266,7 +258,7 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
                     contributors.append(cleaned_contrib)
             fields["title_information"]["additional_contributors"] = contributors
     
-    # Extract publishers - more flexible matching
+    # Extract publishers
     pub_name_match = re.search(r'(?:Publishers?|Name):\s*(.+?)(?=\n\s*-\s*Place:|$)', metadata_str, re.DOTALL | re.IGNORECASE)
     if pub_name_match:
         pub_name = clean_value(pub_name_match.group(1).split('\n')[0])
@@ -308,15 +300,12 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
     if material_types_match:
         material_types_text = clean_value(material_types_match.group(1))
         if material_types_text:
-            # Handle both list format and simple text
             if '[' in material_types_text and ']' in material_types_text:
-                # Extract from list format
                 list_content = re.search(r'\[(.*?)\]', material_types_text)
                 if list_content:
                     types = [t.strip().strip('"\'') for t in list_content.group(1).split(',')]
                     fields["format"]["material_types"] = [t for t in types if t]
             else:
-                # Simple text format
                 fields["format"]["material_types"] = [material_types_text]
     
     # Extract physical description
@@ -340,52 +329,26 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
     if features_match:
         fields["physical_description"]["special_features"] = clean_value(features_match.group(1))
     
-    # Extract tracks - handle the actual YAML-like format from the raw metadata
+    # Simplified track extraction for text format
     tracks_section = re.search(r'tracks:\s*\[(.*?)\]', metadata_str, re.DOTALL)
     if tracks_section:
         tracks_content = tracks_section.group(1)
         
-        # Look for the specific YAML-like format with "number": and "title":
-        track_objects = re.finditer(r'\{\s*"number":\s*([^,]+),\s*"title":\s*([^,]+?)(?:,\s*"titleTransliteration":[^}]*)?\}', tracks_content, re.DOTALL)
+        # Look for track objects in JSON-like format within the text
+        track_pattern = r'\{\s*"number":\s*(\d+),\s*"title":\s*"([^"]+)"[^}]*\}'
+        track_matches = re.finditer(track_pattern, tracks_content, re.DOTALL)
         
-        for match in track_objects:
-            track_number_raw = match.group(1).strip()
-            track_title_raw = match.group(2).strip()
-            
-            # Clean up the track number (remove quotes and extra text)
-            track_number_clean = re.sub(r'["\s]', '', track_number_raw)
-            # Extract just the number part (e.g., "1" from "Disc One - 1")
-            number_match = re.search(r'(\d+)', track_number_clean)
-            if number_match:
-                track_number = int(number_match.group(1))
-            else:
-                continue
-            
-            # Clean up the track title (remove quotes and extra whitespace)
-            track_title = clean_value(track_title_raw.strip('"\''))
-            
-            if track_title:
-                fields["contents"]["tracks"].append({
-                    "number": track_number,
-                    "title": track_title
-                })
-    
-    # If the above didn't work, try a more flexible approach for tracks
-    if not fields["contents"]["tracks"]:
-        # Look for individual track patterns throughout the text
-        track_patterns = re.finditer(r'(?:Disc\s+\w+\s*-\s*)?(\d+),?\s*(?:"title":\s*)?(.+?)(?:,\s*"titleTransliteration"|$)', metadata_str, re.MULTILINE)
-        
-        for match in track_patterns:
+        for match in track_matches:
             try:
                 track_number = int(match.group(1))
-                track_title = clean_value(match.group(2).strip('",'))
+                track_title = clean_value(match.group(2))
                 
-                if track_title and track_title not in ["Not applicable"]:
+                if track_title and track_number > 0:
                     fields["contents"]["tracks"].append({
                         "number": track_number,
                         "title": track_title
                     })
-            except ValueError:
+            except (ValueError, TypeError):
                 continue
     
     # Extract notes

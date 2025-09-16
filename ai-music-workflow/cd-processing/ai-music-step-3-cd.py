@@ -235,18 +235,12 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
                             successful_calls += 1
                             
                             # Parse the results
-                            oclc_number, confidence_score, explanation, other_matches = parse_analysis_result(
-                                analysis_result, oclc_results
+                            oclc_number, confidence_score, explanation, other_matches, alternative_oclc_numbers = parse_analysis_result(
+                                analysis_result, formatted_oclc_results
                             )
                             
                             # Update JSON workflow with Step 3 results
                             try:
-                                # Extract alternative matches list
-                                alternative_oclc_numbers = []
-                                if other_matches and "OCLC:" in other_matches:
-                                    import re
-                                    alternative_oclc_numbers = re.findall(r'OCLC:\s*(\d+)', other_matches)
-                                
                                 update_record_step3(
                                     json_path=workflow_json_path,
                                     barcode=barcode,
@@ -464,8 +458,8 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
             )
             
             # Parse the results
-            oclc_number, confidence_score, explanation, other_matches = parse_analysis_result(
-                analysis_result, oclc_results
+            oclc_number, confidence_score, explanation, other_matches, alternative_oclc_numbers = parse_analysis_result(
+                analysis_result, formatted_oclc_results
             )
             
             # Calculate total processing time for this row
@@ -477,12 +471,6 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
             
             # Update JSON workflow with Step 3 results
             try:
-                # Extract alternative matches list
-                alternative_oclc_numbers = []
-                if other_matches and "OCLC:" in other_matches:
-                    import re
-                    alternative_oclc_numbers = re.findall(r'OCLC:\s*(\d+)', other_matches)
-                
                 update_record_step3(
                     json_path=workflow_json_path,
                     barcode=barcode,
@@ -585,23 +573,43 @@ def parse_analysis_result(analysis_result, oclc_results):
     
     # Format other matches with holdings info
     other_matches = ""
+    alternative_oclc_numbers = []
+    
     try:
         if "Other potential good matches:" in analysis_result:
             other_matches_part = analysis_result.split("Other potential good matches:")[1].strip()
             if other_matches_part and oclc_results:
-                # Extract OCLC numbers from the LLM response
-                oclc_patterns = re.findall(r'OCLC Number:?\s*(\d{8,10})', other_matches_part, re.IGNORECASE)
+                # Extract OCLC numbers from the LLM response using multiple patterns
+                oclc_patterns = []
                 
-                if not oclc_patterns:
-                    oclc_patterns = re.findall(r'[- ]*OCLC(?:\s+Number)?:?\s*(\d{8,10})', other_matches_part, re.IGNORECASE)
+                # Pattern 1: "OCLC Number: 12345678" (most common)
+                oclc_patterns.extend(re.findall(r'OCLC\s+Number:\s*(\d{8,10})', other_matches_part, re.IGNORECASE))
                 
-                if not oclc_patterns:
-                    oclc_patterns = re.findall(r'\b(\d{8,10})\b', other_matches_part)
+                # Pattern 2: "OCLC number: 12345678" (alternative format)
+                oclc_patterns.extend(re.findall(r'OCLC\s+number:\s*(\d{8,10})', other_matches_part, re.IGNORECASE))
+                
+                # Pattern 3: "- OCLC Number: 12345678" (with dash prefix)
+                oclc_patterns.extend(re.findall(r'-\s*OCLC\s+(?:Number|number):\s*(\d{8,10})', other_matches_part, re.IGNORECASE))
+                
+                # Pattern 4: Just "OCLC: 12345678" (shorter format)
+                oclc_patterns.extend(re.findall(r'OCLC:\s*(\d{8,10})', other_matches_part, re.IGNORECASE))
+                
+                # Pattern 5: Standalone 8-10 digit numbers that could be OCLC numbers
+                standalone_numbers = re.findall(r'\b(\d{8,10})\b', other_matches_part)
+                
+                # Combine all found patterns and remove duplicates while preserving order
+                all_found_numbers = oclc_patterns + standalone_numbers
+                seen = set()
+                unique_numbers = []
+                for num in all_found_numbers:
+                    if num not in seen:
+                        seen.add(num)
+                        unique_numbers.append(num)
                 
                 formatted_matches = []
                 
                 # Process each potential match
-                for match_num in oclc_patterns:
+                for match_num in unique_numbers:
                     if f"OCLC Number: {match_num}" in oclc_results:
                         split_results = oclc_results.split(f"OCLC Number: {match_num}")
                         if len(split_results) > 1:
@@ -631,6 +639,7 @@ def parse_analysis_result(analysis_result, oclc_results):
                                 match_info += f" | Title: {title}"
                             
                             formatted_matches.append(match_info)
+                            alternative_oclc_numbers.append(match_num)
                 
                 if formatted_matches:
                     other_matches = "\n".join(formatted_matches) + "\n\nOriginal LLM response:\n" + other_matches_part
@@ -641,7 +650,7 @@ def parse_analysis_result(analysis_result, oclc_results):
     except Exception as parsing_error:
         print(f"Error parsing other matches: {parsing_error}")
         
-    return oclc_number, confidence_score, explanation, other_matches
+    return oclc_number, confidence_score, explanation, other_matches, alternative_oclc_numbers
 
 def update_workbook_row(sheet, temp_sheet, row, oclc_number, confidence_score, explanation, 
                        other_matches, row_duration, prompt_tokens, completion_tokens, tokens_used):
