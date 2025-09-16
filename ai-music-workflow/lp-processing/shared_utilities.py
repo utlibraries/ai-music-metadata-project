@@ -345,48 +345,66 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
     if tracks_section:
         tracks_content = tracks_section.group(1)
         
-        # Look for the specific YAML-like format with "number": and "title":
-        track_objects = re.finditer(r'\{\s*"number":\s*([^,]+),\s*"title":\s*([^,]+?)(?:,\s*"titleTransliteration":[^}]*)?\}', tracks_content, re.DOTALL)
+        # Look for individual track objects in the JSON-like format
+        track_pattern = r'\{\s*"number":\s*(\d+),\s*"title":\s*([^,}]+?)(?:,\s*"titleOriginalLanguage":[^}]*)?\s*\}'
+        track_matches = re.finditer(track_pattern, tracks_content, re.DOTALL)
         
-        for match in track_objects:
-            track_number_raw = match.group(1).strip()
-            track_title_raw = match.group(2).strip()
-            
-            # Clean up the track number (remove quotes and extra text)
-            track_number_clean = re.sub(r'["\s]', '', track_number_raw)
-            # Extract just the number part (e.g., "1" from "Disc One - 1")
-            number_match = re.search(r'(\d+)', track_number_clean)
-            if number_match:
-                track_number = int(number_match.group(1))
-            else:
-                continue
-            
-            # Clean up the track title (remove quotes and extra whitespace)
-            track_title = clean_value(track_title_raw.strip('"\''))
-            
-            if track_title:
-                fields["contents"]["tracks"].append({
-                    "number": track_number,
-                    "title": track_title
-                })
-    
-    # If the above didn't work, try a more flexible approach for tracks
-    if not fields["contents"]["tracks"]:
-        # Look for individual track patterns throughout the text
-        track_patterns = re.finditer(r'(?:Disc\s+\w+\s*-\s*)?(\d+),?\s*(?:"title":\s*)?(.+?)(?:,\s*"titleTransliteration"|$)', metadata_str, re.MULTILINE)
-        
-        for match in track_patterns:
+        for match in track_matches:
             try:
                 track_number = int(match.group(1))
-                track_title = clean_value(match.group(2).strip('",'))
+                track_title_raw = match.group(2).strip()
                 
-                if track_title and track_title not in ["Not applicable"]:
+                # Clean up the track title (remove quotes and extra whitespace)
+                track_title = clean_value(track_title_raw.strip('"\''))
+                
+                if track_title:
                     fields["contents"]["tracks"].append({
                         "number": track_number,
                         "title": track_title
                     })
-            except ValueError:
+            except (ValueError, TypeError):
                 continue
+
+    # If the above didn't work, try a more flexible approach for tracks
+    if not fields["contents"]["tracks"]:
+        # Look for tracks in a simpler format within the raw metadata
+        # This handles cases where tracks might be listed differently
+        track_lines = re.finditer(r'(\d+),\s*"title":\s*([^,\n]+)', metadata_str)
+        
+        for match in track_lines:
+            try:
+                track_number = int(match.group(1))
+                track_title = clean_value(match.group(2).strip('",'))
+                
+                if track_title and track_title not in ["Not applicable", "Not visible"]:
+                    fields["contents"]["tracks"].append({
+                        "number": track_number,
+                        "title": track_title
+                    })
+            except (ValueError, TypeError):
+                continue
+
+    # Final fallback: look for any pattern that has numbers followed by titles
+    if not fields["contents"]["tracks"]:
+        # Try to find track listings in various formats
+        for line in metadata_str.split('\n'):
+            # Look for lines that might contain track info
+            track_match = re.search(r'(\d+)[,:\s]*([A-Za-z][^,\n]{2,})', line)
+            if track_match:
+                try:
+                    track_number = int(track_match.group(1))
+                    track_title = clean_value(track_match.group(2))
+                    
+                    # Only add if it looks like a real track title (not metadata fields)
+                    if (track_title and 
+                        not any(keyword in track_title.lower() for keyword in 
+                            ['not visible', 'not applicable', 'date:', 'year:', 'format:', 'language:'])):
+                        fields["contents"]["tracks"].append({
+                            "number": track_number,
+                            "title": track_title
+                        })
+                except (ValueError, TypeError):
+                    continue
     
     # Extract notes
     notes_match = re.search(r'generalNotes:\s*\[(.*?)\]', metadata_str, re.DOTALL)

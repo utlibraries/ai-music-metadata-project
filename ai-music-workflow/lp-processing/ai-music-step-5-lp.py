@@ -634,7 +634,7 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
             f.write("300    1 audio disc : $banalog ; $c12 in.\n")
             
             # 500 - General Note
-            f.write("500    Compact disc.\n")
+            f.write("340    vinyl.\n")
             
             # 505 - Contents Note (Track listing)
             if tracks and isinstance(tracks, list):

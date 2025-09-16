@@ -24,7 +24,7 @@ MODEL_CONFIGS = {
 # File path configurations
 FILE_PATHS = {
     "base_dir": "ai-music-workflow/lp-processing",
-    "images_folder": "lp-image-folders/lp-scans-8",
+    "images_folder": "lp-image-folders/lp-scans-small-batch-test-jpegs",
     "output_folders": "lp-output-folders",
     "results_folder_prefix": "results-",
     "logs_subfolder": "logs"

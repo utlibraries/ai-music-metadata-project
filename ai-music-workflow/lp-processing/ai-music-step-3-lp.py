@@ -384,7 +384,7 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
     **Matching Instructions**:
     1. Confidence Score: 0% indicates no confidence, and 100% indicates high confidence that we have found the correct OCLC number. If the confidence is below 79%, the record will be checked by a cataloger. 
     2. ***Key Fields in order of importance***:
-    - UPC/Product Code (a match is HIGHEST priority if available in both metadata and OCLC record)
+    - Publisher Numbers (this is the best indicator of a matching record - if the number listed in the metadata is also present in the OCLC record it is likely a match.)
     - Format
     - Title 
     - Artist/Performer

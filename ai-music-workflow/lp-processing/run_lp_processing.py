@@ -33,7 +33,7 @@ def run_script(script_name, step_number, step_description):
         return False
     
     try:
-        print(f"\n🔄 REAL-TIME OUTPUT:")
+        print(f"\n REAL-TIME OUTPUT:")
         print("-" * 40)
         
         # Use a much simpler approach - just run with direct inheritance

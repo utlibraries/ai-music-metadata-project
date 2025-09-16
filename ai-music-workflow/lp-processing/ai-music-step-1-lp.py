@@ -216,14 +216,13 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
         # Convert to batch format
         formatted_requests = processor.create_batch_requests(batch_requests, "lp_metadata")
 
-        # Submit batch
-        batch_id = processor.submit_batch(
-            formatted_requests, 
-            f"LP Metadata Extraction - {total_items} items - {datetime.now().strftime('%Y-%m-%d')}"
+        # Use adaptive batch processing that automatically splits based on file size
+        results = processor.submit_adaptive_batch(
+            batch_requests=formatted_requests,
+            custom_id_mapping=custom_id_mapping,
+            description=f"LP Metadata Extraction - {total_items} items - {datetime.now().strftime('%Y-%m-%d')}",
+            max_file_size_mb=180  # Conservative limit under 200 MB
         )
-        
-        # Wait for completion
-        results = processor.wait_for_completion(batch_id, max_wait_hours=24, check_interval_minutes=5)
         
         if results:
             # Process batch results
@@ -234,10 +233,21 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
             
             # Add results to spreadsheet
             for custom_id, result_data in processed_results["results"].items():
-                if custom_id.startswith("lp_metadata_"):
-                    # Extract the index from custom_id
-                    index = int(custom_id.split("_")[2])
-                    mapping_key = f"req_{index}"
+                    # Handle both single batch and chunked batch custom IDs
+                    if custom_id.startswith("lp_metadata_"):
+                        # Single batch format: lp_metadata_0_hash
+                        index = int(custom_id.split("_")[2])
+                        mapping_key = f"req_{index}"
+                    elif custom_id.startswith("chunk_"):
+                        # Chunked batch format: chunk_0_1_hash
+                        parts = custom_id.split("_")
+                        if len(parts) >= 3:
+                            index = int(parts[2])  # Third part is the original request index
+                            mapping_key = f"req_{index}"
+                        else:
+                            continue  # Skip malformed custom_ids
+                    else:
+                        continue  # Skip unknown custom_id formats
                     
                     if mapping_key in custom_id_mapping:
                         barcode = custom_id_mapping[mapping_key]["barcode"]
