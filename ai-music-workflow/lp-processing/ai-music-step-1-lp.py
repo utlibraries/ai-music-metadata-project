@@ -312,16 +312,27 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
                         row_data = ['', '', '', barcode, metadata_output]
                         ws.append(row_data)
                         
-                        # Add thumbnail images
-                        for i, img_path in enumerate(image_paths, start=1):
-                            img = PILImage.open(img_path)
-                            img.thumbnail((200, 200))
-                            output = BytesIO()
-                            img.save(output, format='PNG')
-                            output.seek(0)
-                            img_openpyxl = Image(output)
-                            img_openpyxl.anchor = ws.cell(row=ws.max_row, column=i).coordinate
-                            ws.add_image(img_openpyxl)
+                        # Add thumbnail images in correct columns based on filename endings
+                        sorted_images = {'a': None, 'b': None, 'c': None}
+                        for img_path in image_paths:
+                            filename = os.path.basename(img_path).lower()
+                            if filename.endswith('a.png') or filename.endswith('a.jpg') or filename.endswith('a.jpeg'):
+                                sorted_images['a'] = img_path
+                            elif filename.endswith('b.png') or filename.endswith('b.jpg') or filename.endswith('b.jpeg'):
+                                sorted_images['b'] = img_path
+                            elif filename.endswith('c.png') or filename.endswith('c.jpg') or filename.endswith('c.jpeg'):
+                                sorted_images['c'] = img_path
+
+                        for col_index, (suffix, img_path) in enumerate([('a', sorted_images['a']), ('b', sorted_images['b']), ('c', sorted_images['c'])], start=1):
+                            if img_path:
+                                img = PILImage.open(img_path)
+                                img.thumbnail((200, 200))
+                                output = BytesIO()
+                                img.save(output, format='PNG')
+                                output.seek(0)
+                                img_openpyxl = Image(output)
+                                img_openpyxl.anchor = ws.cell(row=ws.max_row, column=col_index).coordinate
+                                ws.add_image(img_openpyxl)
                         
                         ws.row_dimensions[ws.max_row].height = 215
                         for cell in ws[ws.max_row]:
@@ -469,16 +480,27 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
                 row_data = ['', '', '', barcode, metadata_output]
                 ws.append(row_data)
 
-                # Add thumbnail images
-                for i, img_path in enumerate(image_paths, start=1):
-                    img = PILImage.open(img_path)
-                    img.thumbnail((200, 200))
-                    output = BytesIO()
-                    img.save(output, format='PNG')
-                    output.seek(0)
-                    img_openpyxl = Image(output)
-                    img_openpyxl.anchor = ws.cell(row=ws.max_row, column=i).coordinate
-                    ws.add_image(img_openpyxl)
+                # Add thumbnail images in correct columns based on filename endings
+                sorted_images = {'a': None, 'b': None, 'c': None}
+                for img_path in image_paths:
+                    filename = os.path.basename(img_path).lower()
+                    if filename.endswith('a.png') or filename.endswith('a.jpg') or filename.endswith('a.jpeg'):
+                        sorted_images['a'] = img_path
+                    elif filename.endswith('b.png') or filename.endswith('b.jpg') or filename.endswith('b.jpeg'):
+                        sorted_images['b'] = img_path
+                    elif filename.endswith('c.png') or filename.endswith('c.jpg') or filename.endswith('c.jpeg'):
+                        sorted_images['c'] = img_path
+
+                for col_index, (suffix, img_path) in enumerate([('a', sorted_images['a']), ('b', sorted_images['b']), ('c', sorted_images['c'])], start=1):
+                    if img_path:
+                        img = PILImage.open(img_path)
+                        img.thumbnail((200, 200))
+                        output = BytesIO()
+                        img.save(output, format='PNG')
+                        output.seek(0)
+                        img_openpyxl = Image(output)
+                        img_openpyxl.anchor = ws.cell(row=ws.max_row, column=col_index).coordinate
+                        ws.add_image(img_openpyxl)
 
                 ws.row_dimensions[ws.max_row].height = 215
                 for cell in ws[ws.max_row]:
@@ -552,7 +574,7 @@ def main():
 
     wb.active.freeze_panes = 'A2'
 
-    output_file = f"lp-metadata-ai-{current_timestamp}.xlsx"
+    output_file = f"full-workflow-data-lp-{current_timestamp}.xlsx"
     full_output_path = os.path.join(results_folder_path, output_file)
     wb.save(full_output_path)
     

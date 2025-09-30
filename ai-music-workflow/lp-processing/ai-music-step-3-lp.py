@@ -1,4 +1,4 @@
-# Use GPT-4o to analyze OCLC results and assign confidence scores
+# Use GPT-4.1-mini to analyze OCLC results and assign confidence scores
 import os
 import time
 from openai import OpenAI
@@ -378,7 +378,7 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
     **Matching Instructions**:
     1. Confidence Score: 0% indicates no confidence, and 100% indicates high confidence that we have found the correct OCLC number. If the confidence is below 79%, the record will be checked by a cataloger. 
     2. ***Key Fields in order of importance***:
-    - Publisher Numbers (this is the best indicator of a matching record - if the number listed in the metadata is also present in the OCLC record it is likely a match.)
+    - Publisher Numbers or Catalog Numbers (this is the best indicator of a matching record - if a catalog number from the metadata matches a catalog number in the OCLC record, it is very likely a match. Look for "Catalog Number:" entries in the OCLC results.)
     - Format
     - Title 
     - Artist/Performer
@@ -395,6 +395,7 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
     5. Publisher: If there is a publisher in the OCLC record but it cannot be found anywhere in the metadata, the LP may be a reissue - mark it as 79 because that way it will be checked by a cataloger.
     6. Publisher: even if not in the publisher field, the publisher should have at least one match between the metadata and OCLC record.  At least a fuzzy or partial match.  Corporate relationships or associations do not count unless explicitly mentioned in both the metadata and the OCLC record.  
     7. If there is no likely match, write "No matching records found" and set the confidence score as 0.
+    8. Catalog Number Priority: Catalog numbers (like "SP-5012" or "VSD 79148-79149") are the most reliable matching criteria. If you find a matching catalog number between the metadata and OCLC record, this should significantly increase your confidence score, even if other fields don't match perfectly.
 
     Format for Response:
     - Your response must follow this format exactly:
@@ -727,7 +728,7 @@ def main():
     file_paths = get_file_path_config()
     threshold_config = get_threshold_config("confidence")
     
-    model_name = model_config.get("model", "gpt-4o-mini")
+    model_name = model_config.get("model", "gpt-4.1-mini")
     
     # Start timing the entire script execution
     script_start_time = time.time()
@@ -751,7 +752,7 @@ def main():
 
     # Look for step 2 files in the results folder
     step2_files = [f for f in os.listdir(results_folder)
-            if f.startswith('lp-metadata-ai-') and f.endswith('.xlsx')]
+            if f.startswith('full-workflow-data-lp') and f.endswith('.xlsx')]
 
     if not step2_files:
         print("No step 2 files found in the results folder!")

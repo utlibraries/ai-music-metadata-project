@@ -32,20 +32,22 @@ def find_latest_results_folder(prefix: str) -> Optional[str]:
     
     return max(matching_folders)
 
-def get_workflow_json_path(results_folder: str) -> str:
+def get_workflow_json_path(results_folder):
     """
-    Get the path to the workflow JSON file for the given results folder.
-    Creates the filename based on the current date.
-    
-    Args:
-        results_folder: Path to the results folder
-    
-    Returns:
-        Full path to the workflow JSON file
+    Find the actual workflow JSON file in the results folder instead of assuming today's date.
     """
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    json_file = f"lp-metadata-workflow-{current_date}.json"
-    return os.path.join(results_folder, json_file)
+    # Look for files matching the pattern
+    json_files = [f for f in os.listdir(results_folder) 
+                  if f.startswith("full-workflow-data-lp-") and f.endswith(".json")]
+    
+    if not json_files:
+        # Fallback to creating with current date if none found
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        return os.path.join(results_folder, f"full-workflow-data-lp-{current_date}.json")
+    
+    # Return the most recent one if multiple exist
+    latest_json = max(json_files)
+    return os.path.join(results_folder, latest_json)
 
 def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
     """
@@ -498,18 +500,23 @@ def extract_confidence_and_explanation(analysis_result: str) -> Tuple[float, str
                 explanation = explanation[:-2].strip()
             explanation = re.sub(r'\s+\d+\.\s*$', '', explanation)
         
-        # Extract alternative matches
-        if "Other potential good matches:" in analysis_result:
-            other_matches_part = analysis_result.split("Other potential good matches:")[1].strip()
-            oclc_patterns = re.findall(r'OCLC Number:?\s*(\d{8,10})', other_matches_part, re.IGNORECASE)
-            
-            if not oclc_patterns:
-                oclc_patterns = re.findall(r'[- ]*OCLC(?:\s+Number)?:?\s*(\d{8,10})', other_matches_part, re.IGNORECASE)
-            
-            if not oclc_patterns:
-                oclc_patterns = re.findall(r'\b(\d{8,10})\b', other_matches_part)
-            
-            alternative_matches = oclc_patterns
+        # Extract the selected OCLC number first
+        selected_oclc = None
+        if "OCLC number:" in analysis_result:
+            oclc_match = re.search(r'OCLC number:\s*(\d{7,10})', analysis_result, re.IGNORECASE)
+            if oclc_match:
+                selected_oclc = oclc_match.group(1)
+        
+        # Find all 7-10 digit numbers in the response using a more flexible pattern
+        # This pattern looks for digit sequences that might have punctuation before/after
+        all_oclc_numbers = re.findall(r'(?:^|[^\d])(\d{7,10})(?:[^\d]|$)', analysis_result, re.MULTILINE)
+        
+        # Remove duplicates and exclude the selected OCLC number
+        seen = set()
+        for oclc in all_oclc_numbers:
+            if oclc not in seen and oclc != selected_oclc:
+                seen.add(oclc)
+                alternative_matches.append(oclc)
     
     except Exception as e:
         print(f"Error parsing analysis result: {e}")

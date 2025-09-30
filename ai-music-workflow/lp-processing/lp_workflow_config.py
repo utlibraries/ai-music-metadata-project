@@ -14,7 +14,7 @@ MODEL_CONFIGS = {
         "batch_threshold": 10  # Use batch processing if more than this many items
     },
     "step3_ai_analysis": {
-        "model": "gpt-4o-mini",
+        "model": "gpt-4.1-mini",
         "max_tokens": 1500,
         "temperature": 0.5,
         "batch_threshold": 10
@@ -24,7 +24,7 @@ MODEL_CONFIGS = {
 # File path configurations
 FILE_PATHS = {
     "base_dir": "ai-music-workflow/lp-processing",
-    "images_folder": "lp-image-folders/lp-scans-5",
+    "images_folder": "lp-image-folders/lp-scans-200-files",
     "output_folders": "lp-output-folders",
     "results_folder_prefix": "results-",
     "logs_subfolder": "logs"

@@ -52,29 +52,30 @@ Model configurations, file paths (including the images folder to process), and o
 
 ### Directory Structure 
 ai-music-metadata-project/ai-music-workflow
-├── cd-processing/                   # CD workflow folder
-│   ├── run_cd_processing.py        # Main CD processing script
-│   ├── [other CD script files...]
-│   ├── cd-image-folders/              # CD image folders go here
-│   │   └── your_collection_name/        # Individual collection folder
-│   │       ├── barcode1a.jpeg     # Front image
-│   │       ├── barcode1b.jpeg     # Back image
-│   │       ├── barcode1c.jpeg     # Optional third image
-│   │       └── ...
-│   └── cd-output-folders/             # Auto-generated CD outputs - this folder is auto-generated
-│       └── [timestamped-folders]/
-├── lp-processing/                   # LP workflow folder  
-│   ├── run_lp_processing.py        # Main LP processing script
-│   ├── [other LP script files...]
-│   ├── lp-image-folders/              # LP image folders go here
-│   │   └── your_collection_name/        # Individual collection folder
-│   │       ├── barcode1a.jpeg     # Front image
-│   │       ├── barcode1b.jpeg     # Back image
-│   │       ├── barcode1c.jpeg     # Optional third image
-│   │       └── ...
-│   └── lp-output-folders/             # Auto-generated LP outputs - this folder is auto-generated
-│       └── [timestamped-folders]/
-└── Requirements, README, License, Technical Guide, Cataloger Guide, gitignore      
+- cd-processing/                   # CD workflow folder
+- - run_cd_processing.py        # Main CD processing script
+- - [other CD script files]
+- - cd-image-folders/              # CD image folders go here
+- - - your_collection_name/        # Individual collection folder
+- - - - barcode1a.jpeg     # Front image (at least one image of item is required)
+- - - - barcode1b.jpeg     # Optional back image
+- - - - barcode1c.jpeg     # Optional third image
+- - - - the rest of the images in barcode groups...
+- - cd-output-folders/             # Auto-generated CD outputs (this folder is auto-generated)
+- - - [timestamped-folders]/
+
+- lp-processing/                   # LP workflow folder
+- - run_lp_processing.py        # Main LP processing script
+- - [other LP script files]
+- - lp-image-folders/              # LP image folders go here
+- - - your_collection_name/        # Individual collection folder
+- - - - barcode1a.jpeg     # Front image (at least one image of item is required)
+- - - - barcode1b.jpeg     # Optional back image
+- - - - barcode1c.jpeg     # Optional third image
+- - - - the rest of the images in barcode groups
+- - lp-output-folders/             # Auto-generated LP outputs (this folder is auto-generated)
+- - - [timestamped-folders]/
+- - Requirements, README, License, Technical Guide, Cataloger Guide, gitignore      
 
 ### Processing Pipeline
 1. **Step 1**: Extract metadata from CD images using Large Language Model (LLM)
@@ -124,5 +125,6 @@ The workflow creates several key files for catalogers and/or other library profe
 - **Cost concerns**: Use automatic mode, clean data first, remove duplicates
 
 ## Contact
-This repository is a work in progress!  
+This repository is a work in progress!  Step 5 in particular is undergoing some renovations.  The LP workflow now creates HTML files for cataloger review.  In order to see the full web pages, with images, the results folder must be downloaded to a user's individual machine, unzipped, and then the HTML pages can be opened in browser.  The user may then make selections and export them to a CSV file, which will download to their downloads folder.  
+
 Please direct questions, ideas, or comments to: **Hannah Moutran** - hlm2454@my.utexas.edu

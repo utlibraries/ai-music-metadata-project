@@ -234,6 +234,18 @@ def format_oclc_results(json_response, access_token):
                 if 'oclcNumber' in record['identifier']:
                     formatted_results.append(f"  - oclcNumber: {record['identifier']['oclcNumber']}")
                 
+                # Add catalog numbers from standardNumbers (028 field)
+                if 'standardNumbers' in record['identifier']:
+                    for std_num in record['identifier']['standardNumbers']:
+                        if isinstance(std_num, dict):
+                            number = std_num.get('standardNumber', '')
+                            source = std_num.get('source', '')
+                            if number:
+                                if source:
+                                    formatted_results.append(f"  - Catalog Number: {number} ({source})")
+                                else:
+                                    formatted_results.append(f"  - Catalog Number: {number}")
+                
                 # Add UPC if it exists
                 if 'otherStandardIdentifiers' in record['identifier']:
                     for id_item in record['identifier']['otherStandardIdentifiers']:
@@ -355,6 +367,18 @@ def format_oclc_api_response_for_accumulation(data, access_token, seen_oclc_numb
                 # Add OCLC number
                 if 'oclcNumber' in record['identifier']:
                     formatted_results.append(f"  - oclcNumber: {record['identifier']['oclcNumber']}")
+                
+                # Add catalog numbers from standardNumbers (028 field)
+                if 'standardNumbers' in record['identifier']:
+                    for std_num in record['identifier']['standardNumbers']:
+                        if isinstance(std_num, dict):
+                            number = std_num.get('standardNumber', '')
+                            source = std_num.get('source', '')
+                            if number:
+                                if source:
+                                    formatted_results.append(f"  - Catalog Number: {number} ({source})")
+                                else:
+                                    formatted_results.append(f"  - Catalog Number: {number}")
                 
                 # Add UPC if it exists
                 if 'otherStandardIdentifiers' in record['identifier']:
@@ -994,7 +1018,7 @@ def main():
     
     # Look for previous step files in the results folder.
     input_files = [f for f in os.listdir(results_folder) 
-               if f.startswith('lp-metadata-ai-') and f.endswith('.xlsx')]
+               if f.startswith('full-workflow-data-lp') and f.endswith('.xlsx')]
     
     if not input_files:
         print("No step 1 files found in the results folder!")
