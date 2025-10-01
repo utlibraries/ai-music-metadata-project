@@ -169,6 +169,30 @@ def main():
         print(f"\nFile validation failed. Please fix issues and try again.")
         return
     
+    # Ask about HTML generation upfront
+    print(f"\n{'='*60}")
+    print(f"HTML REVIEW INTERFACE OPTION")
+    print(f"{'='*60}")
+    print(f"\nStep 6 creates an interactive HTML review interface that copies all images in this run to the results folder.")
+    print(f"The entire results folder must be downloaded and opened locally on your computer (unzipped) in order to view the HTML.")
+    print(f"The HTML website can then be opened in a web browser by double clicking on index.html.")
+    print(f"\nBenefits: 1. Easy review of AI-suggested OCLC matches alongside full size images of LPs.")
+    print(f"          2. Records sortable by confidence.")
+    print(f"          3. Cataloger decisions may then be exported to CSV.")
+    print(f"\nImportant: The HTML runs entirely on your local machine with no external connections.")
+    print(f"           Decisions are stored in your browser's local storage only.")
+    print(f"           You must export decisions to CSV and manually save the file to preserve your work.")
+    print(f"\nNote: Not recommended for batches over 500 records due to the size of the generated folder.")
+    print(f"          For the same reason, we recommend using JPEG format for images when intending to generate HTML.")
+    print(f"\nGenerate HTML review interface? (y/n): ", end='')
+    
+    run_html_step = input().strip().lower() == 'y'
+    
+    if run_html_step:
+        print(f"HTML review will be generated after Step 5.")
+    else:
+        print(f"Skipping HTML generation. Only spreadsheet/text outputs will be created.")
+    
     # Define the workflow steps
     steps = [
         ("ai-music-step-1-lp.py", 1, "Extract metadata from LP images using AI"),
@@ -178,6 +202,10 @@ def main():
         ("ai-music-step-4-lp.py", 4, "Verify track listings and publication years"),
         ("ai-music-step-5-lp.py", 5, "Create final sorted results and batch files")
     ]
+    
+    # Add Step 6 if user chose it
+    if run_html_step:
+        steps.append(("ai-music-step-6-lp.py", 6, "Create interactive HTML review interface"))
     
     # Track overall progress
     workflow_start_time = time.time()
@@ -222,6 +250,6 @@ def main():
         print(f"Only {successful_steps} out of {len(steps)} steps completed successfully.")
     
     print(f"\nProcessing finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
+    
 if __name__ == "__main__":
     main()
