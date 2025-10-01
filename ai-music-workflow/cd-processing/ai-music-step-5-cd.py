@@ -1,106 +1,50 @@
-# Create simplified spreadsheet with key fields and formatted OCLC results
+# Create output files for final results 
 import os
 import datetime
 import re
 import openpyxl
-import requests
-import time
+import json
 from difflib import SequenceMatcher
 from openpyxl import load_workbook
 
 # Custom modules
 from json_workflow import update_record_step5, log_error, log_processing_metrics
-from shared_utilities import find_latest_results_folder, get_workflow_json_path, create_batch_summary
+from shared_utilities import find_latest_results_folder, get_workflow_json_path, create_batch_summary, find_latest_cd_metadata_file, get_bib_info_from_workflow
 from cd_workflow_config import get_file_path_config, get_threshold_config, get_current_timestamp, get_step_config, FILE_NAMING
 
-def find_latest_cd_metadata_file(results_folder):
-    # Find files starting with "cd-metadata-ai-" and ending with ".xlsx"
-    files = [f for f in os.listdir(results_folder) 
-             if f.startswith("cd-metadata-ai-") and f.endswith(".xlsx")]
-    if not files:
-        return None
-    latest_file = max(files)
-    return os.path.join(results_folder, latest_file)
-
-def get_access_token(client_id, client_secret):
-    token_url = "https://oauth.oclc.org/token"
-    data = {
-        "grant_type": "client_credentials",
-        "scope": "wcapi"
-    }
-    response = requests.post(token_url, data=data, auth=(client_id, client_secret))
-    if response.status_code == 200:
-        return response.json()["access_token"]
-    else:
-        raise Exception(f"Failed to get access token: {response.text}")
-
-def get_bib_info(oclc_number, access_token):
+def get_holdings_info_from_workflow(oclc_number, workflow_json_path):
     """
-    Query the OCLC API for bibliographic information for a specific OCLC number.
+    Extract holdings information from formatted OCLC results in workflow JSON.
     """
-    base_url = "https://americas.discovery.api.oclc.org/worldcat/search/v2"
-    endpoint = f"{base_url}/bibs/{oclc_number}"
-    
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json"
-    }
-    
     try:
-        response = requests.get(endpoint, headers=headers)
-        response.raise_for_status()
+        with open(workflow_json_path, 'r', encoding='utf-8') as f:
+            workflow_data = json.load(f)
         
-        data = response.json()
-        # The current API returns data directly, not in a bibRecords array
-        return data
-    except requests.RequestException as e:
-        print(f"Error getting information for OCLC number {oclc_number}: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Error response status: {e.response.status_code}")
-            print(f"Error response content: {e.response.text}")
-        return {"error": str(e)}
-
-def get_holdings_info(oclc_number, access_token):
-    """
-    Query the OCLC API for holdings information for a specific OCLC number.
-    """
-    base_url = "https://americas.discovery.api.oclc.org/worldcat/search/v2"
-    holdings_endpoint = f"{base_url}/bibs-holdings"
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json"
-    }
-    params = {
-        "oclcNumber": oclc_number,
-        "limit": 50
-    }
-    
-    try:
-        holdings_response = requests.get(holdings_endpoint, params=params, headers=headers)
-        holdings_response.raise_for_status()
-        holdings_data = holdings_response.json()
-        
-        is_held_by_IXA = False
-        total_holding_count = 0
-        
-        if "briefRecords" in holdings_data and len(holdings_data["briefRecords"]) > 0:
-            record = holdings_data["briefRecords"][0]
-            if "institutionHolding" in record:
-                holdings = record["institutionHolding"]
-                total_holding_count = holdings.get("totalHoldingCount", 0)
-                if "briefHoldings" in holdings:
-                    for holding in holdings["briefHoldings"]:
-                        if holding.get("oclcSymbol", "") == "IXA":
-                            is_held_by_IXA = True
-                            break
+        # Search through all records for the target OCLC number
+        for barcode, record_data in workflow_data.get("records", {}).items():
+            step2_data = record_data.get("step2_detailed_data", {})
+            formatted_results = step2_data.get("formatted_oclc_results", "")
+            
+            # Look for this OCLC number and extract holdings info
+            oclc_pattern = rf"OCLC Number: {oclc_number}\n\nHeld by IXA: (Yes|No)\nTotal Institutions Holding: (\d+)"
+            match = re.search(oclc_pattern, formatted_results)
+            
+            if match:
+                is_held_by_ixa = match.group(1) == "Yes"
+                total_holdings = int(match.group(2))
+                
+                return {
+                    "held_by_ixa": is_held_by_ixa,
+                    "total_holdings": total_holdings
+                }
         
         return {
-            "held_by_ixa": is_held_by_IXA,
-            "total_holdings": total_holding_count
+            "held_by_ixa": False,
+            "total_holdings": 0,
+            "error": "Holdings data not found in workflow"
         }
         
-    except requests.RequestException as e:
-        print(f"Error getting holdings for OCLC number {oclc_number}: {str(e)}")
+    except Exception as e:
         return {
             "held_by_ixa": False,
             "total_holdings": 0,
@@ -116,65 +60,28 @@ def clean_title(title):
     return title
 
 def extract_title_from_bib_info(data):
-    """Extract and clean title from bibliographic information."""
-    if not isinstance(data, dict):
-        return "No title available"
-    
-    # Check for error in response
-    if "error" in data:
-        return "No title available"
-    
-    # Current API response typically has title at the top level
-    if "title" in data:
-        # For responses with mainTitles structure
-        if "mainTitles" in data["title"] and data["title"]["mainTitles"]:
-            title = data["title"]["mainTitles"][0].get("text", "No title available")
-            return clean_title(title)
-        
-        # For responses with title as direct property
-        if isinstance(data["title"], str):
-            return clean_title(data["title"])
-    
-    # Check for title in different locations that might be in the API response
-    if "name" in data and isinstance(data["name"], str):
-        return clean_title(data["name"])
-    
-    # Look for other possible title fields
-    for field in ["titleInfo", "titleStatement", "uniformTitle"]:
-        if field in data and isinstance(data[field], str):
-            return clean_title(data[field])
-    
+    """Extract title from workflow bibliographic information."""
+    if isinstance(data, dict):
+        if "error" in data:
+            return "No title available"
+        return data.get("title", "No title available")
     return "No title available"
 
 def extract_author_from_bib_info(data):
-    """Extract author from bibliographic information."""
-    if not isinstance(data, dict) or "error" in data:
+    """Extract author from workflow bibliographic information."""
+    if isinstance(data, dict) and "contributors" in data:
+        contributors = data["contributors"]
+        if contributors and len(contributors) > 0:
+            return contributors[0]  # Return first contributor
         return "No author available"
-    
-    # Look for contributor information
-    if "contributor" in data:
-        if "creators" in data["contributor"] and data["contributor"]["creators"]:
-            for creator in data["contributor"]["creators"]:
-                if "nonPersonName" in creator and "text" in creator["nonPersonName"]:
-                    return creator["nonPersonName"]["text"]
-                elif "firstName" in creator and "secondName" in creator:
-                    first_name = creator.get("firstName", {}).get("text", "")
-                    second_name = creator.get("secondName", {}).get("text", "")
-                    return f"{first_name} {second_name}".strip()
-    
     return "No author available"
 
 def extract_publication_date_from_bib_info(data):
-    """Extract publication date from bibliographic information."""
-    if not isinstance(data, dict) or "error" in data:
-        return "No date available"
-    
-    if "date" in data and "publicationDate" in data["date"]:
-        pub_date = data["date"]["publicationDate"].replace("\u2117", "c")
-        # Remove brackets like from publication date
-        pub_date = re.sub(r'\[|\]', '', pub_date)
-        return pub_date
-    
+    """Extract publication date from workflow bibliographic information."""
+    if isinstance(data, dict):
+        if "error" in data:
+            return "No date available"
+        return data.get("publication_date", "No date available")
     return "No date available"
 
 def format_bib_info(data):
@@ -367,7 +274,7 @@ def calculate_title_similarity(title1, title2):
     """Calculate similarity between two titles using SequenceMatcher."""
     return SequenceMatcher(None, title1.lower(), title2.lower()).ratio()
 
-def create_low_confidence_review_text_log(results_folder, step4_file, all_records, access_token, current_date):
+def create_low_confidence_review_text_log(results_folder, step4_file, all_records, workflow_json_path, current_date):
     """
     Create a review text log for unique low confidence matches with detailed information.
     """
@@ -398,16 +305,17 @@ def create_low_confidence_review_text_log(results_folder, step4_file, all_record
             }
             barcode_to_source[barcode] = row_data
     
-    # Create text log file
-    review_file = f"low-confidence-review-{current_date}.txt"
-    review_path = os.path.join(results_folder, review_file)
+    # Create text log file in deliverables subfolder
+    deliverables_folder = os.path.join(results_folder, "deliverables")
+    review_file = f"low-confidence-matches-review-{current_date}.txt"
+    review_path = os.path.join(deliverables_folder, review_file)
     
     # Process each low confidence record and write to text file
     processed_count = 0
     with open(review_path, 'w', encoding='utf-8') as f:
         # Write header
         f.write("=" * 80 + "\n")
-        f.write("LOW CONFIDENCE REVIEW LOG\n")
+        f.write("LOW CONFIDENCE MATCHES REVIEW LOG\n")
         f.write(f"Generated: {current_date}\n")
         f.write(f"Total Records: {len(low_confidence_records)}\n")
         f.write("=" * 80 + "\n\n")
@@ -451,34 +359,29 @@ def create_low_confidence_review_text_log(results_folder, step4_file, all_record
                 f.write("  No other candidates\n")
             f.write("\n")
             
-            # Get detailed OCLC record information
+            # Get detailed OCLC record information from workflow JSON
             if oclc_number and record["has_valid_oclc"]:
                 f.write("OCLC Record Details:\n")
-                oclc_data = get_bib_info(oclc_number, access_token)
-                formatted_info = format_bib_info(oclc_data)
+                oclc_data = get_bib_info_from_workflow(oclc_number, workflow_json_path)
+                
+                # Get holdings information
+                holdings_info = get_holdings_info_from_workflow(oclc_number, workflow_json_path)
+                
+                # Write raw OCLC data as JSON
+                import json
+                raw_oclc_json = json.dumps(oclc_data, indent=2, ensure_ascii=False)
+                f.write(f"  Raw OCLC Data:\n  {raw_oclc_json.replace(chr(10), chr(10) + '  ')}\n")
                 
                 # Add holdings information
-                holdings_info = get_holdings_info(oclc_number, access_token)
-                holdings_text = f"\nTotal Institutions Holding: {holdings_info.get('total_holdings', 0)}\nHeld by IXA: {'Yes' if holdings_info.get('held_by_ixa', False) else 'No'}"
-                formatted_info += holdings_text
+                holdings_text = f"\nHoldings Information:\nTotal Institutions Holding: {holdings_info.get('total_holdings', 0)}\nHeld by IXA: {'Yes' if holdings_info.get('held_by_ixa', False) else 'No'}"
+                f.write(f"  {holdings_text}\n")
                 
-                # Format OCLC info with proper indentation
-                formatted_lines = formatted_info.replace('\n', '\n  ')
-                f.write(f"  {formatted_lines}\n")
-                
-                # Small delay to avoid API rate limits
-                time.sleep(0.5)
             else:
                 f.write("OCLC Record Details:\n")
                 f.write("  No OCLC record available - no valid OCLC number found\n")
             
             f.write("\n")
             processed_count += 1
-            
-            # Only add delay if we made API calls
-            if oclc_number and record["has_valid_oclc"]:
-                # Small delay to avoid API rate limits
-                time.sleep(0.5)
         
         # Write summary footer
         f.write("=" * 80 + "\n")
@@ -512,9 +415,10 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
         print(f"Error reading workflow JSON: {e}")
         return None
     
-    # Create MARC text log file
+    # Create MARC text log file in deliverables subfolder
+    deliverables_folder = os.path.join(results_folder, "deliverables")
     marc_file = f"low-confidence-marc-{current_date}.txt"
-    marc_path = os.path.join(results_folder, marc_file)
+    marc_path = os.path.join(deliverables_folder, marc_file)
     
     def is_valid_field(value):
         """Check if a field value is valid (not None, empty, or 'Not visible')"""
@@ -724,12 +628,21 @@ def create_cataloger_review_spreadsheet(results_folder, all_records, current_dat
     for row_num, record in enumerate(low_confidence_records, start=2):
         ws.cell(row=row_num, column=1, value=record["barcode"])
         ws.cell(row=row_num, column=2, value=current_date)
-        ws.cell(row=row_num, column=3, value=record["oclc_number"] if record["oclc_number"] else "None suggested")
+        
+        # Show the AI-suggested OCLC number (what the workflow chose)
+        ai_suggested_oclc = record["oclc_number"] if record["oclc_number"] else "None suggested"
+        ws.cell(row=row_num, column=3, value=ai_suggested_oclc)
+        
+        # Show the title from OCLC record
         ws.cell(row=row_num, column=4, value=record["title"])
-        # Columns 5, 6 left empty for cataloger input
+        
+        # Columns 5, 6 left empty for cataloger input (Date Cataloger Checked, Status)
+        
         # Column 7 (G) - Auto-populate formula for Correct OCLC Number
+        # If status is "Approved", use the AI-suggested number, otherwise leave blank for manual entry
         ws.cell(row=row_num, column=7, value=f'=IF(F{row_num}="Approved",C{row_num},"")')
-        # Column 8 (H) left empty for notes
+        
+        # Column 8 (H) left empty for cataloger notes
     
     # Create dropdown validation for Status column - alternative approach
     from openpyxl.worksheet.datavalidation import DataValidation
@@ -755,14 +668,59 @@ def create_cataloger_review_spreadsheet(results_folder, all_records, current_dat
     data_range = f"A2:H{len(low_confidence_records) + 1}"
     ws.conditional_formatting.add(data_range, formula_rule)
     
-    # Save the workbook
-    review_file = f"cataloger-review-{current_date}.xlsx"
-    review_path = os.path.join(results_folder, review_file)
-    wb.save(review_path)
+    # Save the workbook in deliverables subfolder
+    deliverables_folder = os.path.join(results_folder, "deliverables")
+    review_file = f"tracking-spreadsheet-catalogers-{current_date}.xlsx"
+    review_path = os.path.join(deliverables_folder, review_file)
     
     print(f"Cataloger review spreadsheet created with {len(low_confidence_records)} records: {review_path}")
     return review_path
 
+def move_workflow_data_files(results_folder, data_folder):
+    """Move and rename JSON and Excel workflow files to data subfolder"""
+    import shutil
+    moved_files = 0
+    try:
+        print(f"Looking for workflow files in: {results_folder}")
+        print(f"Target data folder: {data_folder}")
+        
+        if not os.path.exists(results_folder):
+            print(f"Source folder does not exist: {results_folder}")
+            return
+            
+        files_in_results = os.listdir(results_folder)
+        print(f"Files in results folder: {len(files_in_results)}")
+        
+        current_timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        
+        for filename in files_in_results:
+            src = os.path.join(results_folder, filename)
+            
+            # Move JSON workflow files that start with full-workflow-data-cd-
+            if filename.startswith("full-workflow-data-cd-") and filename.endswith(".json"):
+                dst = os.path.join(data_folder, filename)
+                if os.path.exists(src) and os.path.isfile(src):
+                    shutil.move(src, dst)
+                    print(f"Moved workflow JSON to: {dst}")
+                    moved_files += 1
+            
+            # Move and RENAME Excel workflow files from cd-metadata-ai- to full-workflow-data-cd-
+            elif filename.startswith("cd-metadata-ai-") and filename.endswith(".xlsx"):
+                new_filename = f"full-workflow-data-cd-{current_timestamp}.xlsx"
+                dst = os.path.join(data_folder, new_filename)
+                if os.path.exists(src) and os.path.isfile(src):
+                    shutil.move(src, dst)
+                    print(f"Moved and renamed workflow Excel: {filename} -> {new_filename}")
+                    print(f"  Destination: {dst}")
+                    moved_files += 1
+        
+        print(f"Successfully moved {moved_files} workflow data files")
+                    
+    except Exception as e:
+        print(f"Warning: Could not move workflow data files: {e}")
+        import traceback
+        traceback.print_exc()
+    
 def find_duplicate_groups(all_records, similarity_threshold=0.9, confidence_threshold=80):
     """
     Find groups of duplicate records based on similar OCLC numbers or titles.
@@ -942,28 +900,25 @@ def create_all_records_spreadsheet():
         
     print(f"Using results folder: {results_folder}")
     
+    # Create subfolders for organized file output
+    guides_folder = os.path.join(results_folder, "guides")
+    deliverables_folder = os.path.join(results_folder, "deliverables") 
+    data_folder = os.path.join(results_folder, "data")
+
+    # Create directories if they don't exist
+    for folder in [guides_folder, deliverables_folder, data_folder]:
+        os.makedirs(folder, exist_ok=True)
+    
     # Initialize workflow JSON path
     workflow_json_path = get_workflow_json_path(results_folder)
     
     step4_file = find_latest_cd_metadata_file(results_folder)
     if not step4_file:
-        print("No cd-metadata-ai file found in the results folder!")
+        print("No full-workflow-data-cd file found in the results folder!")
 
     print(f"Using source file: {step4_file}")
 
-    # Get OCLC API credentials
-    client_id = os.environ.get("OCLC_CLIENT_ID")
-    client_secret = os.environ.get("OCLC_SECRET")
-
-    if not client_id or not client_secret:
-        print("Error: OCLC_CLIENT_ID and OCLC_SECRET must be set in environment variables.")
-        return None
-    
-    try:
-        # Get the access token
-        access_token = get_access_token(client_id, client_secret)
-        print("Successfully obtained access token.")
-        
+    try: 
         # Open the latest step 4 workbook
         wb_src = load_workbook(step4_file)
         sheet_src = wb_src.active
@@ -1033,8 +988,8 @@ def create_all_records_spreadsheet():
             
         print(f"Found {len(all_records)} records to process.")
 
-        # Second pass: Get OCLC data and holdings information
-        print("Second pass: Getting OCLC data and holdings information...")
+        # Second pass: Get OCLC data and holdings information from workflow JSON
+        print("Second pass: Getting OCLC data from workflow JSON...")
         processed_count = 0
         
         for record in all_records:
@@ -1046,20 +1001,21 @@ def create_all_records_spreadsheet():
             if has_valid_oclc:
                 print(f"  OCLC Number: {oclc_number}")
                 
-                # Get bibliographic information
-                oclc_data = get_bib_info(oclc_number, access_token)
+                # Get bibliographic information from workflow JSON
+                oclc_data = get_bib_info_from_workflow(oclc_number, workflow_json_path)
                 record["title"] = extract_title_from_bib_info(oclc_data)
                 record["author"] = extract_author_from_bib_info(oclc_data)
                 record["publication_date"] = extract_publication_date_from_bib_info(oclc_data)
                 
-                # Get holdings information
-                holdings_info = get_holdings_info(oclc_number, access_token)
+                # Get holdings information from workflow JSON
+                holdings_info = get_holdings_info_from_workflow(oclc_number, workflow_json_path)
                 record["held_by_ixa"] = holdings_info["held_by_ixa"]
                 
-                # Small delay to avoid API rate limits
-                time.sleep(0.5)
+                print(f"  Holdings from workflow: IXA={holdings_info['held_by_ixa']}")
+                
+                # No API delay needed since we're reading from local JSON
             else:
-                print(f"  No valid OCLC number - skipping API calls")
+                print(f"  No valid OCLC number - using defaults")
                 record["title"] = "No OCLC match found"
                 record["author"] = "No author available"
                 record["publication_date"] = "No date available"
@@ -1135,11 +1091,11 @@ def create_all_records_spreadsheet():
         
         # Save the all records spreadsheet
         current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-        all_records_file = f"sort-groups-all-records-{current_date}.xlsx"
-        all_records_path = os.path.join(results_folder, all_records_file)
+        all_records_file = f"cd-workflow-sorting-{current_date}.xlsx"
+        all_records_path = os.path.join(deliverables_folder, all_records_file)
         wb_new.save(all_records_path)
         
-        print(f"All records spreadsheet created with {len(all_records)} records: {all_records_path}")
+        print(f"Sort physical items with {len(all_records)} records: {all_records_path}")
         
         # Create summary statistics
         sort_group_counts = {}
@@ -1157,7 +1113,7 @@ def create_all_records_spreadsheet():
         
         current_timestamp = get_current_timestamp()
         text_file = FILE_NAMING["batch_upload_alma"].format(timestamp=current_timestamp)
-        text_path = os.path.join(results_folder, text_file)
+        text_path = os.path.join(deliverables_folder, text_file)
         
         with open(text_path, 'w', newline='', encoding='utf-8') as f:
             for record in unique_matches:
@@ -1168,7 +1124,7 @@ def create_all_records_spreadsheet():
         
         # Create low confidence review spreadsheet
         review_path = create_low_confidence_review_text_log(
-            results_folder, step4_file, all_records, access_token, current_date
+            results_folder, step4_file, all_records, workflow_json_path, current_date
         )
         
         # Create MARC format text log for low confidence records
@@ -1180,34 +1136,45 @@ def create_all_records_spreadsheet():
         review_spreadsheet_path = create_cataloger_review_spreadsheet(
             results_folder, all_records, current_date
         )
-        
-        # Copy both guides to results folder
+
+        # Copy both guides to guides subfolder
         try:
             import shutil
-            script_dir = os.path.dirname(__file__)
-            # Go up 2 levels: cd-processing -> ai-music-workflow -> project root
-            project_root = os.path.dirname(os.path.dirname(script_dir))
+            script_dir = os.path.dirname(os.path.abspath(__file__))
             
-            # Copy cataloger guide
-            cataloger_guide_source = os.path.join(project_root, "CATALOGER_GUIDE.txt")
-            if os.path.exists(cataloger_guide_source):
-                cataloger_guide_dest = os.path.join(results_folder, "CATALOGER_GUIDE.txt")
-                shutil.copy2(cataloger_guide_source, cataloger_guide_dest)
-                print(f"Cataloger guide copied to: {cataloger_guide_dest}")
-            else:
-                print("Warning: CATALOGER_GUIDE.txt not found in repository")
+            # Try multiple potential locations for the guides
+            potential_locations = [
+                os.path.dirname(os.path.dirname(script_dir)),  # Two levels up
+                os.path.dirname(script_dir),  # One level up  
+                script_dir,  # Same directory as script
+                os.getcwd()  # Current working directory
+            ]
             
-            # Copy technical guide
-            technical_guide_source = os.path.join(project_root, "TECHNICAL_GUIDE.txt")
-            if os.path.exists(technical_guide_source):
-                technical_guide_dest = os.path.join(results_folder, "TECHNICAL_GUIDE.txt")
-                shutil.copy2(technical_guide_source, technical_guide_dest)
-                print(f"Technical guide copied to: {technical_guide_dest}")
-            else:
-                print("Warning: TECHNICAL_GUIDE.txt not found in repository")
+            guides_found = False
+            for project_root in potential_locations:
+                cataloger_guide_source = os.path.join(project_root, "CATALOGER_GUIDE.txt")
+                technical_guide_source = os.path.join(project_root, "TECHNICAL_GUIDE.txt")
                 
-        except Exception as guide_error:
-            print(f"Warning: Could not copy guides: {guide_error}")
+                if os.path.exists(cataloger_guide_source):
+                    cataloger_guide_dest = os.path.join(guides_folder, "CATALOGER_GUIDE.txt")
+                    shutil.copy2(cataloger_guide_source, cataloger_guide_dest)
+                    print(f"Cataloger guide copied to: {cataloger_guide_dest}")
+                    guides_found = True
+                
+                if os.path.exists(technical_guide_source):
+                    technical_guide_dest = os.path.join(guides_folder, "TECHNICAL_GUIDE.txt")
+                    shutil.copy2(technical_guide_source, technical_guide_dest)
+                    print(f"Technical guide copied to: {technical_guide_dest}")
+                    guides_found = True
+                
+                if guides_found:
+                    break
+            
+            if not guides_found:
+                print("Warning: Guide files not found in any expected location")
+                
+        except Exception as e:
+            print(f"Warning: Could not copy guides: {e}")
             
         # Log final Step 5 processing metrics
         try:
@@ -1239,13 +1206,17 @@ def create_all_records_spreadsheet():
         except Exception as metrics_error:
             print(f"Warning: Could not log Step 5 processing metrics: {metrics_error}")
             
+        # Move workflow data files to data subfolder after all processing is complete
+        print("Moving workflow data files to data subfolder...")
+        move_workflow_data_files(results_folder, data_folder)
+            
         return {
             "all_records_path": all_records_path,
             "text_file_path": text_path,
             "review_path": review_path,
             "marc_path": marc_path,
             "review_spreadsheet_path": review_spreadsheet_path,
-            "guide_path": os.path.join(results_folder, "CATALOGER_GUIDE.txt"),
+            "guide_path": os.path.join(guides_folder, "CATALOGER_GUIDE.txt"),
             "total_records": len(all_records),
             "sort_group_counts": sort_group_counts,
             "unique_matches_count": len(unique_matches)

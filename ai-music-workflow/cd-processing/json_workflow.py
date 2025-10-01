@@ -18,7 +18,7 @@ def initialize_workflow_json(results_folder_path: str) -> str:
         str: Path to the created JSON file
     """
     current_date = datetime.now().strftime("%Y-%m-%d")
-    json_file = f"cd-metadata-workflow-{current_date}.json"
+    json_file = f"full-workflow-data-cd-{current_date}.json"
     json_path = os.path.join(results_folder_path, json_file)
     
     initial_structure = {

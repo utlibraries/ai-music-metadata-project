@@ -44,8 +44,79 @@ def get_workflow_json_path(results_folder: str) -> str:
         Full path to the workflow JSON file
     """
     current_date = datetime.now().strftime("%Y-%m-%d")
-    json_file = f"cd-metadata-workflow-{current_date}.json"
+    json_file = f"full-workflow-data-cd-{current_date}.json"
     return os.path.join(results_folder, json_file)
+
+def find_latest_cd_metadata_file(results_folder: str) -> Optional[str]:
+    """
+    Find the most recent cd-metadata-ai Excel file in the results folder.
+    This is the working file that gets updated through steps 1-4.
+    
+    Args:
+        results_folder: Path to results folder
+    
+    Returns:
+        Path to the latest CD metadata file, or None if not found
+    """
+    files = [f for f in os.listdir(results_folder) 
+             if f.startswith("cd-metadata-ai-") and f.endswith(".xlsx")]
+    if not files:
+        return None
+    latest_file = max(files)
+    return os.path.join(results_folder, latest_file)
+
+def get_bib_info_from_workflow(oclc_number: str, workflow_json_path: str) -> Dict[str, Any]:
+    """
+    Extract bibliographic information from formatted OCLC results in workflow JSON.
+    
+    Args:
+        oclc_number: OCLC number to search for
+        workflow_json_path: Path to workflow JSON file
+    
+    Returns:
+        Dictionary with title, contributors, publication_date, and full_record_text
+    """
+    try:
+        import json
+        with open(workflow_json_path, 'r', encoding='utf-8') as f:
+            workflow_data = json.load(f)
+        
+        for barcode, record_data in workflow_data.get("records", {}).items():
+            step2_data = record_data.get("step2_detailed_data", {})
+            formatted_results = step2_data.get("formatted_oclc_results", "")
+            
+            oclc_pattern = rf"OCLC Number: {re.escape(oclc_number)}\n\n(.*?)(?=\n-{{40}}\nOCLC Number:|\Z)"
+            match = re.search(oclc_pattern, formatted_results, re.DOTALL)
+            
+            if match:
+                record_text = match.group(1)
+                
+                title_match = re.search(r"Title Information:\s*\n\s*- Main Title: (.+?)(?:\n|$)", record_text)
+                title = title_match.group(1) if title_match else "No title available"
+                
+                contributors = []
+                contributor_matches = re.findall(r"Contributors:\s*\n((?:\s*- .+?\n)*)", record_text)
+                if contributor_matches:
+                    contributor_lines = contributor_matches[0].strip().split('\n')
+                    for line in contributor_lines:
+                        if line.strip().startswith('- '):
+                            contributor = line.strip()[2:].split(' (')[0]
+                            contributors.append(contributor)
+                
+                date_match = re.search(r"- publicationDate: (.+?)(?:\n|$)", record_text)
+                pub_date = date_match.group(1) if date_match else "No date available"
+                
+                return {
+                    "title": title,
+                    "contributors": contributors,
+                    "publication_date": pub_date,
+                    "full_record_text": record_text
+                }
+        
+        return {"error": "OCLC record not found in workflow data"}
+        
+    except Exception as e:
+        return {"error": str(e)}
 
 def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
     """

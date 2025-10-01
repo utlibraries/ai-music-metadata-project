@@ -1,6 +1,6 @@
 """
-Step 6: Create Interactive HTML Review Interface for LP Records
-Creates paginated HTML files with images for cataloger review of LP metadata matches.
+Step 6: Create Interactive HTML Review Interface for CD Records
+Creates paginated HTML files with images for cataloger review of CD metadata matches.
 This step is optional and can be skipped for large batches where HTML generation is impractical.
 """
 
@@ -10,8 +10,8 @@ import shutil
 from openpyxl import load_workbook
 
 # Custom modules
-from shared_utilities import find_latest_results_folder, get_workflow_json_path, get_bib_info_from_workflow, find_latest_lp_metadata_file
-from lp_workflow_config import get_file_path_config, get_current_timestamp, get_current_date
+from shared_utilities import find_latest_results_folder, get_workflow_json_path, get_bib_info_from_workflow, find_latest_cd_metadata_file
+from cd_workflow_config import get_file_path_config, get_current_timestamp, get_current_date
 
 
 def create_paginated_review_html(results_folder, all_records, current_date, workflow_json_path, records_per_page=100):
@@ -82,7 +82,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LP Review Index - {current_date}</title>
+    <title>CD Review Index - {current_date}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
         .header {{ background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 30px; }}
@@ -95,7 +95,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
 </head>
 <body>
     <div class="header">
-        <h1>LP Cataloger Review Index</h1>
+        <h1>CD Cataloger Review Index</h1>
         <p>Generated: {current_date} | Total Records: {total_records} | Pages: {total_pages}</p>
     </div>
     
@@ -139,20 +139,20 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
     
     <script>
         // Create unique storage namespace for this workflow
-        const STORAGE_PREFIX = 'lp-workflow-{current_date}-';
+        const STORAGE_PREFIX = 'cd-workflow-{current_date}-';
         
         // Helper functions to use namespaced storage
-        function setStorage(key, value) {{
+        function setStorage(key, value) {
             window.localStorage.setItem(STORAGE_PREFIX + key, value);
-        }}
-        
-        function getStorage(key) {{
+        }
+
+        function getStorage(key) {
             return window.localStorage.getItem(STORAGE_PREFIX + key);
-        }}
-        
-        function getAllWorkflowKeys() {{
+        }
+
+        function getAllWorkflowKeys() {
             const keys = [];
-            for (let i = 0; i < window.localStorage.length; i++) {{
+            for (let i = 0; i < window.localStorage.length; i++) {
                 const key = window.localStorage.key(i);
                 if (key && key.startsWith(STORAGE_PREFIX)) {{
                     keys.push(key.replace(STORAGE_PREFIX, ''));
@@ -161,36 +161,36 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
             return keys;
         }}
         
-        function exportAllDecisions() {{
+        function exportAllDecisions() {
             const catalogerName = prompt('Enter your name for the export file:');
             if (!catalogerName) return;
             
             const allDecisions = [];
             
             const workflowKeys = getAllWorkflowKeys();
-            for (const key of workflowKeys) {{
-                if (key.startsWith('decision-')) {{
+            for (const key of workflowKeys) {
+                if (key.startsWith('decision-')) {
                     const recordId = key.replace('decision-', '');
                     const decision = getStorage(key);
                     const notes = getStorage('notes-' + recordId);
                     
                     const recordDataKey = 'record-data-' + recordId;
                     let recordData = null;
-                    try {{
+                    try {
                         const storedData = getStorage(recordDataKey);
-                        if (storedData) {{
+                        if (storedData) {
                             recordData = JSON.parse(storedData);
-                        }}
-                    }} catch (e) {{
+                        }
+                    } catch (e) {
                         console.log('Error parsing record data for record ' + recordId + ':', e);
-                    }}
+                    }
                     
                     let correctOclc = '';
-                    if (decision === 'approved' && recordData && recordData.oclcNumber) {{
+                    if (decision === 'approved' && recordData && recordData.oclcNumber) {
                         correctOclc = recordData.oclcNumber;
-                    }}
+                    }
                     
-                    allDecisions.push({{
+                    allDecisions.push({
                         recordId: recordId,
                         barcode: recordData ? recordData.barcode : ('Record-' + recordId),
                         confidence: recordData ? recordData.confidence : 'N/A',
@@ -201,21 +201,21 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
                         cataloger: catalogerName,
                         reviewDate: new Date().toISOString().split('T')[0],
                         pageNumber: recordData ? recordData.pageNumber : 'Unknown'
-                    }});
-                }}
-            }}
+                    });
+                }
+            }
             
-            if (allDecisions.length === 0) {{
+            if (allDecisions.length === 0) {
                 alert('No decisions found. Please review some records first.');
                 return;
-            }}
+            }
             
             allDecisions.sort((a, b) => parseInt(a.recordId) - parseInt(b.recordId));
             
             const headers = ['Record', 'Barcode', 'Confidence', 'Sort Group', 'Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
             let csvContent = headers.join(',') + '\\n';
 
-            allDecisions.forEach(row => {{
+            allDecisions.forEach(row => {
                 const csvRow = [
                     row.recordId,
                     row.barcode,
@@ -229,28 +229,28 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
                     row.pageNumber
                 ].join(',');
                 csvContent += csvRow + '\\n';
-            }});
+            });
             
-            const blob = new Blob([csvContent], {{ type: 'text/csv' }});
+            const blob = new Blob([csvContent], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `all-cataloger-decisions-${{catalogerName.replace(/[^a-zA-Z0-9]/g, '_')}}-${{new Date().toISOString().split('T')[0]}}.csv`;
+            a.download = `all-cataloger-decisions-${catalogerName.replace(/[^a-zA-Z0-9]/g, '_')}-${new Date().toISOString().split('T')[0]}.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
             
-            console.log(`Found ${{allDecisions.length}} decisions across all pages`);
-            const pageBreakdown = {{}};
-            allDecisions.forEach(decision => {{
+            console.log(`Found ${allDecisions.length} decisions across all pages`);
+            const pageBreakdown = {};
+            allDecisions.forEach(decision => {
                 const page = decision.pageNumber;
                 pageBreakdown[page] = (pageBreakdown[page] || 0) + 1;
-            }});
+            });
             console.log('Decisions per page:', pageBreakdown);
             
-            alert(`Exported ${{allDecisions.length}} decisions to CSV file.`);
-        }}
+            alert(`Exported ${allDecisions.length} decisions to CSV file.`);
+        }
     </script>
 </body>
 </html>"""
@@ -266,7 +266,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LP Review Page {page_num} - {current_date}</title>
+    <title>CD Review Page {page_num} - {current_date}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
         .header {{ background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
@@ -314,7 +314,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
 </head>
 <body>
     <div class="header">
-        <h1>LP Review - Page {page_num} of {total_pages}</h1>
+        <h1>CD Review - Page {page_num} of {total_pages}</h1>
         <p>Generated: {current_date} | Records {start_idx + 1}-{start_idx + len(page_records)} of {(total_pages - 1) * records_per_page + len(page_records)}</p>
     </div>
     
@@ -435,7 +435,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
         
         <div class="content-grid">
             <div class="images-section">
-                <h3>LP Images</h3>"""
+                <h3>CD Images</h3>"""
         
         if image_files:
             for j, (img_path, filename) in enumerate(image_files[:3]):
@@ -510,8 +510,8 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
     html_content += f"""
     <script>
         // Create unique storage namespace for this workflow
-        const STORAGE_PREFIX = 'lp-workflow-{current_date}-';
-
+        const STORAGE_PREFIX = 'cd-workflow-{current_date}-';
+        
         // Helper functions to use namespaced storage
         function setStorage(key, value) {{
             window.localStorage.setItem(STORAGE_PREFIX + key, value);
@@ -528,7 +528,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
         // Get all keys for this workflow
         function getAllWorkflowKeys() {{
             const keys = [];
-            for (let i = 0; i < window.localStorage.length; i++) {{
+            for (let i = 0; i < window.localStorage.length; i++) {{ 
                 const key = window.localStorage.key(i);
                 if (key && key.startsWith(STORAGE_PREFIX)) {{
                     keys.push(key.replace(STORAGE_PREFIX, ''));
@@ -703,7 +703,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                 'review': 'Further Review Needed'
             }};
             return labels[decision] || decision;
-        }}
+        }}   
         
         function exportDecisions() {{
             const catalogerName = prompt('Enter your name for the export file:');
@@ -866,7 +866,7 @@ def main():
     # Find the sorting spreadsheet from Step 5
     deliverables_folder = os.path.join(results_folder, "deliverables")
     sorting_files = [f for f in os.listdir(deliverables_folder) 
-                     if f.startswith("sorting-spreadsheet-") and f.endswith(".xlsx")]
+                 if f.startswith("cd-workflow-sorting-") and f.endswith(".xlsx")]
     
     if not sorting_files:
         print("No sorting spreadsheet found! Please run Step 5 first.")
@@ -887,7 +887,7 @@ def main():
     print(f"Loaded {len(all_records)} records")
     
     # Get current date
-    from lp_workflow_config import get_current_date
+    from cd_workflow_config import get_current_date
     current_date = get_current_date()
     
     # Create paginated HTML review

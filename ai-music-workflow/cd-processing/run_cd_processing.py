@@ -1,7 +1,8 @@
 """
 AI Music CD Processing Workflow runner script.
 Executes all 6 steps of the CD processing workflow in sequence.
-Don't forget to point to the correct images folder in Script 1!
+Before you begin, make sure that your file configurations are correct in cd_workflow_config.py.
+
 """
 
 import subprocess
@@ -33,7 +34,7 @@ def run_script(script_name, step_number, step_description):
         return False
     
     try:
-        print(f"\n🔄 REAL-TIME OUTPUT:")
+        print(f"\n REAL-TIME OUTPUT:")
         print("-" * 40)
         
         # Use a much simpler approach - just run with direct inheritance
@@ -169,6 +170,30 @@ def main():
         print(f"\nFile validation failed. Please fix issues and try again.")
         return
     
+    # Ask about HTML generation upfront
+    print(f"\n{'='*60}")
+    print(f"HTML REVIEW INTERFACE OPTION")
+    print(f"{'='*60}")
+    print(f"\nStep 6 creates an interactive HTML review interface that copies all images in this run to the results folder.")
+    print(f"The entire results folder must be downloaded and opened locally on your computer (unzipped) in order to view the HTML.")
+    print(f"The HTML website can then be opened in a web browser by double clicking on index.html.")
+    print(f"\nBenefits: 1. Easy review of AI-suggested OCLC matches alongside full size images of CDs.")
+    print(f"          2. Records sortable by confidence.")
+    print(f"          3. Cataloger decisions may then be exported to CSV.")
+    print(f"\nImportant: The HTML runs entirely on your local machine with no external connections.")
+    print(f"           Decisions are stored in your browser's local storage only.")
+    print(f"           You must export decisions to CSV and manually save the file to preserve your work.")
+    print(f"\nNote: Not recommended for batches over 500 records due to the size of the generated folder.")
+    print(f"          For the same reason, we recommend using JPEG format for images when intending to generate HTML.")
+    print(f"\nGenerate HTML review interface? (y/n): ", end='')
+    
+    run_html_step = input().strip().lower() == 'y'
+    
+    if run_html_step:
+        print(f"HTML review will be generated after Step 5.")
+    else:
+        print(f"Skipping HTML generation. Only spreadsheet/text outputs will be created.")
+    
     # Define the workflow steps
     steps = [
         ("ai-music-step-1-cd.py", 1, "Extract metadata from CD images using AI"),
@@ -178,6 +203,10 @@ def main():
         ("ai-music-step-4-cd.py", 4, "Verify track listings and publication years"),
         ("ai-music-step-5-cd.py", 5, "Create final sorted results and batch files")
     ]
+    
+    # Add Step 6 if user chose it
+    if run_html_step:
+        steps.append(("ai-music-step-6-cd.py", 6, "Create interactive HTML review interface"))
     
     # Track overall progress
     workflow_start_time = time.time()
@@ -222,6 +251,6 @@ def main():
         print(f"Only {successful_steps} out of {len(steps)} steps completed successfully.")
     
     print(f"\nProcessing finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
+    
 if __name__ == "__main__":
     main()

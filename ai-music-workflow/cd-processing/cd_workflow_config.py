@@ -62,7 +62,7 @@ OCLC_CONFIG = {
 
 # Workflow file naming patterns
 FILE_NAMING = {
-    "sort_groups_all": "sort-groups-all-records-{timestamp}.xlsx",
+    "sort_groups_all": "cd-workflow-sorting-{timestamp}.xlsx",
     "batch_upload_alma": "batch-upload-alma-cd-{timestamp}.txt",
     "temp_progress": "temp_cd_metadata_progress.xlsx"
 }
