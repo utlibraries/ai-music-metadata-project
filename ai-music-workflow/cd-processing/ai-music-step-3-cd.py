@@ -13,7 +13,7 @@ from token_logging import create_token_usage_log, log_individual_response
 from batch_processor import BatchProcessor 
 from model_pricing import calculate_cost, get_model_info
 from json_workflow import update_record_step3, log_error, log_processing_metrics
-from shared_utilities import find_latest_results_folder, get_workflow_json_path, extract_confidence_and_explanation, create_batch_summary
+from shared_utilities import find_latest_results_folder, get_workflow_json_path, create_batch_summary
 from cd_workflow_config import get_model_config, get_file_path_config, get_threshold_config, get_step_config
 
 def load_workflow_data_from_json(workflow_json_path, barcode):
@@ -557,8 +557,29 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
 
 def parse_analysis_result(analysis_result, oclc_results):
     """Parse the AI analysis result into structured components."""
-    # Use the shared utility function for consistent parsing
-    confidence_score, explanation, alternative_matches = extract_confidence_and_explanation(analysis_result)
+    # Extract confidence and explanation only (not using shared utility for alternatives)
+    confidence_score = 0.0
+    explanation = "Could not parse response"
+    
+    try:
+        # Extract confidence score
+        if "Confidence score:" in analysis_result:
+            confidence_part = analysis_result.split("Confidence score:")[1].split("%")[0].strip()
+            try:
+                confidence_score = float(confidence_part)
+                confidence_score = min(100, max(0, confidence_score))
+            except ValueError:
+                confidence_score = 0.0
+        
+        # Extract explanation
+        if "Explanation:" in analysis_result:
+            explanation_parts = analysis_result.split("Explanation:")[1].split("Other potential good matches:")
+            explanation = explanation_parts[0].strip()
+            if explanation.endswith("4."):
+                explanation = explanation[:-2].strip()
+            explanation = re.sub(r'\s+\d+\.\s*$', '', explanation)
+    except Exception as e:
+        print(f"Error parsing confidence/explanation: {e}")
     
     # Extract OCLC number
     oclc_number = "Not found"
