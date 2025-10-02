@@ -1,7 +1,7 @@
 """
 AI Music LP Processing Workflow runner script.
 Executes all 6 steps of the LP processing workflow in sequence.
-Don't forget to point to the correct images folder in Script 1!
+Before you begin, make sure that your file configurations are correct in lp_workflow_config.py.
 """
 
 import subprocess
