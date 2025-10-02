@@ -1,130 +1,271 @@
 # AI Music Metadata Project
 
 ## Overview
-This project automates metadata extraction and analysis from CD and LP images. It processes images of the items, generates initial metadata, searches for matches and cross-references this information with OCLC WorldCat records. CD and LP processing use separate workflows in dedicated folders with format-specific input and output directories. 
+Automates metadata extraction and OCLC matching for CD and LP collections. The workflow uses AI to extract metadata from images, searches OCLC WorldCat, analyzes matches, and creates ready-to-use cataloging files.
+
+**Separate workflows for CDs and LPs** - each format has its own processing folder with dedicated scripts and configurations.
+
+**Note: This repository is under active development.**
+---
 
 ## Features
-- **Image Description**: OpenAI LLM (default is GPT-4o) creates initial metadata, extracting fields such as title, artist, publisher, tracks, physical description, etc. from CD images
-- **OCLC API Integration**: AI-generated metadata is used to automatically generate queries of OCLC Worldcat Search API, returning no more than 10 total results and truncating excessively long result contents
-- **AI Analysis**: AI-generated metadata and OCLC results are sent to LLM (default is GPT-4o-mini) and it is prompted to choose the best match, give a confidence score based on similarity strength, and provide reasoning for those choices
-- **Track and Year Verification**: Programmatically verifies track listings and publication years between metadata and OCLC records
-- **OpenAI Batch Processing**: Automatic cost optimization with 50% savings for runs with over 10 image groups (a group could be between 1-3 images if they are named with the same barcode)
+- **AI Metadata Extraction**: GPT-4o reads CD/LP images and extracts title, artist, publisher, tracks, dates, and physical description
+- **OCLC Integration**: Automated WorldCat searches return up to 10 matching records
+- **AI Match Analysis**: GPT-4.1-mini evaluates matches, assigns confidence scores, and explains reasoning
+- **Verification**: Automatic track listing and publication year validation
+- **Batch Processing**: 50% cost savings for batches over 10 items (automatic)
+- **HTML Review Interface** (Optional): Visual review of matches with images
+
+---
 
 ## Installation
-1. Clone this repository to your local machine
-2. Install the required dependencies:
-   ```sh
+
+1. **Clone repository**
+   ```bash
+   git clone https://github.com/utlibraries/ai-music-metadata-project.git
+   cd ai-music-metadata-project
+   ```
+
+2. **Install dependencies**
+   ```bash
    pip install -r requirements.txt
    ```
-3. Set up environment variables:
+
+3. **Set environment variables**
    ```bash
    export OPENAI_API_KEY="your-openai-api-key"
-   export OCLC_CLIENT_ID="your-oclc-client-id"  
+   export OCLC_CLIENT_ID="your-oclc-client-id"
    export OCLC_SECRET="your-oclc-secret"
    ```
 
+---
+
 ## Quick Start
+
+### Run Complete Workflow
+
+**For CDs:**
 ```bash
-# Run the complete pipeline - for CDs or LPs 
-python ai-music-workflow/cd-processing/run_cd_processing.py 
-python ai-music-workflow/lp-processing/run_lp_processing.py
-
-# Force batch processing for cost savings
-USE_BATCH_PROCESSING=true python ai-music-workflow/cd-processing/run_cd_processing.py
-USE_BATCH_PROCESSING=true python ai-music-workflow/cd-processing/run_lp_processing.py
-
-# Force real-time processing for immediate results
-USE_BATCH_PROCESSING=false python ai-music-workflow/cd-processing/run_cd_processing.py
-USE_BATCH_PROCESSING=false python ai-music-workflow/cd-processing/run_lp_processing.py
+python ai-music-workflow/cd-processing/run_cd_processing.py
 ```
 
-## How It Works
+**For LPs:**
+```bash
+python ai-music-workflow/lp-processing/run_lp_processing.py
+```
 
-### Image Format
-CD and LP images should be stored as groups of either PNG or JPEG files, named following this style:
-- Front image: `[barcode]a.jpeg`
-- Back image: `[barcode]b.jpeg`
-- Optional third image: `[barcode]c.jpeg`
-Each barcode will create an image group that will be processed as one item.  
+The script will:
+- Automatically choose batch vs. real-time processing
+- Prompt whether to generate HTML review interface (Step 6)
+- Run all processing steps in sequence
+- Create organized output files
 
-### Configurations 
-Model configurations, file paths (including the images folder to process), and other important settings, such as OCLC search parameters, can be found in the format-specific config file.
+### Force Processing Mode (Optional)
 
-### Directory Structure 
-ai-music-metadata-project/ai-music-workflow
-- cd-processing/                   # CD workflow folder
-- - run_cd_processing.py        # Main CD processing script
-- - [other CD script files]
-- - cd-image-folders/              # CD image folders go here
-- - - your_collection_name/        # Individual collection folder
-- - - - barcode1a.jpeg     # Front image (at least one image of item is required)
-- - - - barcode1b.jpeg     # Optional back image
-- - - - barcode1c.jpeg     # Optional third image
-- - - - the rest of the images in barcode groups...
-- - cd-output-folders/             # Auto-generated CD outputs (this folder is auto-generated)
-- - - [timestamped-folders]/
+**Force batch processing** (50% cost savings):
+```bash
+USE_BATCH_PROCESSING=true python run_cd_processing.py
+```
 
-- lp-processing/                   # LP workflow folder
-- - run_lp_processing.py        # Main LP processing script
-- - [other LP script files]
-- - lp-image-folders/              # LP image folders go here
-- - - your_collection_name/        # Individual collection folder
-- - - - barcode1a.jpeg     # Front image (at least one image of item is required)
-- - - - barcode1b.jpeg     # Optional back image
-- - - - barcode1c.jpeg     # Optional third image
-- - - - the rest of the images in barcode groups
-- - lp-output-folders/             # Auto-generated LP outputs (this folder is auto-generated)
-- - - [timestamped-folders]/
-- - Requirements, README, License, Technical Guide, Cataloger Guide, gitignore      
+**Force real-time processing** (faster for small batches):
+```bash
+USE_BATCH_PROCESSING=false python run_cd_processing.py
+```
 
-### Processing Pipeline
-1. **Step 1**: Extract metadata from CD images using Large Language Model (LLM)
-2. **Step 1.5**: Clean up publication numbers and dates
-3. **Step 2**: Query OCLC API with the extracted metadata
-4. **Step 3**: Use LLM to analyze OCLC results and assign confidence scores
-5. **Step 4**: Verify track listings and publication years to validate matches
-6. **Step 5**: Create final output files 
+---
 
-### Automatic Optimization
-The system automatically chooses the best processing method:
-- **≤10 items**: Uses real-time processing for faster results
-- **>10 items**: Uses batch processing for cost savings
+## Image Directory Structure
 
-### Benefits of Batch Processing
-- **50% Cost Reduction** on OpenAI API calls
-- **Higher Rate Limits** for large collections
-- **Same Quality** results as real-time processing
-- **Less Time** when processing very large batches (24 hours or less for each AI step, usually much less)
+Save each collection of images in its own subfolder within `[cd/lp]-image-folders/`.
 
-## Outputs
-- **Full Workflow**: JSON file and excel spreadsheet containing Input Images (thumbnails - excel only), Item Barcode, AI-Generated Metadata, OCLC Queries, OCLC Results, LLM-Suggested OCLC # with Confidence Score, LLM Explanation, Other Potential Matches, Track and Year Verification Results, and Library Holdings Status at our institution (Match Held at IXA?)
+**Example path:** 
+`ai-music-metadata-project/ai-music-workflow/cd-processing/cd-image-folders/cd-scans-100/`
 
-- **Cataloging Tools**:  
-The workflow creates several key files for catalogers and/or other library professionals:
-- Cataloger Guide: Full explanation of all the outputs generated by the workflow and how to use them efficiently 
-- Technical Guide: Documentation on the various logs and how they can be used to improve and monitor workflow
-- Sorting Spreadsheet: Categorizes all items into High Confidence, Held by UT Libraries, Low Confidence, and Duplicates groups (to help with sorting physical items)
-- Batch Upload File: Pipe-delimited file for high-confidence matches ready for Library Services Platform import
-- Cataloger Review Spreadsheet: Tracking spreadsheet for next steps taken with low-confidence matches
-- Low Confidence Review Text File: Initial AI-generated metadata, AI-Suggested OCLC Match, and alternative matches for each low confidence item
-- MARC Text File: Basic MARC records to be used for faster processing in the case of original cataloging
+The workflow will automatically generate an outputs folder with organized results.
 
-- **Logs Folder**: OCLC API search log, LLM response logs, LLM token usage logs, error logs 
+---
+
+## Image Requirements
+
+### Naming Convention
+Images must be named with barcode + letter suffix:
+- `barcode_a.jpeg` - Front image (required)
+- `barcode_b.jpeg` - Back image (optional)
+- `barcode_c.jpeg` - Additional image (optional)
+
+**Examples:**
+- `39015012345678a.jpeg`
+- `39015012345678b.jpeg`
+- `39015012345678c.jpeg`
+
+### Format
+- **Supported**: JPEG (.jpg, .jpeg) or PNG (.png)
+- **Best quality**: Clear, legible text, minimal glare
+- **Recommendation**: JPEG for smaller file sizes (especially if generating HTML)
+
+### Organization
+Place all images for a collection in a single folder:
+```
+cd-image-folders/
+└── spring2024_collection/
+    ├── barcode1a.jpeg
+    ├── barcode1b.jpeg
+    ├── barcode2a.jpeg
+    └── ...
+```
+
+---
+
+## Processing Pipeline
+
+1. **Step 0.5**: Validate image file naming (optional pre-check)
+2. **Step 1**: Extract metadata from images using AI
+3. **Step 1.5**: Clean and normalize extracted metadata
+4. **Step 2**: Query OCLC WorldCat API
+5. **Step 3**: AI analysis of OCLC matches with confidence scoring
+6. **Step 4**: Verify track listings and publication years
+7. **Step 5**: Create final output files organized in subfolders
+8. **Step 6** (Optional): Generate HTML review interface with images
+
+---
+
+## Output Files
+
+### `deliverables/` folder - Working files for catalogers
+
+1. **sorting-spreadsheet-[date].xlsx**
+   - All items categorized: High Confidence, Held by Library, Low Confidence, Duplicates
+   - Use to physically organize materials
+
+2. **batch-upload-alma-[cd/lp]-[timestamp].txt**
+   - High-confidence matches ready for import
+   - Format: `OCLC_NUMBER|BARCODE|TITLE`
+
+3. **tracking-spreadsheet-catalogers-[date].xlsx**
+   - Interactive tracking for low-confidence items
+   - Yellow highlighting for items needing review
+   - Dropdown status menu, auto-populated OCLC numbers
+
+4. **low-confidence-matches-review-[date].txt**
+   - Detailed review information for each low-confidence item
+   - AI-generated metadata, suggested matches, alternatives
+
+5. **marc-formatted-low-confidence-matches-[date].txt**
+   - Basic MARC records for original cataloging
+   - Based on AI-extracted metadata
+
+### `guides/` folder - Documentation
+
+- **CATALOGER_GUIDE.txt** - How to use workflow outputs
+- **TECHNICAL_GUIDE.txt** - Quality control and troubleshooting
+
+### `data/` folder - Workflow tracking
+
+- **full-workflow-data-[cd/lp]-[timestamp].json** - Complete processing log
+- **full-workflow-data-[cd/lp]-[timestamp].xlsx** - Excel version with thumbnails
+- **logs/** - API responses, token usage, errors, metrics
+
+### Main results folder (if HTML is generated)
+
+- **review-index-[date].html** - Start page for visual review
+- **review-page-[#]-[date].html** - Individual review pages
+- **images/** - Copies of all processed images
+
+---
+
+## Automatic Optimization
+
+The system automatically chooses processing mode based on batch size:
+
+| Batch Size | Method | Benefits |
+|------------|--------|----------|
+| ≤10 items | Real-time | Faster results (minutes) |
+| >10 items | Batch | 50% cost savings, higher rate limits |
+
+Both methods produce identical quality results.
+
+---
+
+## Configuration
+
+Edit format-specific config files to customize:
+
+**CD workflow**: `cd-processing/cd_workflow_config.py`
+
+**LP workflow**: `lp-processing/lp_workflow_config.py`
+
+Settings include:
+- Model selection for each step (OpenAI models only)
+- Image folder paths
+
+---
 
 ## Best Practices
-1. **Use the main run script** for automatic optimization and to insure that no steps are accidentally skipped
-2. **Use clear images** - legible, glare-free image text will produce best results
-3. **Clean data first** - remove duplicate or invalid images
-4. **Test with small batches** before processing large collections
-5. **Plan timing** - allow extra time for batch processing
-6. **Monitor large jobs** - check status periodically for larger batches
+
+### Before Processing
+1. **Validate file naming** - Run Step 0.5 pre-check (this will automatically run if using the run script)
+2. **Use clear images** - Legible text, minimal glare, good lighting
+3. **Remove duplicates** - Check for duplicate barcodes
+4. **Test small batches** - Try 10-20 items first
+
+### During Processing
+5. **Use run script** - Ensures all steps execute correctly
+6. **Monitor large jobs** - Check periodically for errors
+7. **Allow time for batch** - Up to 24 hours per AI step (usually much faster)
+
+### After Processing
+8. **Review outputs** - Start with sorting spreadsheet
+9. **Verify high confidence** - Spot-check before batch upload
+10. **Document issues** - Note patterns for workflow improvement
+
+---
+
+## HTML Review Interface
+
+### When to Use
+- Visual verification of AI matches
+- Batch sizes under 500 items
+- When you have time to download and review locally
+
+### How to Use
+1. Choose "yes" when prompted during workflow run
+2. Wait for Step 6 to complete
+3. **Download entire results folder** to your computer
+4. Unzip if compressed
+5. Open `review-index-[date].html` in web browser
+6. Make decisions and add notes
+7. **Export to CSV** to save your work
+
+### Important Notes
+- HTML runs locally (no internet connection needed for viewing)
+- Decisions stored in browser local storage only
+- **Must export to CSV to permanently save decisions**
+- Not recommended for batches over 500 items (large folder size)
+- Use JPEG images when possible (smaller files)
+
+---
 
 ## Troubleshooting
-- **Batch jobs stuck**: Check logs for errors, verify API quota, try smaller test batch
-- **Mixed results**: Review individual response logs, check for data quality issues
-- **Cost concerns**: Use automatic mode, clean data first, remove duplicates
 
-## Contact
-This repository is a work in progress!  Step 5 in particular is undergoing some renovations.  The LP workflow now creates HTML files for cataloger review.  In order to see the full web pages, with images, the results folder must be downloaded to a user's individual machine, unzipped, and then the HTML pages can be opened in browser.  The user may then make selections and export them to a CSV file, which will download to their downloads folder.  
+**For troubleshooting guidance, see TECHNICAL_GUIDE.txt in the guides folder.**
 
-Please direct questions, ideas, or comments to: **Hannah Moutran** - hlm2454@my.utexas.edu
+---
+
+## Support
+
+**Questions or issues?**
+Contact: Hannah Moutran - hlm2454@my.utexas.edu
+
+**Before contacting:**
+1. Check error logs in `data/logs/`
+2. Review TECHNICAL_GUIDE.txt
+3. Try a small test batch to isolate issues
+4. Note your batch size, format (CD/LP), and specific errors
+
+---
+
+## License
+
+MIT License
+
+---

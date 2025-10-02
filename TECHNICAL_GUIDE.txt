@@ -1,95 +1,283 @@
-TECHNICAL DOCUMENTATION
-=======================
+# AI MUSIC WORKFLOW - TECHNICAL GUIDE
 
-WORKFLOW DATA TRACKING
-----------------------
+## Understanding workflow data and using technical files for quality control and troubleshooting
 
-[cd/lp]-metadata-workflow-[date].json
-- Master JSON file tracking all processing steps for each barcode
-- Contains raw AI responses, API calls, confidence calculations, and error logs
-- Used for debugging, quality analysis, and workflow improvements
-- Structure: {"records": {"barcode": {"step1_metadata_extraction": {...}, "step2_oclc_search": {...}, etc.}}}
+---
 
-logs/ folder contains:
-- Individual API response logs for each processing step
-- Token usage and cost tracking files  
-- Error logs with detailed debugging information
-- Processing metrics and batch summaries
+## FILE ORGANIZATION
 
-LOGS FOLDER STRUCTURE:
-- step1_llm_response_log.txt - Full LLM responses - metadata extraction 
-- step1_token_usage_log.txt - Cost and performance metrics
-- oclc_api_search_log.txt - All OCLC API queries and results (step 2) 
-- step3_llm_response_log.txt - Full LLM responses - analysis, OCLC # suggestions, and reasoning
-- step3_token_usage_log.txt - Analysis step metrics
-- error_log.txt - Error tracking across all steps
-- processing_metrics.json - Structured performance data
+After running the workflow, your results folder contains three subfolders:
 
-WORKFLOW MONITORING
--------------------
+### **`deliverables/`** - Working files for catalogers
+- Sorting spreadsheet
+- Batch upload file
+- Review spreadsheets and text logs
+- MARC format file
 
-Key metrics tracked in processing_metrics.json:
-- Success/failure rates for each step
-- API token consumption and costs
-- Processing times and bottlenecks
-- Confidence score distributions
-- OCLC API hit rates and error patterns
+### **`guides/`** - Documentation
+- Cataloger Guide
+- Technical Guide (this document)
 
-Error categories logged:
-- API errors (OpenAI and OCLC)
-- Image processing errors
-- JSON update and parsing errors
-- File system errors
-- Batch processing errors
-- Rate limit errors
-- Data validation errors
-- Metadata cleaning errors
-- Token/authentication errors
-- Network/connection errors
+### **`data/`** - Workflow tracking files
+- `full-workflow-data-[cd/lp]-[timestamp].json` - Master tracking file
+- `full-workflow-data-[cd/lp]-[timestamp].xlsx` - Detailed Excel version
+- `logs/` subfolder with processing details
 
-QUALITY ASSURANCE DATA
-----------------------
+---
 
-Use [cd/lp]-metadata-workflow-[date].json to:
-- Audit AI decision-making for specific records
-- Track which OCLC queries were attempted/successful
-- Review confidence score calculations and adjustments
-- Analyze patterns in low-confidence matches
-- Identify systematic processing issues
+## UNDERSTANDING THE MASTER WORKFLOW FILE
 
-Sample points for analysis:
-- Records where confidence was reduced in step 4
-- Items with no OCLC matches despite multiple queries
-- High-confidence matches found to be incorrect or incorrect but close matches (for example same item and upc but different publication year)
-- API errors that affected final classifications
+**Location**: `data/full-workflow-data-[cd/lp]-[timestamp].json`
 
-SYSTEM MAINTENANCE
-------------------
+This JSON file tracks every processing step for each barcode. It contains:
+- Raw AI responses from metadata extraction
+- OCLC API search queries and results
+- AI analysis and reasoning for each match
+- Confidence score calculations and adjustments
+- Error logs and processing notes
 
-Regular monitoring tasks:
-- Check error_log.txt for recurring issues
-- Monitor OCLC API usage against quotas
-- Review processing times for performance degradation
-- Analyze confidence score patterns
-- Verify JSON data integrity for completed batches
+### File Structure:
+```json
+{
+  "records": {
+    "barcode_12345": {
+      "step1_metadata_extraction": {...},
+      "step2_oclc_search": {...},
+      "step3_ai_analysis": {...},
+      "step4_verification": {...},
+      "step5_final_classification": {...},
+      "errors": [...]
+    }
+  },
+  "batch_metadata": {...}
+}
+```
 
-For batch reprocessing:
-- Use barcode lists from workflow JSON to identify specific items
-- Error logs contain sufficient detail for targeted re-runs
-- Processing metrics can help optimize future batch sizes
+### When to use this file:
+- **Auditing AI decisions** - Review why AI suggested a particular OCLC record
+- **Understanding confidence scores** - See how scores were calculated and adjusted
+- **Investigating errors** - Find details about what went wrong for specific items
+- **Quality improvement** - Identify patterns in AI performance
 
-INTEGRATION POINTS
-------------------
+---
 
-Library Services Platform batch prep:
-- batch-upload-alma-[cd/lp]-[timestamp].txt contains pipe-delimited data
-- Format: OCLC_NUMBER|BARCODE|TITLE
-- Verify OCLC numbers against workflow JSON before import
-- Track import results back to original processing data
+## LOGS FOLDER CONTENTS
 
-Cataloger review feedback:
-- Compare cataloger decisions in review spreadsheet to AI selections
-- Use for tweaking oclc queries and LLM prompts
-- Document systematic AI errors for workflow refinement
+**Location**: `data/logs/`
 
-This workflow is intended to generate not just good results but also comprehensive audit trails for compliance, quality control, and continuous improvement of the AI-assisted cataloging process.
+### Processing Logs:
+- **`step1_llm_response_log.txt`** - Full AI responses from metadata extraction
+  - Shows what the AI "saw" in each image
+  - Useful for understanding extraction errors
+
+- **`step3_llm_response_log.txt`** - AI analysis of OCLC matches
+  - Contains AI's reasoning for choosing each OCLC record
+  - Shows confidence score justifications
+  - Helpful for understanding why certain records were rated low
+
+- **`oclc_api_search_log.txt`** - All OCLC API queries and results
+  - Lists every search query attempted
+  - Shows which searches succeeded/failed
+  - Contains total number of holdings for each record
+
+### Performance Logs:
+- **`step1_token_usage_log.txt`** - Metadata extraction metrics
+  - API token consumption
+  - Estimated costs
+  - Processing times
+
+- **`step3_token_usage_log.txt`** - Analysis step metrics
+  - Similar tracking for the analysis phase
+
+- **`processing_metrics.json`** - Structured performance data
+  - Success/failure rates for each step
+  - Processing times and bottlenecks
+  - Confidence score distributions
+  - OCLC API hit rates
+
+### Error Tracking:
+- **`error_log.txt`** - Comprehensive error log
+  - All errors categorized by type
+  - Timestamps and affected barcodes
+  - Detailed error messages for troubleshooting
+
+---
+
+## QUALITY ASSURANCE STRATEGIES
+
+### 1. Review Confidence Score Patterns
+
+Check `processing_metrics.json` for:
+- Distribution of confidence scores (how many high vs. low)
+- Average confidence by batch
+- Records where confidence was reduced in Step 4
+
+**Red flags**:
+- Unusually high percentage of low-confidence matches
+- Many scores reduced during verification step
+- Systematic patterns in certain types of materials
+
+### 2. Audit Low-Confidence Decisions
+
+For low-confidence matches, review the workflow JSON:
+1. Check `step1_metadata_extraction` - Was metadata extracted accurately?
+2. Check `step2_oclc_search` - Were appropriate searches performed?
+3. Check `step3_ai_analysis` - What was the AI's reasoning?
+4. Check `step4_verification` - Why was confidence reduced?
+
+### 3. Investigate OCLC Search Patterns
+
+Use `oclc_api_search_log.txt` to identify:
+- Searches that returned no results
+- Searches that returned too many results (may need refinement)
+- Common search terms that work well vs. poorly
+- OCLC API errors or rate limiting issues
+
+### 4. Analyze AI Extraction Quality
+
+Review `step1_llm_response_log.txt` for patterns:
+- Fields consistently extracted incorrectly (e.g., dates, UPCs)
+- Image quality issues affecting extraction
+- Specific label designs that cause problems
+- Text that AI consistently misreads
+
+---
+
+## COMMON ISSUES AND SOLUTIONS
+
+### Issue: High percentage of low-confidence matches
+
+**Investigation steps**:
+1. Check error_log.txt for API errors or rate limiting
+2. Review step1 extraction log - is metadata quality poor?
+3. Look at OCLC search log - are searches finding records?
+4. Review step3 analysis - is AI being too conservative?
+
+**Possible causes**:
+- Poor image quality in batch
+- Unusual or rare materials
+- OCLC API issues
+- Need for prompt refinement
+
+### Issue: AI suggestions disagree with cataloger review
+
+**Investigation steps**:
+1. Review AI's reasoning in step3_llm_response_log.txt
+2. Check what OCLC records were available in step2 results
+3. Look at confidence score calculation
+4. Compare AI's analysis to actual record details
+
+**Use this information for**:
+- Documenting patterns for future workflow improvements
+- Understanding AI limitations
+- Training staff on when to trust vs. question AI suggestions
+
+### Issue: Duplicates not properly detected
+
+**Investigation steps**:
+1. Check sorting spreadsheet - are duplicates marked?
+2. Review workflow JSON for confidence scores of duplicate items
+3. Look at OCLC numbers assigned - are they actually the same?
+
+**Note**: Duplicate detection only runs on high-confidence matches (≥80%)
+
+### Issue: Items marked as "Held by IXA" but aren't actually in catalog
+
+**Investigation steps**:
+1. Check OCLC search log for holdings information
+2. Verify the OCLC number in WorldCat
+3. Check institutional holdings code in OCLC
+
+**Note**: This relies on OCLC API holdings data being current
+
+---
+
+## USING DATA FOR WORKFLOW IMPROVEMENT
+
+### Track AI Performance Over Time
+
+Create a spreadsheet tracking:
+- Batch date and size
+- High confidence rate
+- Low confidence rate
+- Cataloger agreement rate (after review)
+- Common error types
+
+### Document Systematic Issues
+
+When you notice patterns:
+1. Note the material type (CD vs. LP, label, format)
+2. Document the specific problem (extraction, search, matching)
+3. Collect example barcodes and workflow JSON sections
+4. Share with workflow administrators for prompt refinement
+
+
+## REPROCESSING AND CORRECTIONS
+
+### If you need to reprocess specific items:
+
+1. Extract barcodes from the sorting spreadsheet or workflow JSON
+2. Create a new subfolder with just those images
+3. Run the workflow on that smaller batch
+4. Compare results to original processing
+
+### Tracking corrections:
+
+When catalogers correct AI suggestions:
+- Note the barcode and original vs. correct OCLC number
+- Review the AI's reasoning in the workflow JSON
+- Document why the AI made that choice
+- Use this information to refine future processing
+
+---
+
+## MONITORING RECOMMENDATIONS
+
+### Per Batch:
+- Check error_log.txt for serious issues
+- Review confidence score distribution
+- Verify OCLC API success rate
+- Scan for unusual patterns
+
+### Monthly:
+- Analyze trends in AI performance
+- Review cataloger correction rates
+- Track processing efficiency
+- Document lessons learned
+
+### Quarterly:
+- Comprehensive review of all batches
+- Calculate overall success rates
+- Identify materials needing special handling
+- Report on workflow effectiveness
+
+---
+
+## WORKFLOW PHILOSOPHY
+
+This system is designed to:
+- **Accelerate** routine cataloging tasks
+- **Flag uncertainty** rather than making questionable decisions
+- **Create audit trails** for all processing steps
+- **Support continuous improvement** through comprehensive data
+
+**Important**: The goal is to assist catalogers, not replace them. When AI is uncertain, it should defer to human expertise.
+
+---
+
+## GETTING HELP
+
+### For technical issues:
+- Check error_log.txt first
+- Review processing_metrics.json for patterns
+- Consult workflow JSON for specific record details
+
+### For workflow questions:
+- Review this guide and the Cataloger Guide
+- Consult with experienced workflow users
+- Document issues for future reference
+
+### For significant problems:
+- Gather relevant log files and examples
+- Note batch details (date, size, material type)
+- Contact workflow administrators with documentation

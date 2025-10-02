@@ -1,111 +1,201 @@
-AI MUSIC WORKFLOW - CATALOGER GUIDE
-===================================
+# AI MUSIC WORKFLOW - CATALOGER GUIDE
 
-How to use the files created by the AI music cataloging workflow to review results and sort physical items.
+## How to use the files created by the AI music cataloging workflow to review results and sort physical items.
 
-OVERVIEW
---------
-This AI workflow processes CD images by extracting metadata from images using AI, searching OCLC for matching records, and using AI again to analyze matches and assign confidence scores (confidence scores are used to decide which items need review).  After this is done, there is an automated check of track listings and publication dates of OCLC results vs the initial metadata.  Results are downgraded if there are any mismatches.  Then, results are used to create final outputs.  The intention of the outputs is to simplify the organization of physical items and cataloging record creation.  It is an effective cataloging tool and is not meant to replace professional judgment. Always test thoroughly and maintain quality controls. 
+---
 
-STEPS AFTER RUNNING AUTOMATED WORKFLOW
-======================================
+## OVERVIEW
 
-1. Sort items using sorting spreadsheet 
-2. Use cataloger review spreadsheet to track review progress - reference low confidence review text file in this process 
-3. Use MARC text file to help with original cataloging where needed 
-4. Upload high confidence and cataloger verified results to Library Services Platform 
+This AI workflow processes CD/LP images by:
+1. Extracting metadata from images using AI
+2. Searching OCLC for matching records
+3. Using AI to analyze matches and assign confidence scores
+4. Automatically checking track listings and publication dates
+5. Downgrading results with mismatches
+6. Creating final outputs to simplify organization and cataloging
 
-KEY FILES CREATED
-=================
+The workflow is an effective cataloging tool but is **not meant to replace professional judgment**. Always test thoroughly and maintain quality controls.
 
-1. SORTING SPREADSHEET: [cd/lp]-sort-groups-all-records-[date].xlsx
-- Spreadsheet with all CDs categorized into groups (High Confidence, Held by UT Libraries, Low Confidence, Duplicates)
+---
 
-2.  BATCH UPLOAD FILE: batch-upload-alma-[cd/lp]-[timestamp].txt  
-- Simplified, de-duplicated, pipe-delimited file for high-confidence matches
-- Format: OCLC_NUMBER|BARCODE|TITLE
+## STEPS AFTER RUNNING AUTOMATED WORKFLOW
 
-3. CATALOGER REVIEW SPREADSHEET: cataloger-review-[date].xlsx
-- Tracking spreadsheet for reviewing low-confidence matches
-- Yellow highlighting indicates items needing attention - once a cataloger enters an OCLC number for a row, it will no longer be highlighted
-- Contains dropdown menu and notes for each low-confidence item 
+1. **Sort items** using the sorting spreadsheet
+2. **Track review progress** using the cataloger review spreadsheet - reference the low confidence review text file in this process
+3. **Use MARC text file** to help with original cataloging where needed
+4. **Upload verified results** - high confidence and cataloger-verified results to your Library Services Platform
+5. **(Optional) Use HTML interface** - if generated, review matches with images side-by-side
 
-4. LOW CONFIDENCE REVIEW TEXT FILE: low-confidence-review-[date].txt
-- Text log with AI-Generated metadata, AI-suggested OCLC record, and other potential matches found for each low-confidence item
+---
 
-5. MARC TEXT FILE (FOR LOW CONFIDENCE ITEMS): low-confidence-marc-[date].txt
-- MARC-formatted records based on initial AI-extracted metadata
-- Can be used as a starting point to speed up original cataloging 
-- Pared down to basics, and contains only fields with visible/available data
+## KEY FILES CREATED
 
-USING THE CATALOGER REVIEW SPREADSHEET
-======================================
+All output files are organized in three subfolders within your results folder:
 
-The cataloger-review-[date].xlsx file is your primary tool for handling low-confidence matches.
+### **`deliverables/` folder** - Files for cataloging work
 
-COLUMNS:
-- Barcode: Physical item identifier
-- Date AI Processed: When the workflow ran
-- AI-Suggested OCLC Number: AI's best guess out of OCLC results (may be blank)
-- Title: Title from OCLC record (or "No OCLC match found")
-- Date Cataloger Checked: Cataloger to fill in
-- Status: Dropdown with three options (see below)
-- Correct OCLC Number: Auto-fills if AI suggested OCLC number is approved, or cataloger to manually enter
-- Notes: Cataloger comments and observations
+1. **SORTING SPREADSHEET**: `sorting-spreadsheet-[date].xlsx`
+   - All items categorized into groups (High Confidence, Held by UT Libraries, Low Confidence, Duplicates)
+   - Use this to physically organize your materials
 
-STATUS DROPDOWN OPTIONS:
-1. "Approved" - AI suggestion is correct
+2. **BATCH UPLOAD FILE**: `batch-upload-alma-[cd/lp]-[timestamp].txt`
+   - Simplified, de-duplicated, pipe-delimited file for high-confidence matches
+   - Format: `OCLC_NUMBER|BARCODE|TITLE`
+   - Ready to upload to your Library Services Platform
+
+3. **CATALOGER REVIEW SPREADSHEET**: `tracking-spreadsheet-catalogers-[date].xlsx`
+   - Tracking spreadsheet for reviewing low-confidence matches
+   - Yellow highlighting indicates items needing attention
+   - Once you enter an OCLC number, highlighting disappears
+   - Contains dropdown menu and notes for each item
+
+4. **LOW CONFIDENCE REVIEW TEXT FILE**: `low-confidence-matches-review-[date].txt`
+   - Detailed text log with:
+     - AI-generated metadata
+     - AI-suggested OCLC record
+     - Other potential matches found
+     - Full OCLC record details
+
+5. **MARC TEXT FILE**: `marc-formatted-low-confidence-matches-[date].txt`
+   - MARC-formatted records based on AI-extracted metadata
+   - Starting point for original cataloging
+   - Pared down to basics with only visible/available data
+
+### **`guides/` folder** - Documentation
+
+- `CATALOGER_GUIDE.txt` - This guide
+- `TECHNICAL_GUIDE.txt` - Technical documentation for troubleshooting
+
+### **`data/` folder** - Workflow data files
+
+- Full workflow JSON and Excel files (for advanced troubleshooting)
+
+### **`images/` folder** - Only if HTML interface generated
+
+- Copies of all processed images (for portability of HTML review)
+
+---
+
+## USING THE CATALOGER REVIEW SPREADSHEET
+
+The `tracking-spreadsheet-catalogers-[date].xlsx` file is your primary tool for handling low-confidence matches.
+
+### COLUMNS:
+- **Barcode**: Physical item identifier
+- **Date AI Processed**: When the workflow ran
+- **AI-Suggested OCLC Number**: AI's best guess from OCLC results (may be blank)
+- **Title**: Title from OCLC record (or "No OCLC match found")
+- **Date Cataloger Checked**: Fill in when you review
+- **Status**: Dropdown with three options (see below)
+- **Correct OCLC Number**: Auto-fills if AI suggestion approved, or manually enter
+- **Notes**: Your comments and observations
+
+### STATUS DROPDOWN OPTIONS:
+
+1. **"Approved"** - AI suggestion is correct
    - Correct OCLC Number auto-fills with AI suggestion
    - Row highlighting disappears automatically
 
-2. "Rejected - Different OCLC" - AI found wrong record
+2. **"Rejected - Different OCLC"** - AI found wrong record
    - Manually enter correct OCLC number in Correct OCLC column
    - Row highlighting disappears when OCLC number entered
 
-3. "Rejected - Needs Original Cataloging" - No OCLC record exists
+3. **"Rejected - Needs Original Cataloging"** - No OCLC record exists
    - Leave Correct OCLC Number blank
    - Use MARC format file as cataloging starting point
-   - Once OCLC number created, it may be filled in and the row highlighting will disappear
+   - Once you create an OCLC number, you may fill it in (highlighting will disappear)
 
+---
 
-SORTING PHYSICAL ITEMS
-======================
+## SORTING PHYSICAL ITEMS
 
-The sort-groups-all-records spreadsheet is intended to help you to organize physical CDs:
+The `sorting-spreadsheet-[date].xlsx` helps you organize physical CDs/LPs into these groups:
 
-1. HIGH CONFIDENCE - Alma Batch Upload
-   - Simple and deduplicated, only high confidence results - intended for batch uploads to Library Services Platforms
-   - Physical items can go directly to appropriate collection
+### 1. **Alma Batch Upload (High Confidence)**
+- Simple and deduplicated, only high confidence results
+- Intended for batch uploads to Library Services Platforms
+- Physical items can go directly to appropriate collection
 
-2. HELD BY UT LIBRARIES (IXA)
-   - Items already in catalog (according to the OCLC Search API)
-   - Verify that these items are indeed duplicates and that the items in collection do not have condition issues
-   - May need withdrawal processing
+### 2. **Held by UT Libraries (IXA)**
+- Items already in catalog (according to OCLC Search API)
+- **Action needed**:
+  - Verify these items are indeed duplicates
+  - Check that existing items don't have condition issues
+  - May need withdrawal processing
 
-3. LOW CONFIDENCE - Cataloger Review
-   - Use cataloger-review-[date].xlsx for decisions
-   - Keep items accessible for hands-on verification
-   - Sort based on cataloger review outcomes
+### 3. **Cataloger Review (Low Confidence)**
+- Use `tracking-spreadsheet-catalogers-[date].xlsx` for decisions
+- Keep items accessible for hands-on verification
+- Reference the low confidence review text file for detailed information
+- Sort based on cataloger review outcomes
 
-4. DUPLICATES
-   - Multiple copies of same title identified in this batch of processed items
-   - Check condition and retention decisions
-   - May keep best copy, withdraw others
+### 4. **Duplicates**
+- Multiple copies of same title identified in this batch
+- **Action needed**:
+  - Check condition
+  - Make retention decisions
+  - May keep best copy, withdraw others
 
-TROUBLESHOOTING
-===============
+---
 
-For questions about specific OCLC records:
-- Use the low confidence review text file and check OCLC for best options
-- The Other Potential Matches in the low confidence text file may provide good alternative matches
-- Verify against physical CD
+## OPTIONAL: HTML REVIEW INTERFACE
 
-QUALITY CONTROL
-===============
+If you chose to generate the HTML interface (Step 6), you'll find these files in your main results folder:
+
+- **`review-index-[date].html`** - Start here
+- **`review-page-[#]-[date].html`** - Individual review pages
+
+### How to use the HTML interface:
+
+1. **Download the entire results folder** to your local computer
+2. **Unzip** if compressed
+3. **Double-click** `review-index-[date].html` to open in your web browser
+4. Review items with images displayed alongside OCLC records
+5. Make decisions and add notes directly in the interface
+6. **Export decisions to CSV** when done (save the file!)
+
+### Important notes about HTML:
+- Runs entirely on your local machine (no internet connection needed for viewing)
+- Your decisions are stored in your browser's local storage only
+- **You must export to CSV to save your work permanently**
+- Not recommended for batches over 500 records (folder size becomes very large)
+- Best with JPEG images (smaller file sizes)
+
+---
+
+## TROUBLESHOOTING
+
+### For questions about specific OCLC records:
+- Use the low confidence review text file
+- Check "Other Potential Matches" section for alternatives
+- Verify against physical CD/LP
+
+### If OCLC numbers seem wrong:
+- The workflow uses multiple verification layers
+- Low confidence items are flagged for human review
+- Trust your professional judgment over AI suggestions
+
+---
+
+## QUALITY CONTROL
 
 The AI workflow provides multiple verification layers:
-- Step 3: AI cross-references multiple data points
-- Step 4: Verifies track listings and publication dates
-- Step 5: Flags low-confidence matches for human review
 
-In this context, AI is a tool to accelerate cataloging, not to replace professional judgment. When in doubt, follow standard cataloging practices and institutional policies.
+- **Step 1**: AI extracts metadata from images
+- **Step 2**: Searches OCLC database
+- **Step 3**: AI cross-references multiple data points
+- **Step 4**: Verifies track listings and publication dates
+- **Step 5**: Flags low-confidence matches for human review
+- **Step 6** (Optional): Visual review with HTML interface
+
+**Remember**: AI is a tool to accelerate cataloging, not to replace professional judgment. When in doubt, follow standard cataloging practices and institutional policies.
+
+---
+
+## WORKFLOW SUMMARY
+
+```
+Images → Metadata Extraction → OCLC Search → AI Analysis → 
+Verification → Classification → Output Files (+ Optional HTML)
+```
+

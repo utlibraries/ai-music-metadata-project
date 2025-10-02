@@ -673,6 +673,8 @@ def create_cataloger_review_spreadsheet(results_folder, all_records, current_dat
     review_file = f"tracking-spreadsheet-catalogers-{current_date}.xlsx"
     review_path = os.path.join(deliverables_folder, review_file)
     
+    wb.save(review_path)
+    
     print(f"Cataloger review spreadsheet created with {len(low_confidence_records)} records: {review_path}")
     return review_path
 
