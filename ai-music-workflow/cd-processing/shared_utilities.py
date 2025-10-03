@@ -35,7 +35,7 @@ def find_latest_results_folder(prefix: str) -> Optional[str]:
 def get_workflow_json_path(results_folder: str) -> str:
     """
     Get the path to the workflow JSON file for the given results folder.
-    Creates the filename based on the current date.
+    Finds the most recent workflow JSON file.
     
     Args:
         results_folder: Path to the results folder
@@ -43,13 +43,21 @@ def get_workflow_json_path(results_folder: str) -> str:
     Returns:
         Full path to the workflow JSON file
     """
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    json_file = f"full-workflow-data-cd-{current_date}.json"
-    return os.path.join(results_folder, json_file)
+    # Look for any file matching the pattern
+    matching_files = [f for f in os.listdir(results_folder)
+                      if f.startswith("full-workflow-data-cd-") and f.endswith(".json")]
+
+    
+    if not matching_files:
+        raise FileNotFoundError(f"No workflow JSON file found in {results_folder}")
+    
+    # Get the most recent one (sorted alphabetically works since they're timestamped)
+    latest_file = sorted(matching_files)[-1]
+    return os.path.join(results_folder, latest_file)
 
 def find_latest_cd_metadata_file(results_folder: str) -> Optional[str]:
     """
-    Find the most recent cd-metadata-ai Excel file in the results folder.
+    Find the most recent full-workflow-data-cd- Excel file in the results folder.
     This is the working file that gets updated through steps 1-4.
     
     Args:
@@ -59,7 +67,7 @@ def find_latest_cd_metadata_file(results_folder: str) -> Optional[str]:
         Path to the latest CD metadata file, or None if not found
     """
     files = [f for f in os.listdir(results_folder) 
-             if f.startswith("cd-metadata-ai-") and f.endswith(".xlsx")]
+             if f.startswith("full-workflow-data-cd-") and f.endswith(".xlsx")]
     if not files:
         return None
     latest_file = max(files)

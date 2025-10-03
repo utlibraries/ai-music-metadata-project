@@ -272,10 +272,10 @@ def main():
     
     # Look for previously created spreadsheet in the results folder
     input_files = [f for f in os.listdir(results_folder) 
-                   if f.startswith('cd-metadata-ai-') and f.endswith('.xlsx')]
+                   if f.startswith('full-workflow-data-cd-') and f.endswith('.xlsx')]
     
     if not input_files:
-        error_msg = "No cd-metadata-ai files found for cleaning"
+        error_msg = "No full-workflow-data-cd- files found for cleaning"
         print(f"{error_msg}")
         try:
             log_error(

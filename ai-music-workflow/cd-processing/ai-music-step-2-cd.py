@@ -990,7 +990,7 @@ def main():
     
     # Look for previous step files in the results folder.
     input_files = [f for f in os.listdir(results_folder) 
-               if f.startswith('cd-metadata-ai-') and f.endswith('.xlsx')]
+               if f.startswith('full-workflow-data-cd-') and f.endswith('.xlsx')]
     
     if not input_files:
         print("No step 1 files found in the results folder!")

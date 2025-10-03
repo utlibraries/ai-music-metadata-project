@@ -487,10 +487,10 @@ def main():
 
     if not os.path.exists(results_folder_path):
         os.makedirs(results_folder_path)
-    workflow_json_path = get_workflow_json_path(results_folder_path)
-    if not os.path.exists(workflow_json_path):
-        initialize_workflow_json(results_folder_path)
-        print(f"Initialized workflow JSON: {workflow_json_path}")
+    
+    # Initialize workflow JSON
+    workflow_json_path = initialize_workflow_json(results_folder_path)
+    print(f"Initialized workflow JSON: {workflow_json_path}")
     
     logs_folder_path = os.path.join(results_folder_path, "logs")
     if not os.path.exists(logs_folder_path):
@@ -519,8 +519,8 @@ def main():
             cell.alignment = Alignment(wrap_text=True, vertical='top')
 
     wb.active.freeze_panes = 'A2'
-
-    output_file = f"cd-metadata-ai-{current_timestamp}.xlsx"
+    
+    output_file = f"full-workflow-data-cd-{current_timestamp}.xlsx"
     full_output_path = os.path.join(results_folder_path, output_file)
     wb.save(full_output_path)
     

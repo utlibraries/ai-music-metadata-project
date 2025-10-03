@@ -139,118 +139,110 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
     
     <script>
         // Create unique storage namespace for this workflow
-        const STORAGE_PREFIX = 'lp-workflow-{current_date}-';
+        const STORAGE_PREFIX = 'lp-workflow-""" + current_date + """-';
         
-        // Helper functions to use namespaced storage
-        function setStorage(key, value) {{
-            window.localStorage.setItem(STORAGE_PREFIX + key, value);
-        }}
-        
-        function getStorage(key) {{
-            return window.localStorage.getItem(STORAGE_PREFIX + key);
-        }}
-        
-        function getAllWorkflowKeys() {{
-            const keys = [];
-            for (let i = 0; i < window.localStorage.length; i++) {{
-                const key = window.localStorage.key(i);
-                if (key && key.startsWith(STORAGE_PREFIX)) {{
-                    keys.push(key.replace(STORAGE_PREFIX, ''));
-                }}
-            }}
-            return keys;
-        }}
-        
-        function exportAllDecisions() {{
+        function exportAllDecisions() {
             const catalogerName = prompt('Enter your name for the export file:');
             if (!catalogerName) return;
-            
-            const allDecisions = [];
-            
-            const workflowKeys = getAllWorkflowKeys();
-            for (const key of workflowKeys) {{
-                if (key.startsWith('decision-')) {{
-                    const recordId = key.replace('decision-', '');
-                    const decision = getStorage(key);
-                    const notes = getStorage('notes-' + recordId);
-                    
-                    const recordDataKey = 'record-data-' + recordId;
-                    let recordData = null;
-                    try {{
-                        const storedData = getStorage(recordDataKey);
-                        if (storedData) {{
-                            recordData = JSON.parse(storedData);
-                        }}
-                    }} catch (e) {{
-                        console.log('Error parsing record data for record ' + recordId + ':', e);
-                    }}
-                    
-                    let correctOclc = '';
-                    if (decision === 'approved' && recordData && recordData.oclcNumber) {{
-                        correctOclc = recordData.oclcNumber;
-                    }}
-                    
-                    allDecisions.push({{
-                        recordId: recordId,
-                        barcode: recordData ? recordData.barcode : ('Record-' + recordId),
-                        confidence: recordData ? recordData.confidence : 'N/A',
-                        sortGroup: recordData ? recordData.sortGroup : 'N/A',
-                        decision: decision,
-                        correctOclc: correctOclc,
-                        notes: notes || '',
-                        cataloger: catalogerName,
-                        reviewDate: new Date().toISOString().split('T')[0],
-                        pageNumber: recordData ? recordData.pageNumber : 'Unknown'
-                    }});
-                }}
-            }}
-            
-            if (allDecisions.length === 0) {{
-                alert('No decisions found. Please review some records first.');
-                return;
-            }}
-            
-            allDecisions.sort((a, b) => parseInt(a.recordId) - parseInt(b.recordId));
-            
-            const headers = ['Record', 'Barcode', 'Confidence', 'Sort Group', 'Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
-            let csvContent = headers.join(',') + '\\n';
 
-            allDecisions.forEach(row => {{
-                const csvRow = [
-                    row.recordId,
-                    row.barcode,
-                    '"' + row.confidence + '"',
-                    '"' + row.sortGroup + '"',
-                    '"' + row.decision + '"',
-                    '"' + row.correctOclc + '"',
-                    '"' + row.notes.replace(/"/g, '""') + '"',
-                    '"' + row.cataloger + '"',
-                    row.reviewDate,
-                    row.pageNumber
-                ].join(',');
-                csvContent += csvRow + '\\n';
-            }});
-            
-            const blob = new Blob([csvContent], {{ type: 'text/csv' }});
-            const url = window.URL.createObjectURL(blob);
+            const rows = [];
+            // Only look at keys for THIS workflow
+            for (let i = 0; i < window.localStorage.length; i++) {
+                const fullKey = window.localStorage.key(i) || '';
+                
+                // Skip keys that don't belong to this workflow
+                if (!fullKey.startsWith(STORAGE_PREFIX)) continue;
+                
+                // Now match within our prefix
+                const localKey = fullKey.replace(STORAGE_PREFIX, '');
+                const m = localKey.match(/^decision-(\d+)$/);
+                if (!m) continue;
+
+                const recordId = m[1];
+                const decision = window.localStorage.getItem(fullKey);
+                const notes = window.localStorage.getItem(STORAGE_PREFIX + 'notes-' + recordId) || '';
+
+                let recordData = null;
+                try {
+                    const raw = window.localStorage.getItem(STORAGE_PREFIX + 'record-data-' + recordId);
+                    if (raw) recordData = JSON.parse(raw);
+                } catch (e) {
+                    console.log('Error parsing record-data for', recordId, e);
+                }
+
+                const barcode    = (recordData && recordData.barcode)    ? recordData.barcode    : ('Record-' + recordId);
+                const confidence = (recordData && recordData.confidence) ? recordData.confidence : 'N/A';
+                const sortGroup  = (recordData && recordData.sortGroup)  ? recordData.sortGroup  : 'N/A';
+                const pageNumber = (recordData && recordData.pageNumber) ? recordData.pageNumber : 'Unknown';
+
+                let correctOclc = '';
+                if (decision === 'approved' && recordData && recordData.oclcNumber) {
+                    correctOclc = recordData.oclcNumber;
+                }
+
+                const decisionLabels = {
+                    'approved': 'Approved',
+                    'different': 'Different OCLC # Needed',
+                    'original': 'Original Cataloging Needed',
+                    'review': 'Further Review Needed'
+                };
+
+                rows.push({
+                    recordId: recordId,
+                    barcode: barcode,
+                    confidence: confidence,
+                    sortGroup: sortGroup,
+                    decision: decisionLabels[decision] || decision,
+                    correctOclc: correctOclc,
+                    notes: notes,
+                    cataloger: catalogerName,
+                    reviewDate: new Date().toISOString().split('T')[0],
+                    pageNumber: pageNumber
+                });
+            }
+
+            if (rows.length === 0) {
+                alert('No decisions found. Open a review page, make a decision, then try again.');
+                return;
+            }
+
+            rows.sort((a, b) => (parseInt(a.recordId) || 0) - (parseInt(b.recordId) || 0));
+
+            const headers = ['Record', 'Barcode', 'Confidence', 'Sort Group', 'Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
+            const esc = (s) => {
+                const str = String(s == null ? '' : s);
+                return /[",\\n\\r]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+            };
+
+            let csv = headers.join(',') + '\\n';
+            for (const r of rows) {
+                csv += [
+                    r.recordId,
+                    esc(r.barcode),
+                    esc(r.confidence),
+                    esc(r.sortGroup),
+                    esc(r.decision),
+                    esc(r.correctOclc),
+                    esc(r.notes),
+                    esc(r.cataloger),
+                    r.reviewDate,
+                    r.pageNumber
+                ].join(',') + '\\n';
+            }
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `all-cataloger-decisions-${{catalogerName.replace(/[^a-zA-Z0-9]/g, '_')}}-${{new Date().toISOString().split('T')[0]}}.csv`;
+            a.href = URL.createObjectURL(blob);
+            a.download = 'all-cataloger-decisions-' + catalogerName.replace(/[^a-zA-Z0-9]/g, '_') + '-' + new Date().toISOString().split('T')[0] + '.csv';
             document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            
-            console.log(`Found ${{allDecisions.length}} decisions across all pages`);
-            const pageBreakdown = {{}};
-            allDecisions.forEach(decision => {{
-                const page = decision.pageNumber;
-                pageBreakdown[page] = (pageBreakdown[page] || 0) + 1;
-            }});
-            console.log('Decisions per page:', pageBreakdown);
-            
-            alert(`Exported ${{allDecisions.length}} decisions to CSV file.`);
-        }}
+            setTimeout(function () {
+                URL.revokeObjectURL(a.href);
+                a.remove();
+            }, 0);
+
+            alert('Exported ' + rows.length + ' decisions to CSV file.');
+        }
     </script>
 </body>
 </html>"""
@@ -552,26 +544,30 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
             setStorage('decision-' + recordId, decision);
             document.getElementById('notes-' + recordId).focus();
             
-            const barcode = record.getAttribute('data-barcode');
-            const confidenceText = record.querySelector('.confidence').textContent;
-            const confidence = confidenceText.replace('% Confidence', '%');
-            const sortGroup = record.querySelector('.sort-group').textContent;
-            
+            const barcode = record.getAttribute('data-barcode') || '';
+            const confEl = record.querySelector('.confidence');
+            const confidenceText = confEl ? confEl.textContent : '';
+            const confidence = confidenceText ? confidenceText.replace('% Confidence', '%') : 'N/A';
+            const sortEl = record.querySelector('.sort-group');
+            const sortGroup = sortEl ? sortEl.textContent : 'N/A';
+
             let oclcNumber = '';
             const oclcSection = record.querySelector('.oclc-section pre');
             if (oclcSection) {{
-                const oclcText = oclcSection.textContent;
-                const oclcMatch = oclcText.match(/OCLC Number: (\\d+)/);
+                const oclcText = oclcSection.textContent || '';
+                const oclcMatch = oclcText.match(/OCLC Number: (\d+)/);
                 if (oclcMatch) {{
                     oclcNumber = oclcMatch[1];
                 }}
             }}
             if (!oclcNumber) {{
-                const recordData = record.dataset;
-                if (recordData.oclcNumber && recordData.oclcNumber !== 'None suggested' && recordData.oclcNumber !== '') {{
+                const recordData = record.dataset || {{}};
+                if (recordData.oclcNumber && recordData.oclcNumber !== 'None suggested') {{
                     oclcNumber = recordData.oclcNumber;
                 }}
             }}
+
+
             
             const enhancedRecordData = {{
                 barcode: barcode,
@@ -647,31 +643,42 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
         function restoreUserState() {{
             for (let i = pageStartIndex + 1; i <= pageStartIndex + {len(page_records)}; i++) {{
                 const decision = getStorage('decision-' + i);
+                const record = document.getElementById('record-' + i);
+                if (!record) continue;
+
+                // Reset button visuals
+                const buttons = record.querySelectorAll('.decision-btn');
+                buttons.forEach(btn => {{
+                btn.style.opacity = '0.5';
+                btn.style.transform = '';
+                }});
+
+                // Re-apply selection by matching button text
                 if (decision) {{
-                    const record = document.getElementById('record-' + i);
-                    if (record) {{
-                        const buttons = record.querySelectorAll('.decision-btn');
-                        buttons.forEach(btn => {{
-                            if ((decision === 'approved' && btn.textContent.includes('Approve')) ||
-                                (decision === 'different' && btn.textContent.includes('Different')) ||
-                                (decision === 'original' && btn.textContent.includes('Original')) ||
-                                (decision === 'review' && btn.textContent.includes('More Review'))) {{
-                                btn.style.opacity = '1';
-                                btn.style.transform = 'scale(1.05)';
-                            }} else {{
-                                btn.style.opacity = '0.5';
-                            }}
-                        }});
+                buttons.forEach(btn => {{
+                    const txt = (btn.textContent || '').toLowerCase();
+                    if ((decision === 'approved' && txt.includes('approve')) ||
+                        (decision === 'different' && txt.includes('different')) ||
+                        (decision === 'original'  && txt.includes('original')) ||
+                        (decision === 'review'    && (txt.includes('more review') || txt.includes('review')))) {{
+                    btn.style.opacity = '1';
+                    btn.style.transform = 'scale(1.05)';
                     }}
+                }});
                 }}
-                
+
+                // Restore notes text
                 const notes = getStorage('notes-' + i);
                 const notesElement = document.getElementById('notes-' + i);
                 if (notes && notesElement) {{
-                    notesElement.value = notes;
+                notesElement.value = notes;
                 }}
             }}
-        }}
+
+            // Refresh "(N records)" counter
+            updateDecisionCounts();
+            }}
+
         
         document.addEventListener('DOMContentLoaded', function() {{
             updateDecisionCounts();
@@ -692,7 +699,10 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                     decisionsCount++;
                 }}
             }}
-            document.getElementById('decisionsCount').textContent = decisionsCount;
+            const counterEl = document.getElementById('decisionsCount');
+            if (counterEl) {{
+                counterEl.textContent = decisionsCount;
+            }}
         }}
         
         function getDecisionLabel(decision) {{
@@ -721,21 +731,24 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                         continue;
                     }}
 
-                    const barcode = recordElement.getAttribute('data-barcode');
-                    const confidenceText = recordElement.querySelector('.confidence').textContent;
-                    const confidence = confidenceText.replace('% Confidence', '%');
-                    const sortGroup = recordElement.querySelector('.sort-group').textContent;
+                    const barcode = recordElement.getAttribute('data-barcode') || '';
+                    const confEl = recordElement.querySelector('.confidence');
+                    const confidenceText = confEl ? confEl.textContent : '';
+                    const confidence = confidenceText ? confidenceText.replace('% Confidence', '%') : 'N/A';
+                    const sortEl = recordElement.querySelector('.sort-group');
+                    const sortGroup = sortEl ? sortEl.textContent : 'N/A';
 
                     let oclcNumber = '';
-                    
                     const oclcSection = recordElement.querySelector('.oclc-section pre');
                     if (oclcSection) {{
-                        const oclcText = oclcSection.textContent;
-                        const oclcMatch = oclcText.match(/OCLC Number: (\\d+)/);
+                        const oclcText = oclcSection.textContent || '';
+                        const oclcMatch = oclcText.match(/OCLC Number: (\d+)/);
                         if (oclcMatch) {{
                             oclcNumber = oclcMatch[1];
                         }}
                     }}
+                    
+
                     
                     if (!oclcNumber) {{
                         const recordData = recordElement.dataset;

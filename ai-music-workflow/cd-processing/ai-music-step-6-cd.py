@@ -11,10 +11,11 @@ from openpyxl import load_workbook
 
 # Custom modules
 from shared_utilities import find_latest_results_folder, get_workflow_json_path, get_bib_info_from_workflow, find_latest_cd_metadata_file
-from cd_workflow_config import get_file_path_config, get_current_timestamp, get_current_date
+from cd_workflow_config import get_file_path_config, get_current_timestamp
 
+current_timestamp = get_current_timestamp()
 
-def create_paginated_review_html(results_folder, all_records, current_date, workflow_json_path, records_per_page=100):
+def create_paginated_review_html(results_folder, all_records, current_timestamp, workflow_json_path, records_per_page=100):
     """
     Create paginated HTML files with external images and lazy loading for large datasets.
     All HTML files will be in the same folder for maximum compatibility.
@@ -30,7 +31,7 @@ def create_paginated_review_html(results_folder, all_records, current_date, work
     page_files = []
     
     # Create index page path (in results folder)
-    index_file = f"review-index-{current_date}.html"
+    index_file = f"review-index-{current_timestamp}.html"
     index_path = os.path.join(results_folder, index_file)
     
     # Group records by sort group for better organization
@@ -42,7 +43,7 @@ def create_paginated_review_html(results_folder, all_records, current_date, work
         sort_groups[group].append(record)
     
     # Create index page
-    create_review_index(index_path, sort_groups, current_date, total_pages, records_per_page)
+    create_review_index(index_path, sort_groups, current_timestamp, total_pages, records_per_page)
     
     # Create individual pages in the same folder as index
     for page_num in range(1, total_pages + 1):
@@ -51,11 +52,11 @@ def create_paginated_review_html(results_folder, all_records, current_date, work
         page_records = all_records[start_idx:end_idx]
         
         # Put page files directly in results folder alongside index
-        page_file = f"review-page-{page_num}-{current_date}.html"
+        page_file = f"review-page-{page_num}-{current_timestamp}.html"
         page_path = os.path.join(results_folder, page_file)
 
         create_single_review_page(
-            page_path, page_records, current_date, workflow_json_path, 
+            page_path, page_records, current_timestamp, workflow_json_path, 
             images_folder, results_folder, page_num, total_pages, records_per_page, start_idx
         )
         
@@ -72,7 +73,7 @@ def create_paginated_review_html(results_folder, all_records, current_date, work
         "total_pages": total_pages
     }
 
-def create_review_index(index_path, sort_groups, current_date, total_pages, records_per_page):
+def create_review_index(index_path, sort_groups, current_timestamp, total_pages, records_per_page):
     """Create an index page with links to all review pages and sort group summaries."""
     
     total_records = sum(len(records) for records in sort_groups.values())
@@ -82,7 +83,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CD Review Index - {current_date}</title>
+    <title>CD Review Index - {current_timestamp}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
         .header {{ background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 30px; }}
@@ -96,7 +97,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
 <body>
     <div class="header">
         <h1>CD Cataloger Review Index</h1>
-        <p>Generated: {current_date} | Total Records: {total_records} | Pages: {total_pages}</p>
+        <p>Generated: {current_timestamp} | Total Records: {total_records} | Pages: {total_pages}</p>
     </div>
     
     <div class="summary">
@@ -117,7 +118,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
     for page_num in range(1, total_pages + 1):
         start_record = (page_num - 1) * records_per_page + 1
         end_record = min(page_num * records_per_page, total_records)
-        page_filename = f"review-page-{page_num}-{current_date}.html"
+        page_filename = f"review-page-{page_num}-{current_timestamp}.html"
         
         html_content += f'''
             <a href="{page_filename}" class="page-link">
@@ -139,7 +140,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
     
     <script>
         // Create unique storage namespace for this workflow
-        const STORAGE_PREFIX = 'cd-workflow-{current_date}-';
+        const STORAGE_PREFIX = 'cd-workflow-""" + current_timestamp + """-';
         
         // Helper functions to use namespaced storage
         function setStorage(key, value) {
@@ -154,102 +155,114 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
             const keys = [];
             for (let i = 0; i < window.localStorage.length; i++) {
                 const key = window.localStorage.key(i);
-                if (key && key.startsWith(STORAGE_PREFIX)) {{
+                if (key && key.startsWith(STORAGE_PREFIX)) {
                     keys.push(key.replace(STORAGE_PREFIX, ''));
-                }}
-            }}
+                }
+            }
             return keys;
-        }}
+        }
         
         function exportAllDecisions() {
             const catalogerName = prompt('Enter your name for the export file:');
             if (!catalogerName) return;
-            
-            const allDecisions = [];
-            
-            const workflowKeys = getAllWorkflowKeys();
-            for (const key of workflowKeys) {
-                if (key.startsWith('decision-')) {
-                    const recordId = key.replace('decision-', '');
-                    const decision = getStorage(key);
-                    const notes = getStorage('notes-' + recordId);
-                    
-                    const recordDataKey = 'record-data-' + recordId;
-                    let recordData = null;
-                    try {
-                        const storedData = getStorage(recordDataKey);
-                        if (storedData) {
-                            recordData = JSON.parse(storedData);
-                        }
-                    } catch (e) {
-                        console.log('Error parsing record data for record ' + recordId + ':', e);
-                    }
-                    
-                    let correctOclc = '';
-                    if (decision === 'approved' && recordData && recordData.oclcNumber) {
-                        correctOclc = recordData.oclcNumber;
-                    }
-                    
-                    allDecisions.push({
-                        recordId: recordId,
-                        barcode: recordData ? recordData.barcode : ('Record-' + recordId),
-                        confidence: recordData ? recordData.confidence : 'N/A',
-                        sortGroup: recordData ? recordData.sortGroup : 'N/A',
-                        decision: decision,
-                        correctOclc: correctOclc,
-                        notes: notes || '',
-                        cataloger: catalogerName,
-                        reviewDate: new Date().toISOString().split('T')[0],
-                        pageNumber: recordData ? recordData.pageNumber : 'Unknown'
-                    });
+
+            const rows = [];
+            // Only look at keys for THIS workflow
+            for (let i = 0; i < window.localStorage.length; i++) {
+                const fullKey = window.localStorage.key(i) || '';
+                
+                // Skip keys that don't belong to this workflow
+                if (!fullKey.startsWith(STORAGE_PREFIX)) continue;
+                
+                // Now match within our prefix
+                const localKey = fullKey.replace(STORAGE_PREFIX, '');
+                const m = localKey.match(/^decision-(\d+)$/);
+                if (!m) continue;
+
+                const recordId = m[1];
+                const decision = window.localStorage.getItem(fullKey);
+                const notes = window.localStorage.getItem(STORAGE_PREFIX + 'notes-' + recordId) || '';
+
+                let recordData = null;
+                try {
+                    const raw = window.localStorage.getItem(STORAGE_PREFIX + 'record-data-' + recordId);
+                    if (raw) recordData = JSON.parse(raw);
+                } catch (e) {
+                    console.log('Error parsing record-data for', recordId, e);
                 }
+
+                const barcode    = (recordData && recordData.barcode)    ? recordData.barcode    : ('Record-' + recordId);
+                const confidence = (recordData && recordData.confidence) ? recordData.confidence : 'N/A';
+                const sortGroup  = (recordData && recordData.sortGroup)  ? recordData.sortGroup  : 'N/A';
+                const pageNumber = (recordData && recordData.pageNumber) ? recordData.pageNumber : 'Unknown';
+
+                let correctOclc = '';
+                if (decision === 'approved' && recordData && recordData.oclcNumber) {
+                    correctOclc = recordData.oclcNumber;
+                }
+
+                const decisionLabels = {
+                    'approved': 'Approved',
+                    'different': 'Different OCLC # Needed',
+                    'original': 'Original Cataloging Needed',
+                    'review': 'Further Review Needed'
+                };
+
+                rows.push({
+                    recordId: recordId,
+                    barcode: barcode,
+                    confidence: confidence,
+                    sortGroup: sortGroup,
+                    decision: decisionLabels[decision] || decision,
+                    correctOclc: correctOclc,
+                    notes: notes,
+                    cataloger: catalogerName,
+                    reviewDate: new Date().toISOString().split('T')[0],
+                    pageNumber: pageNumber
+                });
             }
-            
-            if (allDecisions.length === 0) {
-                alert('No decisions found. Please review some records first.');
+
+            if (rows.length === 0) {
+                alert('No decisions found. Open a review page, make a decision, then try again.');
                 return;
             }
-            
-            allDecisions.sort((a, b) => parseInt(a.recordId) - parseInt(b.recordId));
-            
-            const headers = ['Record', 'Barcode', 'Confidence', 'Sort Group', 'Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
-            let csvContent = headers.join(',') + '\\n';
 
-            allDecisions.forEach(row => {
-                const csvRow = [
-                    row.recordId,
-                    row.barcode,
-                    '"' + row.confidence + '"',
-                    '"' + row.sortGroup + '"',
-                    '"' + row.decision + '"',
-                    '"' + row.correctOclc + '"',
-                    '"' + row.notes.replace(/"/g, '""') + '"',
-                    '"' + row.cataloger + '"',
-                    row.reviewDate,
-                    row.pageNumber
-                ].join(',');
-                csvContent += csvRow + '\\n';
-            });
-            
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
+            rows.sort((a, b) => (parseInt(a.recordId) || 0) - (parseInt(b.recordId) || 0));
+
+            const headers = ['Record', 'Barcode', 'Confidence', 'Sort Group', 'Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
+            const esc = (s) => {
+                const str = String(s == null ? '' : s);
+                return /[",\\n\\r]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+            };
+
+            let csv = headers.join(',') + '\\n';
+            for (const r of rows) {
+                csv += [
+                    r.recordId,
+                    esc(r.barcode),
+                    esc(r.confidence),
+                    esc(r.sortGroup),
+                    esc(r.decision),
+                    esc(r.correctOclc),
+                    esc(r.notes),
+                    esc(r.cataloger),
+                    r.reviewDate,
+                    r.pageNumber
+                ].join(',') + '\\n';
+            }
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `all-cataloger-decisions-${catalogerName.replace(/[^a-zA-Z0-9]/g, '_')}-${new Date().toISOString().split('T')[0]}.csv`;
+            a.href = URL.createObjectURL(blob);
+            a.download = 'all-cataloger-decisions-' + catalogerName.replace(/[^a-zA-Z0-9]/g, '_') + '-' + new Date().toISOString().split('T')[0] + '.csv';
             document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            
-            console.log(`Found ${allDecisions.length} decisions across all pages`);
-            const pageBreakdown = {};
-            allDecisions.forEach(decision => {
-                const page = decision.pageNumber;
-                pageBreakdown[page] = (pageBreakdown[page] || 0) + 1;
-            });
-            console.log('Decisions per page:', pageBreakdown);
-            
-            alert(`Exported ${allDecisions.length} decisions to CSV file.`);
+            setTimeout(function () {
+                URL.revokeObjectURL(a.href);
+                a.remove();
+            }, 0);
+
+            alert('Exported ' + rows.length + ' decisions to CSV file.');
         }
     </script>
 </body>
@@ -258,7 +271,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
     with open(index_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-def create_single_review_page(page_path, page_records, current_date, workflow_json_path, images_folder, results_folder, page_num, total_pages, records_per_page, start_idx):
+def create_single_review_page(page_path, page_records, current_timestamp, workflow_json_path, images_folder, results_folder, page_num, total_pages, records_per_page, start_idx):
     """Create a single review page with direct image loading."""
     
     html_content = f"""<!DOCTYPE html>
@@ -266,7 +279,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CD Review Page {page_num} - {current_date}</title>
+    <title>CD Review Page {page_num} - {current_timestamp}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
         .header {{ background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
@@ -315,21 +328,21 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
 <body>
     <div class="header">
         <h1>CD Review - Page {page_num} of {total_pages}</h1>
-        <p>Generated: {current_date} | Records {start_idx + 1}-{start_idx + len(page_records)} of {(total_pages - 1) * records_per_page + len(page_records)}</p>
+        <p>Generated: {current_timestamp} | Records {start_idx + 1}-{start_idx + len(page_records)} of {(total_pages - 1) * records_per_page + len(page_records)}</p>
     </div>
     
     <div class="navigation">
-        <a href="review-index-{current_date}.html" class="nav-btn">Back to Index</a>"""
+        <a href="review-index-{current_timestamp}.html" class="nav-btn">Back to Index</a>"""
     
     if page_num > 1:
-        html_content += f'<a href="review-page-{page_num - 1}-{current_date}.html" class="nav-btn">Previous</a>'
+        html_content += f'<a href="review-page-{page_num - 1}-{current_timestamp}.html" class="nav-btn">Previous</a>'
     else:
         html_content += '<span class="nav-btn disabled">Previous</span>'
     
     html_content += f'<span style="margin: 0 20px; font-weight: bold;">Page {page_num} of {total_pages}</span>'
     
     if page_num < total_pages:
-        html_content += f'<a href="review-page-{page_num + 1}-{current_date}.html" class="nav-btn">Next</a>'
+        html_content += f'<a href="review-page-{page_num + 1}-{current_timestamp}.html" class="nav-btn">Next</a>'
     else:
         html_content += '<span class="nav-btn disabled">Next</span>'
     
@@ -425,7 +438,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
         image_files.sort()
         
         html_content += f"""
-    <div class="record" id="record-{global_record_id}" data-barcode="{barcode}" data-oclc-number="{oclc_number}">
+    <div class="record" id="record-{global_record_id}" data-barcode="{barcode}" data-oclc-number="{oclc_number}" data-sort-group="{sort_group}">
         <div class="record-header">
             <div class="barcode">Record {global_record_id}: Barcode {barcode}</div>
             <div>
@@ -510,7 +523,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
     html_content += f"""
     <script>
         // Create unique storage namespace for this workflow
-        const STORAGE_PREFIX = 'cd-workflow-{current_date}-';
+        const STORAGE_PREFIX = 'cd-workflow-{current_timestamp}-';
         
         // Helper functions to use namespaced storage
         function setStorage(key, value) {{
@@ -555,7 +568,8 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
             const barcode = record.getAttribute('data-barcode');
             const confidenceText = record.querySelector('.confidence').textContent;
             const confidence = confidenceText.replace('% Confidence', '%');
-            const sortGroup = record.querySelector('.sort-group').textContent;
+            const sortEl = record.querySelector('.sort-group');
+            const sortGroup = sortEl ? sortEl.textContent : 'N/A';
             
             let oclcNumber = '';
             const oclcSection = record.querySelector('.oclc-section pre');
@@ -647,30 +661,40 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
         function restoreUserState() {{
             for (let i = pageStartIndex + 1; i <= pageStartIndex + {len(page_records)}; i++) {{
                 const decision = getStorage('decision-' + i);
+                const record = document.getElementById('record-' + i);
+                if (!record) continue;
+
+                // Reset button visuals
+                const buttons = record.querySelectorAll('.decision-btn');
+                buttons.forEach(btn => {{
+                    btn.style.opacity = '0.5';
+                    btn.style.transform = '';
+                }});
+
+                // Re-apply selection by matching button text
                 if (decision) {{
-                    const record = document.getElementById('record-' + i);
-                    if (record) {{
-                        const buttons = record.querySelectorAll('.decision-btn');
-                        buttons.forEach(btn => {{
-                            if ((decision === 'approved' && btn.textContent.includes('Approve')) ||
-                                (decision === 'different' && btn.textContent.includes('Different')) ||
-                                (decision === 'original' && btn.textContent.includes('Original')) ||
-                                (decision === 'review' && btn.textContent.includes('More Review'))) {{
-                                btn.style.opacity = '1';
-                                btn.style.transform = 'scale(1.05)';
-                            }} else {{
-                                btn.style.opacity = '0.5';
-                            }}
-                        }});
-                    }}
+                    buttons.forEach(btn => {{
+                        const txt = (btn.textContent || '').toLowerCase();
+                        if ((decision === 'approved' && txt.includes('approve')) ||
+                            (decision === 'different' && txt.includes('different')) ||
+                            (decision === 'original'  && txt.includes('original')) ||
+                            (decision === 'review'    && (txt.includes('more review') || txt.includes('review')))) {{
+                            btn.style.opacity = '1';
+                            btn.style.transform = 'scale(1.05)';
+                        }}
+                    }});
                 }}
-                
+
+                // Restore notes text
                 const notes = getStorage('notes-' + i);
                 const notesElement = document.getElementById('notes-' + i);
                 if (notes && notesElement) {{
                     notesElement.value = notes;
                 }}
             }}
+
+            // Refresh "(N records)" counter
+            updateDecisionCounts();
         }}
         
         document.addEventListener('DOMContentLoaded', function() {{
@@ -724,7 +748,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                     const barcode = recordElement.getAttribute('data-barcode');
                     const confidenceText = recordElement.querySelector('.confidence').textContent;
                     const confidence = confidenceText.replace('% Confidence', '%');
-                    const sortGroup = recordElement.querySelector('.sort-group').textContent;
+                    const sortGroup = recordElement.getAttribute('data-sort-group') || 'N/A';
 
                     let oclcNumber = '';
                     
@@ -886,15 +910,11 @@ def main():
     
     print(f"Loaded {len(all_records)} records")
     
-    # Get current date
-    from cd_workflow_config import get_current_date
-    current_date = get_current_date()
-    
     # Create paginated HTML review
     result = create_paginated_review_html(
         results_folder, 
         all_records, 
-        current_date, 
+        current_timestamp, 
         workflow_json_path, 
         records_per_page=100
     )
