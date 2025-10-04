@@ -12,6 +12,7 @@ import glob
 import re
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
+from lp_workflow_config import get_current_timestamp
 
 def find_latest_results_folder(prefix: str) -> Optional[str]:
     """
@@ -42,8 +43,8 @@ def get_workflow_json_path(results_folder):
     
     if not json_files:
         # Fallback to creating with current date if none found
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        return os.path.join(results_folder, f"full-workflow-data-lp-{current_date}.json")
+        current_timestamp = get_current_timestamp()
+        return os.path.join(results_folder, f"full-workflow-data-lp-{current_timestamp}.json")
     
     # Return the most recent one if multiple exist
     latest_json = max(json_files)

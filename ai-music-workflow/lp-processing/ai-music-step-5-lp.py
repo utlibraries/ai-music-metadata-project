@@ -12,6 +12,9 @@ from json_workflow import update_record_step5, log_error, log_processing_metrics
 from shared_utilities import find_latest_results_folder, get_workflow_json_path, create_batch_summary, find_latest_lp_metadata_file, get_bib_info_from_workflow
 from lp_workflow_config import get_file_path_config, get_threshold_config, get_current_timestamp, get_step_config, FILE_NAMING
 
+current_timestamp = get_current_timestamp()
+current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+
 def get_holdings_info_from_workflow(oclc_number, workflow_json_path):
     """
     Extract holdings information from formatted OCLC results in workflow JSON.
@@ -274,7 +277,7 @@ def calculate_title_similarity(title1, title2):
     """Calculate similarity between two titles using SequenceMatcher."""
     return SequenceMatcher(None, title1.lower(), title2.lower()).ratio()
 
-def create_low_confidence_review_text_log(results_folder, step4_file, all_records, workflow_json_path, current_date):
+def create_low_confidence_review_text_log(results_folder, step4_file, all_records, workflow_json_path, current_timestamp):
     """
     Create a review text log for unique low confidence matches with detailed information.
     """
@@ -307,7 +310,7 @@ def create_low_confidence_review_text_log(results_folder, step4_file, all_record
     
     # Create text log file in deliverables subfolder
     deliverables_folder = os.path.join(results_folder, "deliverables")
-    review_file = f"low-confidence-matches-review-{current_date}.txt"
+    review_file = f"low-confidence-matches-review-{current_timestamp}.txt"
     review_path = os.path.join(deliverables_folder, review_file)
     
     # Process each low confidence record and write to text file
@@ -392,7 +395,7 @@ def create_low_confidence_review_text_log(results_folder, step4_file, all_record
     print(f"Low confidence review text log created with {len(low_confidence_records)} records: {review_path}")
     return review_path
 
-def create_marc_format_text_log(results_folder, all_records, workflow_json_path, current_date):
+def create_marc_format_text_log(results_folder, all_records, workflow_json_path, current_timestamp):
     """
     Create a MARC-formatted text log from the original JSON metadata for low confidence records.
     """
@@ -417,7 +420,7 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
     
     # Create MARC text log file in deliverables subfolder
     deliverables_folder = os.path.join(results_folder, "deliverables")
-    marc_file = f"marc-formatted-low-confidence-matches-{current_date}.txt"
+    marc_file = f"marc-formatted-low-confidence-matches-{current_timestamp}.txt"
     marc_path = os.path.join(deliverables_folder, marc_file)
     
     def is_valid_field(value):
@@ -574,7 +577,7 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
     print(f"MARC format text log created with {processed_count} records: {marc_path}")
     return marc_path
 
-def create_cataloger_review_spreadsheet(results_folder, all_records, current_date):
+def create_cataloger_review_spreadsheet(results_folder, all_records, current_date, current_timestamp):
     """
     Create a separate Excel workbook for catalogers to review low confidence matches.
     """
@@ -670,7 +673,7 @@ def create_cataloger_review_spreadsheet(results_folder, all_records, current_dat
     
     # Save the workbook in deliverables subfolder
     deliverables_folder = os.path.join(results_folder, "deliverables")
-    review_file = f"tracking-spreadsheet-catalogers-{current_date}.xlsx"
+    review_file = f"tracking-spreadsheet-catalogers-{current_timestamp}.xlsx"
     review_path = os.path.join(deliverables_folder, review_file)
     
     wb.save(review_path) 
@@ -1088,8 +1091,7 @@ def create_all_records_spreadsheet():
                 )
         
         # Save the all records spreadsheet
-        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-        all_records_file = f"sorting-spreadsheet-{current_date}.xlsx"
+        all_records_file = f"sorting-spreadsheet-{current_timestamp}.xlsx"
         all_records_path = os.path.join(deliverables_folder, all_records_file)
         wb_new.save(all_records_path)
         
@@ -1109,7 +1111,6 @@ def create_all_records_spreadsheet():
         unique_matches = [record for record in all_records 
                          if record["sort_group"] == "Alma Batch Upload (High Confidence)"]
         
-        current_timestamp = get_current_timestamp()
         text_file = FILE_NAMING["batch_upload_alma"].format(timestamp=current_timestamp)
         text_path = os.path.join(deliverables_folder, text_file)
         
@@ -1122,17 +1123,17 @@ def create_all_records_spreadsheet():
         
         # Create low confidence review spreadsheet
         review_path = create_low_confidence_review_text_log(
-            results_folder, step4_file, all_records, workflow_json_path, current_date
+            results_folder, step4_file, all_records, workflow_json_path, current_timestamp
         )
         
         # Create MARC format text log for low confidence records
         marc_path = create_marc_format_text_log(
-            results_folder, all_records, workflow_json_path, current_date
+            results_folder, all_records, workflow_json_path, current_timestamp
         )
         
         # Create cataloger review spreadsheet
         review_spreadsheet_path = create_cataloger_review_spreadsheet(
-            results_folder, all_records, current_date
+            results_folder, all_records, current_date, current_timestamp
         )
 
         # Copy both guides to guides subfolder

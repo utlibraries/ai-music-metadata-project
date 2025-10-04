@@ -9,6 +9,9 @@ import json
 import os
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+from lp_workflow_config import get_current_timestamp
+
+current_timestamp = get_current_timestamp()
 
 def initialize_workflow_json(results_folder_path: str) -> str:
     """
@@ -17,10 +20,10 @@ def initialize_workflow_json(results_folder_path: str) -> str:
     Returns:
         str: Path to the created JSON file
     """
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    json_file = f"full-workflow-data-lp-{current_date}.json"
+    json_file = f"full-workflow-data-lp-{current_timestamp}.json"
     json_path = os.path.join(results_folder_path, json_file)
     
+    current_date = datetime.now().strftime("%Y-%m-%d")
     initial_structure = {
         "batch_info": {
             "created_at": datetime.now().isoformat(),

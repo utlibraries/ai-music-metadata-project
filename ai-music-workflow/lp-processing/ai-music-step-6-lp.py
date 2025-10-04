@@ -193,6 +193,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
                     confidence: confidence,
                     sortGroup: sortGroup,
                     decision: decisionLabels[decision] || decision,
+                    aiSuggestedOclc: (recordData && recordData.oclcNumber) ? recordData.oclcNumber : '',
                     correctOclc: correctOclc,
                     notes: notes,
                     cataloger: catalogerName,
@@ -208,7 +209,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
 
             rows.sort((a, b) => (parseInt(a.recordId) || 0) - (parseInt(b.recordId) || 0));
 
-            const headers = ['Record', 'Barcode', 'Confidence', 'Sort Group', 'Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
+            const headers = ['Record', 'Barcode', 'Confidence', 'Initial Sort Group', 'Cataloger Decision', 'AI-Suggested OCLC #', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
             const esc = (s) => {
                 const str = String(s == null ? '' : s);
                 return /[",\\n\\r]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
@@ -222,6 +223,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
                     esc(r.confidence),
                     esc(r.sortGroup),
                     esc(r.decision),
+                    esc(r.aiSuggestedOclc),
                     esc(r.correctOclc),
                     esc(r.notes),
                     esc(r.cataloger),
@@ -417,7 +419,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
         image_files.sort()
         
         html_content += f"""
-    <div class="record" id="record-{global_record_id}" data-barcode="{barcode}" data-oclc-number="{oclc_number}">
+            <div class="record" id="record-{global_record_id}" data-barcode="{barcode}" data-oclc-number="{oclc_number}" data-sort-group="{sort_group}">
         <div class="record-header">
             <div class="barcode">Record {global_record_id}: Barcode {barcode}</div>
             <div>
@@ -548,8 +550,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
             const confEl = record.querySelector('.confidence');
             const confidenceText = confEl ? confEl.textContent : '';
             const confidence = confidenceText ? confidenceText.replace('% Confidence', '%') : 'N/A';
-            const sortEl = record.querySelector('.sort-group');
-            const sortGroup = sortEl ? sortEl.textContent : 'N/A';
+            const sortGroup = record.getAttribute('data-sort-group') || 'N/A';
 
             let oclcNumber = '';
             const oclcSection = record.querySelector('.oclc-section pre');
@@ -735,8 +736,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                     const confEl = recordElement.querySelector('.confidence');
                     const confidenceText = confEl ? confEl.textContent : '';
                     const confidence = confidenceText ? confidenceText.replace('% Confidence', '%') : 'N/A';
-                    const sortEl = recordElement.querySelector('.sort-group');
-                    const sortGroup = sortEl ? sortEl.textContent : 'N/A';
+                    const sortGroup = recordElement.getAttribute('data-sort-group') || 'N/A';
 
                     let oclcNumber = '';
                     const oclcSection = recordElement.querySelector('.oclc-section pre');
@@ -777,6 +777,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                         confidence: confidence,
                         sortGroup: sortGroup,
                         decision: getDecisionLabel(decision) || 'Not reviewed',
+                        aiSuggestedOclc: oclcNumber,
                         correctOclc: correctOclc,
                         notes: notes || '',
                         cataloger: catalogerName,
@@ -786,7 +787,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                 }}
             }}
             
-            const headers = ['Record', 'Barcode', 'Confidence', 'Sort Group', 'Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
+            const headers = ['Record', 'Barcode', 'Confidence', 'Initial Sort Group', 'Cataloger Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
             let csvContent = headers.join(',') + '\\n';
 
             decisions.forEach(row => {{
@@ -796,6 +797,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                 '"' + row.confidence + '"',
                 '"' + row.sortGroup + '"',
                 '"' + row.decision + '"',
+                '"' + row.aiSuggestedOclc + '"',
                 '"' + row.correctOclc + '"',
                 '"' + row.notes.replace(/"/g, '""') + '"',
                 '"' + row.cataloger + '"',

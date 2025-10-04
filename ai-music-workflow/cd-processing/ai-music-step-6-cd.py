@@ -214,6 +214,7 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
                     confidence: confidence,
                     sortGroup: sortGroup,
                     decision: decisionLabels[decision] || decision,
+                    aiSuggestedOclc: (recordData && recordData.oclcNumber) ? recordData.oclcNumber : '',  // Add this line
                     correctOclc: correctOclc,
                     notes: notes,
                     cataloger: catalogerName,
@@ -229,7 +230,7 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
 
             rows.sort((a, b) => (parseInt(a.recordId) || 0) - (parseInt(b.recordId) || 0));
 
-            const headers = ['Record', 'Barcode', 'Confidence', 'Sort Group', 'Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
+            const headers = ['Record', 'Barcode', 'Confidence', 'Initial Sort Group', 'Cataloger Decision', 'AI-Suggested OCLC #', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
             const esc = (s) => {
                 const str = String(s == null ? '' : s);
                 return /[",\\n\\r]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
@@ -243,6 +244,7 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
                     esc(r.confidence),
                     esc(r.sortGroup),
                     esc(r.decision),
+                    esc(r.aiSuggestedOclc),  // Add this line
                     esc(r.correctOclc),
                     esc(r.notes),
                     esc(r.cataloger),
@@ -788,6 +790,7 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
                         confidence: confidence,
                         sortGroup: sortGroup,
                         decision: getDecisionLabel(decision) || 'Not reviewed',
+                        aiSuggestedOclc: oclcNumber,  // Add this line
                         correctOclc: correctOclc,
                         notes: notes || '',
                         cataloger: catalogerName,
@@ -797,7 +800,7 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
                 }}
             }}
             
-            const headers = ['Record', 'Barcode', 'Confidence', 'Sort Group', 'Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
+            const headers = ['Record', 'Barcode', 'Confidence', 'Initial Sort Group', 'Cataloger Decision', 'AI-Suggested OCLC #', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
             let csvContent = headers.join(',') + '\\n';
 
             decisions.forEach(row => {{
@@ -807,6 +810,7 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
                 '"' + row.confidence + '"',
                 '"' + row.sortGroup + '"',
                 '"' + row.decision + '"',
+                '"' + row.aiSuggestedOclc + '"',  // Add this line
                 '"' + row.correctOclc + '"',
                 '"' + row.notes.replace(/"/g, '""') + '"',
                 '"' + row.cataloger + '"',

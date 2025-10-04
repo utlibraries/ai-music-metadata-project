@@ -10,6 +10,7 @@ import time
 import os
 from datetime import datetime
 
+
 def run_script(script_name, step_number, step_description):
     """Run a Python script and handle any errors."""
     print(f"\n{'='*60}")
