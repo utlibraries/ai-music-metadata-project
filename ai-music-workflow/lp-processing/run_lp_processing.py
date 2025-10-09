@@ -10,9 +10,19 @@ import time
 import os
 from datetime import datetime
 
+def _derive_step_key(step_number, script_name: str) -> str | None:
+    try:
+        n = float(step_number)
+    except Exception:
+        n = None
+    if n == 1.0:
+        return "step1"
+    if n == 3.0:
+        return "step3"
+    return None
+
 
 def run_script(script_name, step_number, step_description):
-    """Run a Python script and handle any errors."""
     print(f"\n{'='*60}")
     print(f"STEP {step_number}: {step_description}")
     print(f"Running: {script_name}")
@@ -20,33 +30,42 @@ def run_script(script_name, step_number, step_description):
     print(f"{'='*60}")
     
     start_time = time.time()
-    
-    # Get the directory where this runner script is located
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     script_path = os.path.join(script_dir, script_name)
-    
-    # Check if the script exists
     if not os.path.exists(script_path):
         print(f"STEP {step_number} FAILED")
         print(f"Error: Could not find script '{script_name}' in directory '{script_dir}'")
         print(f"Looking for: {script_path}")
-        print("Make sure all script files are in the same directory as this runner.")
         return False
-    
+
+    child_env = {**os.environ, 'PYTHONUNBUFFERED': '1'}
+    step_key = _derive_step_key(step_number, script_name)
+    if step_key is not None:
+        try:
+            from lp_workflow_config import get_model_config
+            mc = get_model_config(step_key)
+            child_env.setdefault('USE_BATCH_PROCESSING', 'auto')
+            child_env['WORKFLOW_DEFAULT_STEP']   = step_key
+            child_env['WORKFLOW_BATCH_THRESHOLD'] = str(mc.get('batch_threshold', 11))
+            child_env['WORKFLOW_MODEL']          = mc.get('model', 'gpt-4o-mini-2024-07-18')
+            child_env['WORKFLOW_MAX_TOKENS']     = str(mc.get('max_tokens', 2000))
+            child_env['WORKFLOW_TEMPERATURE']    = str(mc.get('temperature', 0.0))
+            print("\nBatch/config env for child:")
+            print(f"  USE_BATCH_PROCESSING     = {child_env['USE_BATCH_PROCESSING']}")
+            print(f"  WORKFLOW_DEFAULT_STEP    = {child_env['WORKFLOW_DEFAULT_STEP']}")
+            print(f"  WORKFLOW_BATCH_THRESHOLD = {child_env['WORKFLOW_BATCH_THRESHOLD']}")
+            print(f"  WORKFLOW_MODEL           = {child_env['WORKFLOW_MODEL']}")
+            print(f"  WORKFLOW_MAX_TOKENS      = {child_env['WORKFLOW_MAX_TOKENS']}")
+            print(f"  WORKFLOW_TEMPERATURE     = {child_env['WORKFLOW_TEMPERATURE']}")
+        except Exception as e:
+            print(f"Warning: could not derive model/batch env for {step_key}: {e}")
+
     try:
         print(f"\n REAL-TIME OUTPUT:")
         print("-" * 40)
-        
-        # Use a much simpler approach - just run with direct inheritance
-        result = subprocess.run([
-            sys.executable, '-u', script_path
-        ], 
-        env={**os.environ, 'PYTHONUNBUFFERED': '1'},
-        text=True)
-        
-        end_time = time.time()
-        duration = end_time - start_time
-        
+        result = subprocess.run([sys.executable, '-u', script_path], env=child_env, text=True)
+        duration = time.time() - start_time
         if result.returncode == 0:
             print(f"\nSTEP {step_number} COMPLETED SUCCESSFULLY")
             print(f"Duration: {duration:.2f} seconds")
@@ -56,17 +75,15 @@ def run_script(script_name, step_number, step_description):
             print(f"Duration: {duration:.2f} seconds")
             print(f"Error code: {result.returncode}")
             return False
-        
     except FileNotFoundError:
         print(f"\nSTEP {step_number} FAILED")
         print(f"Error: Could not find script '{script_name}'")
-        print("Make sure all script files are in the same directory as this runner.")
         return False
-    
     except Exception as e:
         print(f"\n STEP {step_number} FAILED")
         print(f"Unexpected error: {str(e)}")
         return False
+
 
 def check_environment():
     """Check if required environment variables are set."""

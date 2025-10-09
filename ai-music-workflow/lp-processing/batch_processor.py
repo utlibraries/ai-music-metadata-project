@@ -18,7 +18,15 @@ import tempfile
 
 # Custom module
 from model_pricing import estimate_cost
+from lp_workflow_config import get_model_config
 
+def _get_batch_threshold(step_name: str) -> int:
+    cfg = get_model_config(step_name)
+    return int(cfg.get("batch_threshold", 11))
+
+def _get_step_model(step_name: str) -> str:
+    cfg = get_model_config(step_name)
+    return cfg.get("model", "gpt-4o-mini-2024-07-18")   
 
 class BatchProcessor:
     """
@@ -32,132 +40,120 @@ class BatchProcessor:
     - Integration with existing token logging system
     """
     
-    def __init__(self, api_key: Optional[str] = None):
-        """Initialize batch processor with OpenAI client."""
+    def __init__(self, api_key: Optional[str] = None, default_step: str = "step1"):
         self.client = OpenAI(api_key=api_key or os.getenv('OPENAI_API_KEY'))
-        self.batch_jobs = {}  # Track active batch jobs
+        self.batch_jobs = {}
+        self.default_step = default_step
+
         
-    def should_use_batch(self, num_requests: int, force_batch: bool = False) -> bool:
-        """
-        Determine whether to use batch processing based on request count and settings.
-        
-        Args:
-            num_requests: Number of API requests to process
-            force_batch: Override automatic decision
-            
-        Returns:
-            True if batch processing should be used
-        """
+    def should_use_batch(self, num_requests: int, force_batch: bool = False, step_name: Optional[str] = None) -> bool:
         if force_batch:
             return True
-            
-        # Check environment variable
         use_batch_env = os.getenv('USE_BATCH_PROCESSING', 'auto').lower()
-        
         if use_batch_env == 'true':
             return True
-        elif use_batch_env == 'false':
+        if use_batch_env == 'false':
             return False
-        else:  # auto mode
-            # Use batch for >10 requests (cost effective threshold)
-            return num_requests > 10
+        step = step_name or self.default_step
+        threshold = _get_batch_threshold(step)
+        return num_requests > threshold
+
     
-    def create_batch_requests(self, requests_data: List[Dict[str, Any]], 
-                            custom_id_prefix: str = "req") -> List[Dict[str, Any]]:
-        """
-        Convert request data into OpenAI batch format.
-        
-        Args:
-            requests_data: List of dictionaries containing request parameters
-            custom_id_prefix: Prefix for custom request IDs
-            
-        Returns:
-            List of formatted batch requests
-        """
+    def create_batch_requests(self, requests_data, custom_id_prefix: str = "req", step_name: Optional[str] = None):
         batch_requests = []
-        
+        step = step_name or self.default_step
+        step_cfg = get_model_config(step)
+        default_model = step_cfg.get("model", "gpt-4o-mini-2024-07-18")
+        default_max_tokens = step_cfg.get("max_tokens", 2000)
+        default_temperature = step_cfg.get("temperature", 0)
+
         for i, req_data in enumerate(requests_data):
-            batch_request = {
+            body = {
+                "model": req_data.get("model", default_model),
+                "messages": req_data["messages"],
+                "max_tokens": req_data.get("max_tokens", default_max_tokens),
+                "temperature": req_data.get("temperature", default_temperature),
+            }
+            if "response_format" in req_data:
+                body["response_format"] = req_data["response_format"]
+
+            batch_requests.append({
                 "custom_id": f"{custom_id_prefix}_{i}_{uuid.uuid4().hex[:8]}",
                 "method": "POST",
                 "url": "/v1/chat/completions",
-                "body": {
-                    "model": req_data.get("model", "gpt-4o-mini-2024-07-18"),
-                    "messages": req_data["messages"],
-                    "max_tokens": req_data.get("max_tokens", 2000),
-                    "temperature": req_data.get("temperature", 0)
-                }
-            }
-            
-            # Add optional parameters if present
-            if "response_format" in req_data:
-                batch_request["body"]["response_format"] = req_data["response_format"]
-                
-            batch_requests.append(batch_request)
-            
+                "body": body
+            })
         return batch_requests
+
     
-    def estimate_batch_cost(self, batch_requests: List[Dict[str, Any]], model_name: str) -> Dict[str, float]:
+    def estimate_batch_cost(
+        self,
+        batch_requests: List[Dict[str, Any]],
+        model_name: Optional[str] = None,
+        step_name: Optional[str] = None
+    ) -> Dict[str, float]:
         """
         Estimate the cost of processing a batch of requests.
-        
+
         Args:
-            batch_requests: List of request dictionaries
-            model_name: Model name to use for pricing
-            
+            batch_requests: List of request dictionaries. Can be either:
+                            - pre-batch shape: {"model","messages","max_tokens"...}
+                            - batch shape: {"custom_id","method","url","body": {...}}
+            model_name: Explicit model to use for pricing (optional)
+            step_name: Step name whose model to use if model_name not provided (optional)
+
         Returns:
             Dictionary with cost estimates and savings information
         """
-        # More sophisticated token estimation based on request content
         total_estimated_prompt_tokens = 0
         total_estimated_completion_tokens = 0
-        
+
         for request in batch_requests:
-            # Estimate prompt tokens based on message content
+            # Support both shapes
+            messages = request.get("messages")
+            if messages is None:
+                messages = request.get("body", {}).get("messages", [])
+
+            # ----- prompt token estimate -----
             prompt_text = ""
             image_count = 0
-            
-            for message in request.get("messages", []):
+            for message in (messages or []):
                 content = message.get("content", "")
                 if isinstance(content, str):
                     prompt_text += content
                 elif isinstance(content, list):
-                    # Handle multi-modal content (text + images)
                     for item in content:
                         if item.get("type") == "text":
                             prompt_text += item.get("text", "")
                         elif item.get("type") == "image_url":
                             image_count += 1
-            
-            # Rough token estimation: ~4 characters per token
-            estimated_prompt_tokens = len(prompt_text) // 4
-            
-            # Images add significant tokens - rough estimate based on OpenAI pricing
-            # High-res images can be 1000+ tokens each
-            estimated_prompt_tokens += image_count * 1000
-            
-            # Add baseline for system messages and formatting
-            estimated_prompt_tokens += 100
-            
+
+            estimated_prompt_tokens = len(prompt_text) // 4  # ~4 chars/token
+            estimated_prompt_tokens += image_count * 1000    # rough visual token cost
+            estimated_prompt_tokens += 100                   # system/formatting headroom
             total_estimated_prompt_tokens += estimated_prompt_tokens
-            
-            # Estimate completion tokens based on max_tokens setting
-            max_tokens = request.get("max_tokens", 2000)
-            # Assume we'll use about 60% of max tokens on average
-            estimated_completion_tokens = int(max_tokens * 0.6)
-            total_estimated_completion_tokens += estimated_completion_tokens
-        
-        print(f" Token Estimation:")
+
+            # ----- completion token estimate -----
+            max_tokens = request.get("max_tokens")
+            if max_tokens is None:
+                max_tokens = request.get("body", {}).get("max_tokens", 2000)
+            total_estimated_completion_tokens += int(max_tokens * 0.6)
+
+        print(" Token Estimation:")
         print(f"   Estimated prompt tokens: {total_estimated_prompt_tokens:,}")
         print(f"   Estimated completion tokens: {total_estimated_completion_tokens:,}")
         print(f"   Total estimated tokens: {total_estimated_prompt_tokens + total_estimated_completion_tokens:,}")
-        
+
+        # Use provided model, or derive from step (fallback to default step)
+        model_for_pricing = model_name or _get_step_model(step_name or self.default_step)
+
         return estimate_cost(
-            model_name=model_name,
+            model_name=model_for_pricing,
             estimated_prompt_tokens=total_estimated_prompt_tokens,
             estimated_completion_tokens=total_estimated_completion_tokens,
             is_batch=True
         )
+
     
     def submit_batch(self, batch_requests: List[Dict[str, Any]], 
                     description: str = "") -> str:

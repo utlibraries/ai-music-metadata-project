@@ -16,6 +16,17 @@ from json_workflow import update_record_step3, log_error, log_processing_metrics
 from shared_utilities import find_latest_results_folder, get_workflow_json_path, create_batch_summary
 from lp_workflow_config import get_model_config, get_file_path_config, get_threshold_config, get_step_config
 
+STEP_NAME = "step3"
+bp = BatchProcessor(default_step=STEP_NAME)
+
+def should_use_batch_for_this_step(num_requests: int) -> bool:
+    return bp.should_use_batch(num_requests=num_requests, step_name=STEP_NAME)
+
+MODEL_CONFIG = get_model_config(STEP_NAME)
+DEFAULT_MODEL = MODEL_CONFIG["model"]
+DEFAULT_MAX_TOKENS = MODEL_CONFIG["max_tokens"]
+DEFAULT_TEMPERATURE = MODEL_CONFIG["temperature"]
+
 def load_workflow_data_from_json(workflow_json_path, barcode):
     """Load extracted_fields and formatted_oclc_results from JSON workflow file."""
     try:
@@ -149,8 +160,7 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
     COMPLETION_TOKENS_COLUMN = 'N'  
     TOTAL_TOKENS_COLUMN = 'O'
     
-    # Initialize batch processor and check if we should use batch processing
-    processor = BatchProcessor()
+    processor = bp
     
     # Count valid rows for batch decision
     total_valid_rows = 0
@@ -162,8 +172,9 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
             extracted_fields, formatted_oclc_results = load_workflow_data_from_json(workflow_json_path, barcode)
             if extracted_fields and formatted_oclc_results:
                 total_valid_rows += 1
-    
-    use_batch = processor.should_use_batch(total_valid_rows)
+
+    # Decide via config/env and reuse the module-level BatchProcessor (bp)
+    use_batch = should_use_batch_for_this_step(total_valid_rows)
     
     print(f"Processing mode: {'BATCH' if use_batch else 'INDIVIDUAL'}")
     print(f"Valid rows to process: {total_valid_rows}")

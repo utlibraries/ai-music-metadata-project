@@ -19,6 +19,18 @@ from json_workflow import initialize_workflow_json, update_record_step1, log_err
 from shared_utilities import get_workflow_json_path, extract_metadata_fields, group_images_by_barcode, create_batch_summary
 from lp_workflow_config import get_current_timestamp, get_file_path_config, get_model_config
 
+STEP_NAME = "step1"
+bp = BatchProcessor(default_step=STEP_NAME)
+
+def should_use_batch_for_this_step(num_requests: int) -> bool:
+    return bp.should_use_batch(num_requests=num_requests, step_name=STEP_NAME)
+
+MODEL_CONFIG = get_model_config(STEP_NAME)
+DEFAULT_MODEL = MODEL_CONFIG["model"]
+DEFAULT_MAX_TOKENS = MODEL_CONFIG["max_tokens"]
+DEFAULT_TEMPERATURE = MODEL_CONFIG["temperature"]
+
+
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 def get_llm_prompt():
@@ -196,8 +208,9 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
     print("-" * 50)
 
     # Initialize batch processor and check if we should use batch processing
-    processor = BatchProcessor()
-    use_batch = processor.should_use_batch(total_items)
+    use_batch = should_use_batch_for_this_step(total_items)
+    processor = bp
+
     
     print(f"Processing mode: {'BATCH' if use_batch else 'INDIVIDUAL'}")
     
@@ -214,7 +227,11 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
         print(f"   Savings: ${cost_estimate['savings']:.4f} ({cost_estimate['savings_percentage']:.1f}%)")
         
         # Convert to batch format
-        formatted_requests = processor.create_batch_requests(batch_requests, "lp_metadata")
+        formatted_requests = processor.create_batch_requests(
+            batch_requests,
+            "lp_metadata"
+        )
+
 
         # Use adaptive batch processing that automatically splits based on file size
         results = processor.submit_adaptive_batch(
@@ -543,8 +560,9 @@ def main():
         os.makedirs(results_folder_path)
     workflow_json_path = get_workflow_json_path(results_folder_path)
     if not os.path.exists(workflow_json_path):
-        initialize_workflow_json(results_folder_path)
+        workflow_json_path = initialize_workflow_json(results_folder_path)
         print(f"Initialized workflow JSON: {workflow_json_path}")
+
     
     logs_folder_path = os.path.join(results_folder_path, "logs")
     if not os.path.exists(logs_folder_path):
@@ -582,7 +600,8 @@ def main():
     script_duration = time.time() - script_start_time
     
     # Determine if batch processing was used (check if we have many items but zero processing time)
-    was_batch_processed = total_items > 10 and total_time == 0
+    was_batch_processed = should_use_batch_for_this_step(total_items) and total_time == 0
+
     
     # Calculate actual cost using the model pricing
     estimated_cost = calculate_cost(
