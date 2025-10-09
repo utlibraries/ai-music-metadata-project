@@ -11,8 +11,28 @@ import time
 import os
 from datetime import datetime
 
+from batch_processor import BatchProcessor
+from cd_workflow_config import get_model_config
+
+def _derive_step_key(step_number, script_name: str) -> str | None:
+    """
+    Map runner step to config key. Adjust if you later use batch on other steps.
+    Returns 'step1' or 'step3' for steps that should consult MODEL_CONFIGS in cd_workflow_config.py.
+    """
+    try:
+        n = float(step_number)
+    except Exception:
+        n = None
+
+    if n == 1.0:
+        return "step1"
+    if n == 3.0:
+        return "step3"
+    # For all other steps, we don't set batch-related env
+    return None
+
 def run_script(script_name, step_number, step_description):
-    """Run a Python script and handle any errors."""
+    """Run a Python script and handle any errors, passing batch/config env to child if applicable."""
     print(f"\n{'='*60}")
     print(f"STEP {step_number}: {step_description}")
     print(f"Running: {script_name}")
@@ -32,17 +52,43 @@ def run_script(script_name, step_number, step_description):
         print(f"Looking for: {script_path}")
         print("Make sure all script files are in the same directory as this runner.")
         return False
-    
+
+    # Build child environment, injecting per-step config where batching matters
+    child_env = {**os.environ, 'PYTHONUNBUFFERED': '1'}
+    step_key = _derive_step_key(step_number, script_name)
+
+    if step_key is not None:
+        try:
+            mc = get_model_config(step_key)  # from cd_workflow_config.py
+            # These envs are read by your step scripts (or your BatchProcessor if you wire it there).
+            # They let child code pick up *the same* model/batch settings your config defines.
+            child_env.setdefault('USE_BATCH_PROCESSING', 'auto')  # 'true'/'false' to override; 'auto' consults threshold
+            child_env['WORKFLOW_DEFAULT_STEP']   = step_key
+            child_env['WORKFLOW_BATCH_THRESHOLD'] = str(mc.get('batch_threshold', 11))
+            child_env['WORKFLOW_MODEL']          = mc.get('model', 'gpt-4o-mini-2024-07-18')
+            child_env['WORKFLOW_MAX_TOKENS']     = str(mc.get('max_tokens', 2000))
+            child_env['WORKFLOW_TEMPERATURE']    = str(mc.get('temperature', 0.0))
+            print("\nBatch/config env for child:")
+            print(f"  USE_BATCH_PROCESSING     = {child_env['USE_BATCH_PROCESSING']}")
+            print(f"  WORKFLOW_DEFAULT_STEP    = {child_env['WORKFLOW_DEFAULT_STEP']}")
+            print(f"  WORKFLOW_BATCH_THRESHOLD = {child_env['WORKFLOW_BATCH_THRESHOLD']}")
+            print(f"  WORKFLOW_MODEL           = {child_env['WORKFLOW_MODEL']}")
+            print(f"  WORKFLOW_MAX_TOKENS      = {child_env['WORKFLOW_MAX_TOKENS']}")
+            print(f"  WORKFLOW_TEMPERATURE     = {child_env['WORKFLOW_TEMPERATURE']}")
+        except Exception as e:
+            print(f"Warning: could not derive model/batch env from config for {step_key}: {e}")
+            # Continue with defaults (child can still import config directly)
+
     try:
         print(f"\n REAL-TIME OUTPUT:")
         print("-" * 40)
         
-        # Use a much simpler approach - just run with direct inheritance
-        result = subprocess.run([
-            sys.executable, '-u', script_path
-        ], 
-        env={**os.environ, 'PYTHONUNBUFFERED': '1'},
-        text=True)
+        # Run the step script as a child process with the enriched environment
+        result = subprocess.run(
+            [sys.executable, '-u', script_path],
+            env=child_env,
+            text=True
+        )
         
         end_time = time.time()
         duration = end_time - start_time
@@ -67,6 +113,7 @@ def run_script(script_name, step_number, step_description):
         print(f"\n STEP {step_number} FAILED")
         print(f"Unexpected error: {str(e)}")
         return False
+
 
 def check_environment():
     """Check if required environment variables are set."""

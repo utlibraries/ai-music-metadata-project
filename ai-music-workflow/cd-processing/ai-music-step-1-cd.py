@@ -19,6 +19,26 @@ from json_workflow import initialize_workflow_json, update_record_step1, log_err
 from shared_utilities import get_workflow_json_path, extract_metadata_fields, group_images_by_barcode, create_batch_summary
 from cd_workflow_config import get_current_timestamp, get_file_path_config, get_model_config
 
+STEP_NAME = "step1"
+
+# Initialize BatchProcessor with this step as default
+bp = BatchProcessor(default_step=STEP_NAME)
+
+def should_use_batch_for_this_step(num_requests: int) -> bool:
+    """
+    Decide whether to use batch for this step.
+    - Honors USE_BATCH_PROCESSING env (true/false/auto)
+    - If 'auto', reads threshold from cd_workflow_config.py
+    """
+    return bp.should_use_batch(num_requests=num_requests, step_name=STEP_NAME)
+
+# Default model configuration for synchronous (non-batch) path
+MODEL_CONFIG = get_model_config(STEP_NAME)
+DEFAULT_MODEL = MODEL_CONFIG["model"]
+DEFAULT_MAX_TOKENS = MODEL_CONFIG["max_tokens"]
+DEFAULT_TEMPERATURE = MODEL_CONFIG["temperature"]
+
+
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 def get_llm_prompt():
@@ -164,11 +184,12 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
     print(f"Starting metadata extraction using {model_name}...")
     print("-" * 50)
 
-    # Initialize batch processor and check if we should use batch processing
-    processor = BatchProcessor()
-    use_batch = processor.should_use_batch(total_items)
+    # Decide via config/env and reuse the module-level BatchProcessor (bp)
+    use_batch = should_use_batch_for_this_step(total_items)
+    processor = bp  # reuse the configured BatchProcessor for step1
     
     print(f"Processing mode: {'BATCH' if use_batch else 'INDIVIDUAL'}")
+
     
     if use_batch:
         print(f"Preparing {total_items} requests for batch processing...")
@@ -182,8 +203,13 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
         print(f"   Batch API: ${cost_estimate['batch_cost']:.4f}")
         print(f"   Savings: ${cost_estimate['savings']:.4f} ({cost_estimate['savings_percentage']:.1f}%)")
         
-        # Convert to batch format
-        formatted_requests = processor.create_batch_requests(batch_requests, "cd_metadata")
+        # Convert to batch format (use step defaults for model/max_tokens if needed)
+        formatted_requests = processor.create_batch_requests(
+            batch_requests,
+            "cd_metadata",
+            step_name=STEP_NAME
+        )
+
 
         # Use adaptive batch processing that automatically splits based on file size
         results = processor.submit_adaptive_batch(
