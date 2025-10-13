@@ -1,21 +1,22 @@
 # AI Music Metadata Project
 
 ## Overview
-Automates metadata extraction and OCLC matching for CD and LP collections. The workflow uses AI to extract metadata from images, searches OCLC WorldCat, analyzes matches, and creates ready-to-use cataloging files.
+Automates metadata extraction and OCLC matching for CD and LP collections. This project uses AI as a tool for basic metadata extraction from images and for analyzing OCLC match results. It also searches OCLC WorldCat with the generated metadata and creates ready-to-use cataloging files.  In addition, there are now scripts in each workflow folder for experimenting with batch uploading to Alma Sandbox if desired.
 
 **Separate workflows for CDs and LPs** - each format has its own processing folder with dedicated scripts and configurations.
 
-**Note: This repository is under active development.**
----
+***Note: This repository is under active development.***
 
+
+---
 ## Features
-- **AI Metadata Extraction**: GPT-4o reads CD/LP images and extracts title, artist, publisher, tracks, dates, and physical description
-- **OCLC Integration**: Automated WorldCat searches return up to 10 matching records
-- **AI Match Analysis**: GPT-4.1-mini evaluates matches, assigns confidence scores, and explains reasoning
+- **AI Metadata Extraction**: LLM extracts title, artist, publisher, tracks, dates, and physical description from CD/LP images
+- **OCLC Integration**: Automated WorldCat searches return up to 10 matching records per item
+- **AI Match Analysis**: LLM evaluates matches, assigns confidence scores, and explains reasoning
 - **Verification**: Automatic track listing and publication year validation
 - **Batch Processing**: 50% cost savings for batches over 10 items (automatic)
-- **HTML Review Interface** (Optional): Visual review of matches with images
-
+- **HTML Review Interface** (Optional but a very convenient tool): Visual review of matches with images
+- **Alma Batch Uploads**: Creates new bibs, holdings, and items by importing bibliographic information from OCLC. Intended for experimentation in Alma SANDBOX and excluded from the automated run script.
 ---
 
 ## Installation
@@ -32,6 +33,7 @@ Automates metadata extraction and OCLC matching for CD and LP collections. The w
    ```
 
 3. **Set environment variables**
+Each batch processing script documents additional environment variables it requires. Otherwise, you’ll need to set:
    ```bash
    export OPENAI_API_KEY="your-openai-api-key"
    export OCLC_CLIENT_ID="your-oclc-client-id"
@@ -42,7 +44,7 @@ Automates metadata extraction and OCLC matching for CD and LP collections. The w
 
 ## Quick Start
 
-### Run Complete Workflow
+### Run Workflow - Steps .5 - 6 
 
 **For CDs:**
 ```bash
@@ -55,9 +57,9 @@ python ai-music-workflow/lp-processing/run_lp_processing.py
 ```
 
 The script will:
-- Automatically choose batch vs. real-time processing
-- Prompt whether to generate HTML review interface (Step 6)
-- Run all processing steps in sequence
+- Automatically choose batch vs. real-time processing (you can change threshold in configuration file)
+- Prompt for whether to generate HTML review interface (Step 6)
+- Run processing steps in sequence
 - Create organized output files
 
 ### Force Processing Mode (Optional)
@@ -126,6 +128,9 @@ cd-image-folders/
 6. **Step 4**: Verify track listings and publication years
 7. **Step 5**: Create final output files organized in subfolders
 8. **Step 6** (Optional): Generate HTML review interface with images
+9. **Alma Batch Processing**: Takes the generated high confidence matches and uses the OCLC number to create bib, holding, and item records in Alma.   
+
+*****The Alma batch upload scripts are provided for sandbox experimentation only, and are not part of the default automated workflow.*****
 
 ---
 
@@ -134,36 +139,41 @@ cd-image-folders/
 ### `deliverables/` folder - Working files for catalogers
 
 1. **sorting-spreadsheet-[date].xlsx**
-   - All items categorized: High Confidence, Held by Library, Low Confidence, Duplicates
+   - ALL ITEMS categorized: High Confidence, Held by Library, Low Confidence, Duplicates
    - Use to physically organize materials
 
 2. **batch-upload-alma-[cd/lp]-[timestamp].txt**
-   - High-confidence matches ready for import
+   - HIGH CONFIDENCE matches ready for import
    - Format: `OCLC_NUMBER|BARCODE|TITLE`
 
 3. **tracking-spreadsheet-catalogers-[date].xlsx**
-   - Interactive tracking for low-confidence items
+   - Interactive tracking for LOW CONFIDENCE items
    - Yellow highlighting for items needing review
    - Dropdown status menu, auto-populated OCLC numbers
 
 4. **low-confidence-matches-review-[date].txt**
-   - Detailed review information for each low-confidence item
+   - Detailed review information for each LOW CONFIDENCE item
    - AI-generated metadata, suggested matches, alternatives
 
 5. **marc-formatted-low-confidence-matches-[date].txt**
    - Basic MARC records for original cataloging
    - Based on AI-extracted metadata
+   - For LOW CONFIDENCE items only 
+
+*****If you choose to use the batch uploading script, a report on that batch upload will be saved in this folder as well*****
 
 ### `guides/` folder - Documentation
 
 - **CATALOGER_GUIDE.txt** - How to use workflow outputs
 - **TECHNICAL_GUIDE.txt** - Quality control and troubleshooting
 
-### `data/` folder - Workflow tracking
+### `data/` folder - Complete 'Run' Workflow tracking
 
 - **full-workflow-data-[cd/lp]-[timestamp].json** - Complete processing log
 - **full-workflow-data-[cd/lp]-[timestamp].xlsx** - Excel version with thumbnails
-- **logs/** - API responses, token usage, errors, metrics
+
+### `logs/` folder - Contains all main workflow logs 
+- including API response logs, token usage logs, error logs, and metrics
 
 ### Main results folder (if HTML is generated)
 
@@ -175,14 +185,7 @@ cd-image-folders/
 
 ## Automatic Optimization
 
-The system automatically chooses processing mode based on batch size:
-
-| Batch Size | Method | Benefits |
-|------------|--------|----------|
-| ≤10 items | Real-time | Faster results (minutes) |
-| >10 items | Batch | 50% cost savings, higher rate limits |
-
-Both methods produce identical quality results.
+The system automatically chooses processing mode based on batch size.  The threshold can be changed in the Configuration file. Both methods produce identical quality results.
 
 ---
 
@@ -197,6 +200,7 @@ Edit format-specific config files to customize:
 Settings include:
 - Model selection for each step (OpenAI models only)
 - Image folder paths
+- Batch Processing Threshold
 
 ---
 
@@ -205,11 +209,10 @@ Settings include:
 ### Before Processing
 1. **Validate file naming** - Run Step 0.5 pre-check (this will automatically run if using the run script)
 2. **Use clear images** - Legible text, minimal glare, good lighting
-3. **Remove duplicates** - Check for duplicate barcodes
-4. **Test small batches** - Try 10-20 items first
+3. **Test small batches** 
 
 ### During Processing
-5. **Use run script** - Ensures all steps execute correctly
+5. **Use run script** - Ensures all core steps execute correctly
 6. **Monitor large jobs** - Check periodically for errors
 7. **Allow time for batch** - Up to 24 hours per AI step (usually much faster)
 
@@ -223,9 +226,8 @@ Settings include:
 ## HTML Review Interface
 
 ### When to Use
-- Visual verification of AI matches
-- Batch sizes under 500 items
-- When you have time to download and review locally
+- Visual interface to assess AI matches
+- For batch sizes under 500 items
 
 ### How to Use
 1. Choose "yes" when prompted during workflow run
@@ -242,6 +244,7 @@ Settings include:
 - **Must export to CSV to permanently save decisions**
 - Not recommended for batches over 500 items (large folder size)
 - Use JPEG images when possible (smaller files)
+- Items may be sorted by confidence and then put back in their original order. 
 
 ---
 
@@ -253,14 +256,8 @@ Settings include:
 
 ## Support
 
-**Questions or issues?**
-Contact: Hannah Moutran - hlm2454@my.utexas.edu
-
-**Before contacting:**
-1. Check error logs in `data/logs/`
-2. Review TECHNICAL_GUIDE.txt
-3. Try a small test batch to isolate issues
-4. Note your batch size, format (CD/LP), and specific errors
+**Questions, ideas, comments?**  
+Hannah Moutran - hlm2454@my.utexas.edu
 
 ---
 
