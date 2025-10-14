@@ -13,9 +13,15 @@ WHAT IT DOES:
   • Skips titles that already exist in your Alma instance (by OCLC number)
   • Writes a CSV of created IDs (MMS, holding, item) next to the input file
 
-DEFAULTS / SAFETY:
-  • Runs against **Alma SANDBOX** by default (uses ALMA_SANDBOX_API_KEY)
-  • This can be used for production.  If you have permissions and decide to switch to PRODUCTION, set ALMA_API_KEY instead of the Sandbox key and **consider whether or not to comment out** the unsuppress step in `process_file()`
+USAGE:
+  python path/to/alma-batch-upload-script-cd.py path/to/input.txt [--delimiter '|'] [--yes] [--restrict-dir /expected/deliverables] [--report]
+
+SAFETY:
+  • File path is REQUIRED (no auto-detect).
+  • Standard run performs imports after a confirmation prompt.
+  • Use --yes to skip the prompt (non-interactive runs).
+  • Optional: --report prints a summary in the terminal and exits (no other action taken).
+  • Optional: --restrict-dir limits inputs to a known directory tree.
 
 REQUIRED ENVIRONMENT VARIABLES:
   ALMA_SANDBOX_API_KEY  
@@ -28,13 +34,8 @@ REQUIRED ENVIRONMENT VARIABLES:
   
 OPTIONAL ENVIRONMENT VARIABLES:
   ALMA_REGION=api-na (default) 
-  INTERNAL_NOTE_2="AI-assisted cataloging"
+  ALMA_INTERNAL_NOTE_2="AI-assisted cataloging"
 
-USAGE:
-  python path/to/alma-batch-upload-script-cd.py --auto
-    (this will find the latest batch-upload-alma-cd-<timestamp>.txt file from workflow output)
-  python path/to/alma-batch-upload-script-cd.py path/to/other/input/file.txt
-  python path/to/alma-batch-upload-script-cd.py --auto --delimiter ','
 """
 
 import os
@@ -43,9 +44,7 @@ import xml.etree.ElementTree as ET
 import csv
 import time
 from datetime import datetime
-
-from shared_utilities import find_latest_results_folder
-from cd_workflow_config import get_file_path_config
+import argparse
 
 # ====== CONFIGURATION ======
 # Load from environment variables with validation
@@ -78,43 +77,6 @@ def validate_input_file(file_path):
         raise SystemExit(f"Error: Input file not readable: {file_path}")
     return file_path
 
-def find_latest_batch_upload_file(base_path=None):
-    """Find the most recent batch upload file from workflow output."""
-    # Get the configured paths
-    file_paths = get_file_path_config()
-    
-    # Find the latest results folder using the shared utility
-    results_folder = find_latest_results_folder(file_paths["results_prefix"])
-    
-    if not results_folder:
-        print(f"No results folder found matching pattern: {file_paths['results_prefix']}*")
-        return None
-    
-    print(f"Found results folder: {results_folder}")
-    
-    # Look in deliverables subfolder
-    deliverables_path = os.path.join(results_folder, 'deliverables')
-    
-    if not os.path.exists(deliverables_path):
-        print(f"Deliverables folder not found at: {deliverables_path}")
-        return None
-    
-    print(f"Checking deliverables folder: {deliverables_path}")
-    
-    # Find batch upload files
-    batch_files = [f for f in os.listdir(deliverables_path) 
-                   if f.startswith('batch-upload-alma-') and f.endswith('.txt')]
-    
-    if not batch_files:
-        print(f"No batch-upload-alma-*.txt files found in: {deliverables_path}")
-        print(f"Available files: {os.listdir(deliverables_path)}")
-        return None
-    
-    # Return most recent batch file (sorted by name, which includes timestamp)
-    latest_batch = max(batch_files)
-    full_path = os.path.join(deliverables_path, latest_batch)
-    return full_path
-
 # API base URL
 ALMA_BASE = f"https://{ALMA_REGION}.hosted.exlibrisgroup.com/almaws/v1"
 
@@ -141,212 +103,69 @@ def get_access_token(client_id, client_secret):
         raise Exception(f"Failed to get access token: {response.text}")
 
 
-def get_marcxml_from_oclc(oclc_number, access_token):
+def get_marcxml_from_oclc(oclc_number: str, access_token: str):
     """
-    Fetch MARCXML from OCLC using Search API v2
+    Fetch a WorldCat Discovery v2 record and return MARCXML + the source record.
+    Prefers full bibRecords; falls back to briefRecords; raises if nothing usable.
+
+    Returns: (marcxml: str, source_record: dict)
     """
+    base_url = "https://americas.discovery.api.oclc.org/worldcat/search/v2/bibs"
     oclc_num = oclc_number.replace("(OCoLC)", "").strip()
-    
-    # Use Search API v2 endpoint
-    url = "https://americas.discovery.api.oclc.org/worldcat/search/v2/bibs"
-    
+
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json"  # Search API returns JSON
+        "Accept": "application/json",
     }
-    
-    # Search for the specific OCLC number
-    params = {
-        "q": f"no:{oclc_num}",
-        "limit": 1,
-        "itemType": "music",
-        "itemSubType": "music-cd"
-    }
-    
-    print(f"         Searching OCLC Search API v2 for #{oclc_num}...")
-    r = requests.get(url, headers=headers, params=params, timeout=30)
-    r.raise_for_status()
-    
-    data = r.json()
-    record = data['bibRecords'][0]
-    # Build a richer MARCXML straight from the Discovery bibRecord we already have
-    print("         → Building MARCXML from Discovery record...")
-    marcxml = build_marcxml_from_discovery_record(record)
-    
-    # Return MARCXML
-    return marcxml, record
 
-def convert_oclc_json_to_marcxml(oclc_json_data):
-    """
-    Convert OCLC JSON response to MARCXML format for Alma import
-    """
-    # Check if this has detailed MARC fields
-    if 'briefRecords' in oclc_json_data and len(oclc_json_data['briefRecords']) > 0:
-        record = oclc_json_data['briefRecords'][0]
-    elif 'bibRecords' in oclc_json_data and len(oclc_json_data['bibRecords']) > 0:
-        record = oclc_json_data['bibRecords'][0]
-    else:
-        raise ValueError("Could not find record data in OCLC response")
-    
-    # Build MARCXML structure
-    marc_ns = "http://www.loc.gov/MARC21/slim"
-    root = ET.Element('{%s}record' % marc_ns)
-    root.set('xmlns', marc_ns)
-    
-    # Leader
-    leader = ET.SubElement(root, 'leader')
-    leader.text = '00000njm a2200000Ii 4500'
-    
-    # 001 - Control Number (OCLC number)
-    if 'identifier' in record and 'oclcNumber' in record['identifier']:
-        field001 = ET.SubElement(root, 'controlfield')
-        field001.set('tag', '001')
-        field001.text = record['identifier']['oclcNumber']
-    
-    # 003 - Control Number Identifier
-    field003 = ET.SubElement(root, 'controlfield')
-    field003.set('tag', '003')
-    field003.text = 'OCoLC'
-    
-    # 007 - Physical Description Fixed Field (for CD)
-    field007 = ET.SubElement(root, 'controlfield')
-    field007.set('tag', '007')
-    field007.text = 'sd fsngnnmmned'  # Standard for audio CD
-    
-    # 008 - Fixed-Length Data Elements
-    field008 = ET.SubElement(root, 'controlfield')
-    field008.set('tag', '008')
-    pub_date = record.get('date', {}).get('publicationDate', '    ')[:4]
-    field008.text = f"      s{pub_date}    xxu|||  ||||||  ||  eng d"
-    
-    # 020 - ISBN (if present)
-    if 'identifier' in record and 'otherStandardIdentifiers' in record['identifier']:
-        for ident in record['identifier']['otherStandardIdentifiers']:
-            if isinstance(ident, dict) and ident.get('type') == 'ISBN':
-                field020 = ET.SubElement(root, 'datafield')
-                field020.set('tag', '020')
-                field020.set('ind1', ' ')
-                field020.set('ind2', ' ')
-                subfield_a = ET.SubElement(field020, 'subfield')
-                subfield_a.set('code', 'a')
-                subfield_a.text = ident.get('id', '')
-    
-    # 024 - UPC
-    if 'identifier' in record and 'otherStandardIdentifiers' in record['identifier']:
-        for ident in record['identifier']['otherStandardIdentifiers']:
-            if isinstance(ident, dict) and 'UPC' in ident.get('type', ''):
-                field024 = ET.SubElement(root, 'datafield')
-                field024.set('tag', '024')
-                field024.set('ind1', '1')
-                field024.set('ind2', ' ')
-                subfield_a = ET.SubElement(field024, 'subfield')
-                subfield_a.set('code', 'a')
-                subfield_a.text = ident.get('id', '')
-    
-    # 035 - System Control Number (OCLC)
-    if 'identifier' in record and 'oclcNumber' in record['identifier']:
-        field035 = ET.SubElement(root, 'datafield')
-        field035.set('tag', '035')
-        field035.set('ind1', ' ')
-        field035.set('ind2', ' ')
-        subfield_a = ET.SubElement(field035, 'subfield')
-        subfield_a.set('code', 'a')
-        subfield_a.text = f"(OCoLC){record['identifier']['oclcNumber']}"
-    
-    # 100/110 - Main Entry (creator)
-    if 'contributor' in record and 'creators' in record['contributor']:
-        creators = record['contributor']['creators']
-        if creators:
-            creator = creators[0]
-            if 'nonPersonName' in creator:
-                # Corporate name
-                field110 = ET.SubElement(root, 'datafield')
-                field110.set('tag', '110')
-                field110.set('ind1', '2')
-                field110.set('ind2', ' ')
-                subfield_a = ET.SubElement(field110, 'subfield')
-                subfield_a.set('code', 'a')
-                subfield_a.text = creator['nonPersonName'].get('text', '')
-            elif 'firstName' in creator or 'secondName' in creator:
-                # Personal name
-                field100 = ET.SubElement(root, 'datafield')
-                field100.set('tag', '100')
-                field100.set('ind1', '1')
-                field100.set('ind2', ' ')
-                subfield_a = ET.SubElement(field100, 'subfield')
-                subfield_a.set('code', 'a')
-                first = creator.get('firstName', {}).get('text', '')
-                second = creator.get('secondName', {}).get('text', '')
-                subfield_a.text = f"{second}, {first}".strip(', ')
-    
-    # 245 - Title
-    if 'title' in record:
-        field245 = ET.SubElement(root, 'datafield')
-        field245.set('tag', '245')
-        field245.set('ind1', '0' if not ('contributor' in record and 'creators' in record['contributor']) else '1')
-        field245.set('ind2', '0')
-        
-        if 'mainTitles' in record['title'] and record['title']['mainTitles']:
-            subfield_a = ET.SubElement(field245, 'subfield')
-            subfield_a.set('code', 'a')
-            subfield_a.text = record['title']['mainTitles'][0].get('text', '')
-        
-        if 'subtitles' in record['title'] and record['title']['subtitles']:
-            subfield_b = ET.SubElement(field245, 'subfield')
-            subfield_b.set('code', 'b')
-            subfield_b.text = record['title']['subtitles'][0].get('text', '')
-    
-    # 264 - Publication
-    if 'publishers' in record and record['publishers']:
-        pub = record['publishers'][0]
-        field264 = ET.SubElement(root, 'datafield')
-        field264.set('tag', '264')
-        field264.set('ind1', ' ')
-        field264.set('ind2', '1')
-        
-        if 'publicationPlace' in pub:
-            subfield_a = ET.SubElement(field264, 'subfield')
-            subfield_a.set('code', 'a')
-            subfield_a.text = pub['publicationPlace']
-        
-        if 'publisherName' in pub:
-            subfield_b = ET.SubElement(field264, 'subfield')
-            subfield_b.set('code', 'b')
-            subfield_b.text = pub['publisherName'].get('text', '')
-        
-        if 'publicationDate' in record.get('date', {}):
-            subfield_c = ET.SubElement(field264, 'subfield')
-            subfield_c.set('code', 'c')
-            subfield_c.text = record['date']['publicationDate']
-    
-    # 300 - Physical Description
-    if 'description' in record and 'physicalDescription' in record['description']:
-        field300 = ET.SubElement(root, 'datafield')
-        field300.set('tag', '300')
-        field300.set('ind1', ' ')
-        field300.set('ind2', ' ')
-        subfield_a = ET.SubElement(field300, 'subfield')
-        subfield_a.set('code', 'a')
-        subfield_a.text = record['description']['physicalDescription']
-    
-    # 505 - Contents
-    if 'description' in record and 'contents' in record['description']:
-        for content in record['description']['contents']:
-            if 'contentNote' in content:
-                field505 = ET.SubElement(root, 'datafield')
-                field505.set('tag', '505')
-                field505.set('ind1', '0')
-                field505.set('ind2', '0')
-                subfield_a = ET.SubElement(field505, 'subfield')
-                subfield_a.set('code', 'a')
-                subfield_a.text = content['contentNote'].get('text', '')
-    
-    # Convert to string
-    xml_string = ET.tostring(root, encoding='unicode')
-    return xml_string
+    # Most specific first → broader
+    query_attempts = [
+        {"q": f"no:{oclc_num}", "limit": 1, "itemType": "music", "itemSubType": "music-cd"},
+        {"q": f"no:{oclc_num}", "limit": 1, "itemType": "music"},
+        {"q": f"no:{oclc_num}", "limit": 1},
+    ]
 
+    last_error_text = None
+    data = None
 
-def convert_brief_record_to_marcxml(brief_record):
+    for params in query_attempts:
+        try:
+            r = requests.get(base_url, headers=headers, params=params, timeout=30)
+            if r.status_code in (401, 403):
+                raise RuntimeError(f"OCLC auth error ({r.status_code}): {r.text}")
+            r.raise_for_status()
+            data = r.json()
+        except Exception as e:
+            last_error_text = str(e)
+            continue
+
+        if data:
+            # Preferred: full bib
+            bibs = (data.get("bibRecords") or [])
+            if bibs:
+                rec = bibs[0]
+                try:
+                    marcxml = build_marcxml_from_discovery_record(rec)
+                    return marcxml, rec
+                except Exception:
+                    # Try brief below if mapping fails
+                    pass
+
+            # Fallback: brief
+            briefs = (data.get("briefRecords") or [])
+            if briefs:
+                brief = briefs[0]
+                marcxml = build_minimal_marcxml_fallback(brief)
+                return marcxml, brief
+
+        last_error_text = "No bibRecords or briefRecords in response."
+
+    raise ValueError(
+        f"No usable OCLC record found for {oclc_num}. "
+        f"Last error/response: {last_error_text or 'none'}"
+    )
+
+def build_minimal_marcxml_fallback(brief_record):
     """
     Fallback: Convert a brief OCLC record to minimal but VALID MARCXML for Alma
     """
@@ -693,8 +512,7 @@ def import_to_alma(marcxml, normalization_rule=None):
     else:
         raise RuntimeError("No MMS ID returned from Alma")
 
-# Important note: If you run this in PRODUCTION, you may want to comment out this unsuppressing step
-# so new bibs stay suppressed for review before discovery.
+# This unsuppresses new bibs when called (makes them visible in Primo VE). Leave it in for immediate discovery.
 def unsuppress_bib(mms_id: str):
     """Unsuppress bib for Discovery (Primo VE). Does NOT touch external search."""
     url = f"{ALMA_BASE}/bibs/{mms_id}"
@@ -795,6 +613,49 @@ def create_item(mms_id, holding_id, barcode, item_policy_code, material_value="C
     else:
         raise RuntimeError("Item creation failed - no PID returned")
 
+def ensure_under_dir(file_path: str, allowed_root: str):
+    p = os.path.realpath(file_path)
+    root = os.path.realpath(allowed_root)
+    if not p.startswith(root + os.sep) and p != root:
+        raise SystemExit(f"Error: {p} is outside allowed path: {root}")
+
+def report_summary(input_file, delimiter):
+    with open(input_file, 'r', encoding='utf-8') as f:
+        lines = [ln.strip() for ln in f if ln.strip()]
+    total = len(lines)
+    sample = lines[:5]
+    print("\n--- CONSOLE REPORT ---")
+    print ()
+    print(f"Input file: {input_file}")
+    print ()
+    print(f"Delimiter:  {delimiter!r}")
+    print(f"Total lines: {total}")
+    if sample:
+        print("Snippet of input file (up to 5 records):")
+        print ()
+        for s in sample:
+            print(f"  {s}")
+            print ()
+    # Where the ID CSV will go:
+    out_dir = os.path.dirname(input_file)
+    ts = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    print ()
+    print(f"No actions taken.")
+    print ()
+    print(f"Planned path to output CSV: {os.path.join(out_dir, f'alma-import-ids-{ts}.csv')}")
+    print ()
+    return total
+
+def _classify_oclc_source(rec: dict) -> str:
+    """
+    Human-friendly label for which OCLC record flavor we used.
+    """
+    if not isinstance(rec, dict):
+        return "Unknown OCLC record type"
+    if rec.get("varFields") or rec.get("publishers") or rec.get("contributor"):
+        return "OCLC full bib record"
+    return "OCLC brief fallback record"
+
 '''
 def print_physical_material_type_codes():
     url = f"{ALMA_BASE}/conf/code-tables/PhysicalMaterialType"
@@ -844,7 +705,7 @@ def process_file(input_file, delimiter='|'):
             print(f"[{idx}/{total}] Skipping invalid line: {line}")
             continue
         
-        parts = line.split(delimiter)
+        parts = line.split(delimiter, 2)
         if len(parts) < 2:
             print(f"[{idx}/{total}] Skipping - need at least oclcNumber{delimiter}barcode: {line}")
             continue
@@ -878,6 +739,7 @@ def process_file(input_file, delimiter='|'):
             else:
                 print(f"         Record not found, fetching from OCLC...")
                 marcxml, discovery_rec = get_marcxml_from_oclc(oclc_num, oclc_token)
+                result['oclc_source'] = _classify_oclc_source(discovery_rec)
 
                 # Hard-code CD for this workflow
                 result['format'] = "CD"
@@ -916,6 +778,7 @@ def process_file(input_file, delimiter='|'):
 
                 result['status'] = 'success'
                 print(f"         SUCCESS (new record imported)\n")
+                print(f"         Source used: {result.get('oclc_source','Unknown')}\n")
 
                 
         except requests.exceptions.HTTPError as e:
@@ -955,7 +818,7 @@ def write_id_table(results, input_file_path):
     
     with open(csv_path, 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
-        w.writerow(["MMS ID", "Holding ID", "Item ID", "OCLC", "Barcode", "Title", "Format", "Material Type"])
+        w.writerow(["MMS ID", "Holding ID", "Item ID", "OCLC", "Barcode", "Title", "Format", "Material Type", "OCLC Source"])
         for r in results:
             if r.get('status') == 'success':
                 w.writerow([
@@ -967,6 +830,7 @@ def write_id_table(results, input_file_path):
                     r.get('title',''),
                     r.get('format',''),
                     r.get('material_type',''),
+                    r.get('oclc_source',''),
                 ])
     print(f"\nCreated record IDs written to: {csv_path}")
     return csv_path
@@ -1015,45 +879,63 @@ def print_summary(results, input_file_path):
     print("="*60)
 
 if __name__ == "__main__":
-    import argparse
     
     parser = argparse.ArgumentParser(
-        description='Import OCLC records to Alma with holdings and items'
+        description='Import OCLC records to Alma with holdings and items (CD workflow)'
     )
-   
+
     parser.add_argument(
         'input_file',
-        nargs='?',
-        help='Path to pipe-delimited input file (oclcNumber|barcode|title)'
+        help='Path to delimited input file (oclcNumber|barcode|title)'
     )
-    
+
     parser.add_argument(
-        '--auto',
-        action='store_true',
-        help='Automatically find latest batch upload file'
-    )
-    parser.add_argument(
-        '--delimiter', 
+        '--delimiter',
         default='|',
         help='Field delimiter (default: |)'
     )
+
+    parser.add_argument(
+        '--yes',
+        action='store_true',
+        help='Do not prompt for confirmation.'
+    )
     
+    parser.add_argument(
+        '--report',
+        action='store_true',
+        help='Report only; no writes.'
+    )
+
+    parser.add_argument(
+        '--restrict-dir',
+        default=None,
+        help='Only allow input files under this directory.'
+    )
+    
+    # --- main selection logic ---
     args = parser.parse_args()
-    
-    # Determine input file
-    input_file = None
-    if args.auto:
-        print("Searching for latest batch upload file...")
-        input_file = find_latest_batch_upload_file()
-        if not input_file:
-            raise SystemExit("Error: No batch upload file found. Run workflow first.")
-        print(f"Found: {input_file}")
-    elif args.input_file:
-        input_file = validate_input_file(args.input_file)
-    else:
-        parser.print_help()
-        raise SystemExit("\nError: Provide input file path or use --auto flag")
-    
+
+    # Mandatory file, validated
+    input_file = validate_input_file(args.input_file)
+
+    # Optional path restriction
+    if args.restrict_dir:
+        ensure_under_dir(input_file, args.restrict_dir)
+
+    # Always show a short report header so the operator sees what's about to happen
+    count = report_summary(input_file, args.delimiter)
+
+    if args.report:
+        raise SystemExit(0)
+
+    # Require explicit confirmation unless --yes
+    if not args.yes:
+        resp = input(f"Proceed to import {count} line(s) into Alma? Type 'yes' to continue: ").strip().lower()
+        if resp != 'yes':
+            raise SystemExit("Aborted by user.")
+
+    # Execute
     try:
         results = process_file(input_file, delimiter=args.delimiter)
         print_summary(results, input_file)
