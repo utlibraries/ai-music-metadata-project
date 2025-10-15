@@ -25,6 +25,8 @@ def create_paginated_review_html(results_folder, all_records, current_timestamp,
     # Get file path config to find images folder
     file_paths = get_file_path_config()
     images_folder = file_paths["images_folder"]
+    images_folder_name = os.path.basename(images_folder)
+
     
     # Calculate number of pages needed
     total_pages = math.ceil(len(all_records) / records_per_page)
@@ -43,8 +45,8 @@ def create_paginated_review_html(results_folder, all_records, current_timestamp,
         sort_groups[group].append(record)
     
     # Create index page
-    create_review_index(index_path, sort_groups, current_timestamp, total_pages, records_per_page)
-    
+    create_review_index(index_path, sort_groups, current_timestamp, total_pages, records_per_page, images_folder_name)
+
     # Create individual pages in the same folder as index
     for page_num in range(1, total_pages + 1):
         start_idx = (page_num - 1) * records_per_page
@@ -57,7 +59,7 @@ def create_paginated_review_html(results_folder, all_records, current_timestamp,
 
         create_single_review_page(
             page_path, page_records, current_timestamp, workflow_json_path, 
-            images_folder, results_folder, page_num, total_pages, records_per_page, start_idx
+            images_folder, results_folder, page_num, total_pages, records_per_page, start_idx, images_folder_name
         )
         
         page_files.append(page_path)
@@ -73,7 +75,7 @@ def create_paginated_review_html(results_folder, all_records, current_timestamp,
         "total_pages": total_pages
     }
 
-def create_review_index(index_path, sort_groups, current_timestamp, total_pages, records_per_page):
+def create_review_index(index_path, sort_groups, current_timestamp, total_pages, records_per_page, images_folder_name):
     """Create an index page with links to all review pages and sort group summaries."""
     
     total_records = sum(len(records) for records in sort_groups.values())
@@ -256,7 +258,7 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'all-cataloger-decisions-' + catalogerName.replace(/[^a-zA-Z0-9]/g, '_') + '-' + new Date().toISOString().split('T')[0] + '.csv';
+            a.download = 'cataloger-decisions-""" + images_folder_name + """-""" + current_timestamp + """.csv';
             document.body.appendChild(a);
             a.click();
             setTimeout(function () {
@@ -273,7 +275,7 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
     with open(index_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-def create_single_review_page(page_path, page_records, current_timestamp, workflow_json_path, images_folder, results_folder, page_num, total_pages, records_per_page, start_idx):
+def create_single_review_page(page_path, page_records, current_timestamp, workflow_json_path, images_folder, results_folder, page_num, total_pages, records_per_page, start_idx, images_folder_name):
     """Create a single review page with direct image loading."""
     
     html_content = f"""<!DOCTYPE html>
@@ -824,8 +826,7 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            const exportTypeLabel = exportType === 'decisions' ? 'decisions' : 'all-records';
-            a.download = 'cataloger-' + exportTypeLabel + '-page-{page_num}-' + catalogerName.replace(/[^a-zA-Z0-9]/g, '_') + '-' + new Date().toISOString().split('T')[0] + '.csv';
+            a.download = 'cataloger-decisions-{images_folder_name}-{current_timestamp}.csv';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
