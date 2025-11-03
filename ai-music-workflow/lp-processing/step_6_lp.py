@@ -1,6 +1,6 @@
 """
-Step 6: Create Interactive HTML Review Interface for CD Records
-Creates paginated HTML files with images for cataloger review of CD metadata matches.
+Step 6: Create Interactive HTML Review Interface for lp Records
+Creates paginated HTML files with images for cataloger review of lp metadata matches.
 This step is optional and can be skipped for large batches where HTML generation is impractical.
 """
 
@@ -8,10 +8,13 @@ import os
 import math
 import shutil
 from openpyxl import load_workbook
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+import json
 
 # Custom modules
-from shared_utilities import find_latest_results_folder, get_workflow_json_path, get_bib_info_from_workflow, find_latest_cd_metadata_file
-from cd_workflow_config import get_file_path_config, get_current_timestamp
+from shared_utilities import find_latest_results_folder, get_workflow_json_path, get_bib_info_from_workflow, find_latest_lp_metadata_file
+from lp_workflow_config import get_file_path_config, get_current_timestamp
 
 current_timestamp = get_current_timestamp()
 
@@ -85,7 +88,7 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CD Review Index - {current_timestamp}</title>
+    <title>lp Review Index - {current_timestamp}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
         .header {{ background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 30px; }}
@@ -98,7 +101,7 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
 </head>
 <body>
     <div class="header">
-        <h1>CD Cataloger Review Index</h1>
+        <h1>lp Cataloger Review Index</h1>
         <p>Generated: {current_timestamp} | Total Records: {total_records} | Pages: {total_pages}</p>
     </div>
     
@@ -142,7 +145,7 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
     
     <script>
         // Create unique storage namespace for this workflow
-        const STORAGE_PREFIX = 'cd-workflow-""" + current_timestamp + """-';
+        const STORAGE_PREFIX = 'lp-workflow-""" + current_timestamp + """-';
         
         // Helper functions to use namespaced storage
         function setStorage(key, value) {
@@ -194,13 +197,32 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
                 }
 
                 const barcode    = (recordData && recordData.barcode)    ? recordData.barcode    : ('Record-' + recordId);
-                const confidence = (recordData && recordData.confidence) ? recordData.confidence : 'N/A';
+                let confidence   = (recordData && recordData.confidence) ? recordData.confidence : 'N/A';
                 const sortGroup  = (recordData && recordData.sortGroup)  ? recordData.sortGroup  : 'N/A';
                 const pageNumber = (recordData && recordData.pageNumber) ? recordData.pageNumber : 'Unknown';
+                const aiOclcNumber = (recordData && recordData.oclcNumber) ? recordData.oclcNumber : '';
 
+                // Read cataloger-provided correct OCLC from storage
+                const catalogerCorrectOclc = window.localStorage.getItem(STORAGE_PREFIX + 'correct-oclc-' + recordId) || '';
+                
                 let correctOclc = '';
-                if (decision === 'approved' && recordData && recordData.oclcNumber) {
-                    correctOclc = recordData.oclcNumber;
+                
+                // Apply confidence adjustments based on cataloger decision
+                if (decision === 'approved' && aiOclcNumber) {
+                    correctOclc = aiOclcNumber;
+                    confidence = '100%';
+                } else if (decision === 'different' && catalogerCorrectOclc) {
+                    correctOclc = catalogerCorrectOclc;
+                    confidence = '100%';
+                } else if (decision === 'different' && !catalogerCorrectOclc) {
+                    correctOclc = '';
+                    confidence = '0%';
+                } else if (decision === 'original') {
+                    correctOclc = '';
+                    confidence = '0%';
+                } else if (decision === 'review') {
+                    correctOclc = '';
+                    confidence = '0%';
                 }
 
                 const decisionLabels = {
@@ -216,7 +238,7 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
                     confidence: confidence,
                     sortGroup: sortGroup,
                     decision: decisionLabels[decision] || decision,
-                    aiSuggestedOclc: (recordData && recordData.oclcNumber) ? recordData.oclcNumber : '',  // Add this line
+                    aiSuggestedOclc: aiOclcNumber,
                     correctOclc: correctOclc,
                     notes: notes,
                     cataloger: catalogerName,
@@ -283,7 +305,7 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CD Review Page {page_num} - {current_timestamp}</title>
+    <title>lp Review Page {page_num} - {current_timestamp}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
         .header {{ background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
@@ -314,7 +336,7 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
         .oclc-field {{ margin-bottom: 10px; }}
         .oclc-label {{ font-weight: bold; color: #2c3e50; display: inline-block; width: 150px; }}
         .oclc-value {{ color: #333; }}
-        .decision-section {{ grid-column: 1 / -1; margin-top: 20px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; }}
+        .decision-section {{ grid-column: 1 / -1; margin-top: 20px; padding: 15px; background-color: #fff3lp; border: 1px solid #ffeaa7; border-radius: 5px; }}
         .decision-buttons {{ display: flex; gap: 10px; margin-top: 10px; }}
         .decision-btn {{ padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }}
         .btn-approve {{ background-color: #27ae60; color: white; }}
@@ -331,7 +353,7 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
 </head>
 <body>
     <div class="header">
-        <h1>CD Review - Page {page_num} of {total_pages}</h1>
+        <h1>lp Review - Page {page_num} of {total_pages}</h1>
         <p>Generated: {current_timestamp} | Records {start_idx + 1}-{start_idx + len(page_records)} of {(total_pages - 1) * records_per_page + len(page_records)}</p>
     </div>
     
@@ -452,7 +474,7 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
         
         <div class="content-grid">
             <div class="images-section">
-                <h3>CD Images</h3>"""
+                <h3>lp Images</h3>"""
         
         if image_files:
             for j, (img_path, filename) in enumerate(image_files[:3]):
@@ -517,8 +539,12 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
                     </button>
                 </div>
                 
-                <textarea class="notes-area" placeholder="Notes and correct OCLC number (if different)..." 
+                <textarea class="notes-area" placeholder="Notes..." 
                          id="notes-{global_record_id}"></textarea>
+                
+                <input type="text" class="correct-oclc-input" placeholder="Correct OCLC Number (if different)" 
+                       id="correct-oclc-{global_record_id}" 
+                       style="width: 100%; margin-top: 10px; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
             </div>
         </div>
     </div>"""
@@ -527,7 +553,7 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
     html_content += f"""
     <script>
         // Create unique storage namespace for this workflow
-        const STORAGE_PREFIX = 'cd-workflow-{current_timestamp}-';
+        const STORAGE_PREFIX = 'lp-workflow-{current_timestamp}-';
         
         // Helper functions to use namespaced storage
         function setStorage(key, value) {{
@@ -659,6 +685,11 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
                 if (notesElement) {{
                     setStorage('notes-' + i, notesElement.value);
                 }}
+                // Persist correct OCLC field
+                const correctOclcElement = document.getElementById('correct-oclc-' + i);
+                if (correctOclcElement) {{
+                    setStorage('correct-oclc-' + i, correctOclcElement.value);
+                }}
             }}
         }}
         
@@ -695,6 +726,13 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
                 if (notes && notesElement) {{
                     notesElement.value = notes;
                 }}
+                
+                // Restore correct OCLC field
+                const correctOclc = getStorage('correct-oclc-' + i);
+                const correctOclcElement = document.getElementById('correct-oclc-' + i);
+                if (correctOclc && correctOclcElement) {{
+                    correctOclcElement.value = correctOclc;
+                }}
             }}
 
             // Refresh "(N records)" counter
@@ -710,6 +748,11 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
             if (e.target.classList.contains('notes-area')) {{
                 const recordId = e.target.id.split('-')[1];
                 setStorage('notes-' + recordId, e.target.value);
+            }}
+            // Auto-save correct OCLC field on input
+            if (e.target.classList.contains('correct-oclc-input')) {{
+                const recordId = e.target.id.split('-')[2];
+                setStorage('correct-oclc-' + recordId, e.target.value);
             }}
         }});
         
@@ -772,14 +815,33 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
                         }}
                     }}
                     
+                    // Read cataloger-provided correct OCLC from storage
+                    const catalogerCorrectOclc = getStorage('correct-oclc-' + i) || '';
+                    
                     let correctOclc = '';
+                    let adjustedConfidence = confidence;
+                    
+                    // Determine correct OCLC and adjust confidence based on cataloger decision
                     if (decision === 'approved' && oclcNumber) {{
                         correctOclc = oclcNumber;
+                        adjustedConfidence = '100%';
+                    }} else if (decision === 'different' && catalogerCorrectOclc) {{
+                        correctOclc = catalogerCorrectOclc;
+                        adjustedConfidence = '100%';
+                    }} else if (decision === 'different' && !catalogerCorrectOclc) {{
+                        correctOclc = '';
+                        adjustedConfidence = '0%';
+                    }} else if (decision === 'original') {{
+                        correctOclc = '';
+                        adjustedConfidence = '0%';
+                    }} else if (decision === 'review') {{
+                        correctOclc = '';
+                        adjustedConfidence = '0%';
                     }}
                     
                     var enhancedRecordData = {{
                         barcode: barcode,
-                        confidence: confidence,
+                        confidence: adjustedConfidence,
                         sortGroup: sortGroup,
                         oclcNumber: oclcNumber,
                         pageNumber: {page_num}
@@ -789,10 +851,10 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
                     decisions.push({{
                         record: i,
                         barcode: barcode,
-                        confidence: confidence,
+                        confidence: adjustedConfidence,
                         sortGroup: sortGroup,
                         decision: getDecisionLabel(decision) || 'Not reviewed',
-                        aiSuggestedOclc: oclcNumber,  // Add this line
+                        aiSuggestedOclc: oclcNumber,
                         correctOclc: correctOclc,
                         notes: notes || '',
                         cataloger: catalogerName,
@@ -873,6 +935,123 @@ def load_records_from_step5(step5_file):
     
     return all_records
 
+def create_decisions_history_spreadsheet(results_folder, workflow_json_path, current_timestamp):
+    """
+    Create decisions-history.xlsx with two sheets:
+    - Current Decisions: Latest decision for each barcode
+    - Decision History: Complete audit trail of all decisions
+    
+    Initially populated with AI decisions from workflow JSON.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from datetime import datetime
+    import json
+    
+    print("\nCreating decisions history spreadsheet...")
+    
+    deliverables_folder = os.path.join(results_folder, "deliverables")
+    decisions_file = os.path.join(deliverables_folder, "decisions-history.xlsx")
+    
+    wb = Workbook()
+    
+    current_sheet = wb.active
+    current_sheet.title = "Current Decisions"
+    
+    history_sheet = wb.create_sheet("Decision History")
+    
+    # UPDATED HEADERS - Removed Record ID
+    headers = [
+        "Barcode",
+        "AI Suggested OCLC",
+        "AI Confidence %",
+        "Cataloger Decision",
+        "Chosen OCLC",
+        "Final Confidence %",
+        "Held by IXA",
+        "Decided By",
+        "Decided At",
+        "Notes",
+        "Decision Version"
+    ]
+    
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    
+    for sheet in [current_sheet, history_sheet]:
+        for col_idx, header in enumerate(headers, start=1):
+            cell = sheet.cell(row=1, column=col_idx, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
+        
+        # UPDATED COLUMN WIDTHS - Removed Record ID column
+        sheet.column_dimensions['A'].width = 17  # Barcode
+        sheet.column_dimensions['B'].width = 18  # AI Suggested OCLC
+        sheet.column_dimensions['C'].width = 16  # AI Confidence %
+        sheet.column_dimensions['D'].width = 25  # Cataloger Decision
+        sheet.column_dimensions['E'].width = 18  # Chosen OCLC
+        sheet.column_dimensions['F'].width = 18  # Final Confidence %
+        sheet.column_dimensions['G'].width = 15  # Held by IXA
+        sheet.column_dimensions['H'].width = 20  # Decided By
+        sheet.column_dimensions['I'].width = 20  # Decided At
+        sheet.column_dimensions['J'].width = 40  # Notes
+        sheet.column_dimensions['K'].width = 16  # Decision Version
+    
+    with open(workflow_json_path, 'r', encoding='utf-8') as f:
+        workflow_data = json.load(f)
+    
+    records = workflow_data.get("records", {})
+    
+    # Get current timestamp in clean format
+    clean_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    row_idx = 2
+    for barcode, record_data in records.items():
+        if "step3_ai_analysis" not in record_data or "step5_final_classification" not in record_data:
+            continue
+        
+        step3 = record_data.get("step3_ai_analysis", {})
+        step5 = record_data.get("step5_final_classification", {})
+        
+        ai_oclc = step3.get("selected_oclc_number", "")
+        ai_confidence = step3.get("confidence_score", {}).get("final", 0)
+        
+        sort_group = step5.get("sort_group", "")
+        held_by_ixa = "Yes" if sort_group == "Held by UT Libraries (IXA)" else "No"
+        
+        # UPDATED ROW DATA - Removed Record ID, using clean timestamp
+        row_data = [
+            barcode,
+            ai_oclc,
+            ai_confidence,
+            "Not Reviewed",
+            "",  # Chosen OCLC blank
+            ai_confidence,
+            held_by_ixa,
+            "AI",
+            clean_timestamp,  # ← CLEAN TIMESTAMP
+            "",
+            "v1"
+        ]
+        
+        for sheet in [current_sheet, history_sheet]:
+            for col_idx, value in enumerate(row_data, start=1):
+                cell = sheet.cell(row=row_idx, column=col_idx, value=value)
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+        
+        row_idx += 1
+    
+    current_sheet.freeze_panes = "A2"
+    history_sheet.freeze_panes = "A2"
+    
+    wb.save(decisions_file)
+    print(f"   Created: {os.path.basename(decisions_file)}")
+    print(f"   Records initialized: {row_idx - 2}")
+    
+    return decisions_file
+
 def main():
     print("Step 6: Creating Interactive HTML Review Interface")
     print("=" * 60)
@@ -895,7 +1074,7 @@ def main():
     # Find the sorting spreadsheet from Step 5
     deliverables_folder = os.path.join(results_folder, "deliverables")
     sorting_files = [f for f in os.listdir(deliverables_folder) 
-                 if f.startswith("cd-workflow-sorting-") and f.endswith(".xlsx")]
+                 if f.startswith("lp-workflow-sorting-") and f.endswith(".xlsx")]
     
     if not sorting_files:
         print("No sorting spreadsheet found! Please run Step 5 first.")
@@ -924,12 +1103,26 @@ def main():
         records_per_page=100
     )
     
+    # Create decisions history spreadsheet
+    decisions_file = create_decisions_history_spreadsheet(
+        results_folder,
+        workflow_json_path,
+        current_timestamp
+    )
     print(f"\n=== HTML Review Interface Created ===")
     print(f"Index page: {result['index_path']}")
     print(f"Total pages created: {result['total_pages']}")
     print(f"Total records: {len(all_records)}")
-    print(f"\nOpen the index page in a web browser to begin review.")
+    print(f"\nDownload the results folder to your machine, and then open the index page in a web browser to begin review.")
     
+   
+    
+    print(f"\nThe HTML interface allows a cataloger to make decisions regarding the workflow results.")
+    print(f"\nOnce decisions have been made, they may be exported to CSV.  ")
+    print(f"\nThis CSV should be moved to the results folder and will be processed and integrated into workflow files.")
+    print(f"\nAll cataloger decisions, once processed by Script 7, will be stored in the decisions history spreadsheet.")
+    print(f"\n=== Decisions History Spreadsheet Created ===")
+    print(f"File: {decisions_file}")
     return result
 
 if __name__ == "__main__":

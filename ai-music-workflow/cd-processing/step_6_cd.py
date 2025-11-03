@@ -1,6 +1,6 @@
 """
-Step 6: Create Interactive HTML Review Interface for LP Records
-Creates paginated HTML files with images for cataloger review of LP metadata matches.
+Step 6: Create Interactive HTML Review Interface for CD Records
+Creates paginated HTML files with images for cataloger review of CD metadata matches.
 This step is optional and can be skipped for large batches where HTML generation is impractical.
 """
 
@@ -8,13 +8,17 @@ import os
 import math
 import shutil
 from openpyxl import load_workbook
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+import json
 
 # Custom modules
-from shared_utilities import find_latest_results_folder, get_workflow_json_path, get_bib_info_from_workflow, find_latest_lp_metadata_file
-from lp_workflow_config import get_file_path_config, get_current_timestamp, get_current_date
+from shared_utilities import find_latest_results_folder, get_workflow_json_path, get_bib_info_from_workflow, find_latest_cd_metadata_file
+from cd_workflow_config import get_file_path_config, get_current_timestamp
 
+current_timestamp = get_current_timestamp()
 
-def create_paginated_review_html(results_folder, all_records, current_date, workflow_json_path, records_per_page=100):
+def create_paginated_review_html(results_folder, all_records, current_timestamp, workflow_json_path, records_per_page=100):
     """
     Create paginated HTML files with external images and lazy loading for large datasets.
     All HTML files will be in the same folder for maximum compatibility.
@@ -32,7 +36,7 @@ def create_paginated_review_html(results_folder, all_records, current_date, work
     page_files = []
     
     # Create index page path (in results folder)
-    index_file = f"review-index-{current_date}.html"
+    index_file = f"review-index-{current_timestamp}.html"
     index_path = os.path.join(results_folder, index_file)
     
     # Group records by sort group for better organization
@@ -44,8 +48,8 @@ def create_paginated_review_html(results_folder, all_records, current_date, work
         sort_groups[group].append(record)
     
     # Create index page
-    create_review_index(index_path, sort_groups, current_date, total_pages, records_per_page, images_folder_name)
-    
+    create_review_index(index_path, sort_groups, current_timestamp, total_pages, records_per_page, images_folder_name)
+
     # Create individual pages in the same folder as index
     for page_num in range(1, total_pages + 1):
         start_idx = (page_num - 1) * records_per_page
@@ -53,11 +57,11 @@ def create_paginated_review_html(results_folder, all_records, current_date, work
         page_records = all_records[start_idx:end_idx]
         
         # Put page files directly in results folder alongside index
-        page_file = f"review-page-{page_num}-{current_date}.html"
+        page_file = f"review-page-{page_num}-{current_timestamp}.html"
         page_path = os.path.join(results_folder, page_file)
 
         create_single_review_page(
-            page_path, page_records, current_date, workflow_json_path, 
+            page_path, page_records, current_timestamp, workflow_json_path, 
             images_folder, results_folder, page_num, total_pages, records_per_page, start_idx, images_folder_name
         )
         
@@ -74,7 +78,7 @@ def create_paginated_review_html(results_folder, all_records, current_date, work
         "total_pages": total_pages
     }
 
-def create_review_index(index_path, sort_groups, current_date, total_pages, records_per_page, images_folder_name):
+def create_review_index(index_path, sort_groups, current_timestamp, total_pages, records_per_page, images_folder_name):
     """Create an index page with links to all review pages and sort group summaries."""
     
     total_records = sum(len(records) for records in sort_groups.values())
@@ -84,7 +88,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LP Review Index - {current_date}</title>
+    <title>CD Review Index - {current_timestamp}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
         .header {{ background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 30px; }}
@@ -97,8 +101,8 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
 </head>
 <body>
     <div class="header">
-        <h1>LP Cataloger Review Index</h1>
-        <p>Generated: {current_date} | Total Records: {total_records} | Pages: {total_pages}</p>
+        <h1>CD Cataloger Review Index</h1>
+        <p>Generated: {current_timestamp} | Total Records: {total_records} | Pages: {total_pages}</p>
     </div>
     
     <div class="summary">
@@ -119,7 +123,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
     for page_num in range(1, total_pages + 1):
         start_record = (page_num - 1) * records_per_page + 1
         end_record = min(page_num * records_per_page, total_records)
-        page_filename = f"review-page-{page_num}-{current_date}.html"
+        page_filename = f"review-page-{page_num}-{current_timestamp}.html"
         
         html_content += f'''
             <a href="{page_filename}" class="page-link">
@@ -141,7 +145,27 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
     
     <script>
         // Create unique storage namespace for this workflow
-        const STORAGE_PREFIX = 'lp-workflow-""" + current_date + """-';
+        const STORAGE_PREFIX = 'cd-workflow-""" + current_timestamp + """-';
+        
+        // Helper functions to use namespaced storage
+        function setStorage(key, value) {
+            window.localStorage.setItem(STORAGE_PREFIX + key, value);
+        }
+
+        function getStorage(key) {
+            return window.localStorage.getItem(STORAGE_PREFIX + key);
+        }
+
+        function getAllWorkflowKeys() {
+            const keys = [];
+            for (let i = 0; i < window.localStorage.length; i++) {
+                const key = window.localStorage.key(i);
+                if (key && key.startsWith(STORAGE_PREFIX)) {
+                    keys.push(key.replace(STORAGE_PREFIX, ''));
+                }
+            }
+            return keys;
+        }
         
         function exportAllDecisions() {
             const catalogerName = prompt('Enter your name for the export file:');
@@ -173,13 +197,32 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
                 }
 
                 const barcode    = (recordData && recordData.barcode)    ? recordData.barcode    : ('Record-' + recordId);
-                const confidence = (recordData && recordData.confidence) ? recordData.confidence : 'N/A';
+                let confidence   = (recordData && recordData.confidence) ? recordData.confidence : 'N/A';
                 const sortGroup  = (recordData && recordData.sortGroup)  ? recordData.sortGroup  : 'N/A';
                 const pageNumber = (recordData && recordData.pageNumber) ? recordData.pageNumber : 'Unknown';
+                const aiOclcNumber = (recordData && recordData.oclcNumber) ? recordData.oclcNumber : '';
 
+                // Read cataloger-provided correct OCLC from storage
+                const catalogerCorrectOclc = window.localStorage.getItem(STORAGE_PREFIX + 'correct-oclc-' + recordId) || '';
+                
                 let correctOclc = '';
-                if (decision === 'approved' && recordData && recordData.oclcNumber) {
-                    correctOclc = recordData.oclcNumber;
+                
+                // Apply confidence adjustments based on cataloger decision
+                if (decision === 'approved' && aiOclcNumber) {
+                    correctOclc = aiOclcNumber;
+                    confidence = '100%';
+                } else if (decision === 'different' && catalogerCorrectOclc) {
+                    correctOclc = catalogerCorrectOclc;
+                    confidence = '100%';
+                } else if (decision === 'different' && !catalogerCorrectOclc) {
+                    correctOclc = '';
+                    confidence = '0%';
+                } else if (decision === 'original') {
+                    correctOclc = '';
+                    confidence = '0%';
+                } else if (decision === 'review') {
+                    correctOclc = '';
+                    confidence = '0%';
                 }
 
                 const decisionLabels = {
@@ -195,7 +238,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
                     confidence: confidence,
                     sortGroup: sortGroup,
                     decision: decisionLabels[decision] || decision,
-                    aiSuggestedOclc: (recordData && recordData.oclcNumber) ? recordData.oclcNumber : '',
+                    aiSuggestedOclc: aiOclcNumber,
                     correctOclc: correctOclc,
                     notes: notes,
                     cataloger: catalogerName,
@@ -225,7 +268,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
                     esc(r.confidence),
                     esc(r.sortGroup),
                     esc(r.decision),
-                    esc(r.aiSuggestedOclc),
+                    esc(r.aiSuggestedOclc),  // Add this line
                     esc(r.correctOclc),
                     esc(r.notes),
                     esc(r.cataloger),
@@ -237,7 +280,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'cataloger-decisions-""" + images_folder_name + """-""" + current_date + """.csv';
+            a.download = 'cataloger-decisions-""" + images_folder_name + """-""" + current_timestamp + """.csv';
             document.body.appendChild(a);
             a.click();
             setTimeout(function () {
@@ -254,7 +297,7 @@ def create_review_index(index_path, sort_groups, current_date, total_pages, reco
     with open(index_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-def create_single_review_page(page_path, page_records, current_date, workflow_json_path, images_folder, results_folder, page_num, total_pages, records_per_page, start_idx, images_folder_name):
+def create_single_review_page(page_path, page_records, current_timestamp, workflow_json_path, images_folder, results_folder, page_num, total_pages, records_per_page, start_idx, images_folder_name):
     """Create a single review page with direct image loading."""
     
     html_content = f"""<!DOCTYPE html>
@@ -262,7 +305,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LP Review Page {page_num} - {current_date}</title>
+    <title>CD Review Page {page_num} - {current_timestamp}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
         .header {{ background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
@@ -310,22 +353,22 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
 </head>
 <body>
     <div class="header">
-        <h1>LP Review - Page {page_num} of {total_pages}</h1>
-        <p>Generated: {current_date} | Records {start_idx + 1}-{start_idx + len(page_records)} of {(total_pages - 1) * records_per_page + len(page_records)}</p>
+        <h1>CD Review - Page {page_num} of {total_pages}</h1>
+        <p>Generated: {current_timestamp} | Records {start_idx + 1}-{start_idx + len(page_records)} of {(total_pages - 1) * records_per_page + len(page_records)}</p>
     </div>
     
     <div class="navigation">
-        <a href="review-index-{current_date}.html" class="nav-btn">Back to Index</a>"""
+        <a href="review-index-{current_timestamp}.html" class="nav-btn">Back to Index</a>"""
     
     if page_num > 1:
-        html_content += f'<a href="review-page-{page_num - 1}-{current_date}.html" class="nav-btn">Previous</a>'
+        html_content += f'<a href="review-page-{page_num - 1}-{current_timestamp}.html" class="nav-btn">Previous</a>'
     else:
         html_content += '<span class="nav-btn disabled">Previous</span>'
     
     html_content += f'<span style="margin: 0 20px; font-weight: bold;">Page {page_num} of {total_pages}</span>'
     
     if page_num < total_pages:
-        html_content += f'<a href="review-page-{page_num + 1}-{current_date}.html" class="nav-btn">Next</a>'
+        html_content += f'<a href="review-page-{page_num + 1}-{current_timestamp}.html" class="nav-btn">Next</a>'
     else:
         html_content += '<span class="nav-btn disabled">Next</span>'
     
@@ -421,7 +464,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
         image_files.sort()
         
         html_content += f"""
-            <div class="record" id="record-{global_record_id}" data-barcode="{barcode}" data-oclc-number="{oclc_number}" data-sort-group="{sort_group}">
+    <div class="record" id="record-{global_record_id}" data-barcode="{barcode}" data-oclc-number="{oclc_number}" data-sort-group="{sort_group}">
         <div class="record-header">
             <div class="barcode">Record {global_record_id}: Barcode {barcode}</div>
             <div>
@@ -431,7 +474,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
         
         <div class="content-grid">
             <div class="images-section">
-                <h3>LP Images</h3>"""
+                <h3>CD Images</h3>"""
         
         if image_files:
             for j, (img_path, filename) in enumerate(image_files[:3]):
@@ -496,8 +539,12 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                     </button>
                 </div>
                 
-                <textarea class="notes-area" placeholder="Notes and correct OCLC number (if different)..." 
+                <textarea class="notes-area" placeholder="Notes..." 
                          id="notes-{global_record_id}"></textarea>
+                
+                <input type="text" class="correct-oclc-input" placeholder="Correct OCLC Number (if different)" 
+                       id="correct-oclc-{global_record_id}" 
+                       style="width: 100%; margin-top: 10px; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
             </div>
         </div>
     </div>"""
@@ -506,8 +553,8 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
     html_content += f"""
     <script>
         // Create unique storage namespace for this workflow
-        const STORAGE_PREFIX = 'lp-workflow-{current_date}-';
-
+        const STORAGE_PREFIX = 'cd-workflow-{current_timestamp}-';
+        
         // Helper functions to use namespaced storage
         function setStorage(key, value) {{
             window.localStorage.setItem(STORAGE_PREFIX + key, value);
@@ -524,7 +571,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
         // Get all keys for this workflow
         function getAllWorkflowKeys() {{
             const keys = [];
-            for (let i = 0; i < window.localStorage.length; i++) {{
+            for (let i = 0; i < window.localStorage.length; i++) {{ 
                 const key = window.localStorage.key(i);
                 if (key && key.startsWith(STORAGE_PREFIX)) {{
                     keys.push(key.replace(STORAGE_PREFIX, ''));
@@ -548,29 +595,27 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
             setStorage('decision-' + recordId, decision);
             document.getElementById('notes-' + recordId).focus();
             
-            const barcode = record.getAttribute('data-barcode') || '';
-            const confEl = record.querySelector('.confidence');
-            const confidenceText = confEl ? confEl.textContent : '';
-            const confidence = confidenceText ? confidenceText.replace('% Confidence', '%') : 'N/A';
-            const sortGroup = record.getAttribute('data-sort-group') || 'N/A';
-
+            const barcode = record.getAttribute('data-barcode');
+            const confidenceText = record.querySelector('.confidence').textContent;
+            const confidence = confidenceText.replace('% Confidence', '%');
+            const sortEl = record.querySelector('.sort-group');
+            const sortGroup = sortEl ? sortEl.textContent : 'N/A';
+            
             let oclcNumber = '';
             const oclcSection = record.querySelector('.oclc-section pre');
             if (oclcSection) {{
-                const oclcText = oclcSection.textContent || '';
-                const oclcMatch = oclcText.match(/OCLC Number: (\d+)/);
+                const oclcText = oclcSection.textContent;
+                const oclcMatch = oclcText.match(/OCLC Number: (\\d+)/);
                 if (oclcMatch) {{
                     oclcNumber = oclcMatch[1];
                 }}
             }}
             if (!oclcNumber) {{
-                const recordData = record.dataset || {{}};
-                if (recordData.oclcNumber && recordData.oclcNumber !== 'None suggested') {{
+                const recordData = record.dataset;
+                if (recordData.oclcNumber && recordData.oclcNumber !== 'None suggested' && recordData.oclcNumber !== '') {{
                     oclcNumber = recordData.oclcNumber;
                 }}
             }}
-
-
             
             const enhancedRecordData = {{
                 barcode: barcode,
@@ -640,6 +685,11 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                 if (notesElement) {{
                     setStorage('notes-' + i, notesElement.value);
                 }}
+                // Persist correct OCLC field
+                const correctOclcElement = document.getElementById('correct-oclc-' + i);
+                if (correctOclcElement) {{
+                    setStorage('correct-oclc-' + i, correctOclcElement.value);
+                }}
             }}
         }}
         
@@ -652,36 +702,42 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                 // Reset button visuals
                 const buttons = record.querySelectorAll('.decision-btn');
                 buttons.forEach(btn => {{
-                btn.style.opacity = '0.5';
-                btn.style.transform = '';
+                    btn.style.opacity = '0.5';
+                    btn.style.transform = '';
                 }});
 
                 // Re-apply selection by matching button text
                 if (decision) {{
-                buttons.forEach(btn => {{
-                    const txt = (btn.textContent || '').toLowerCase();
-                    if ((decision === 'approved' && txt.includes('approve')) ||
-                        (decision === 'different' && txt.includes('different')) ||
-                        (decision === 'original'  && txt.includes('original')) ||
-                        (decision === 'review'    && (txt.includes('more review') || txt.includes('review')))) {{
-                    btn.style.opacity = '1';
-                    btn.style.transform = 'scale(1.05)';
-                    }}
-                }});
+                    buttons.forEach(btn => {{
+                        const txt = (btn.textContent || '').toLowerCase();
+                        if ((decision === 'approved' && txt.includes('approve')) ||
+                            (decision === 'different' && txt.includes('different')) ||
+                            (decision === 'original'  && txt.includes('original')) ||
+                            (decision === 'review'    && (txt.includes('more review') || txt.includes('review')))) {{
+                            btn.style.opacity = '1';
+                            btn.style.transform = 'scale(1.05)';
+                        }}
+                    }});
                 }}
 
                 // Restore notes text
                 const notes = getStorage('notes-' + i);
                 const notesElement = document.getElementById('notes-' + i);
                 if (notes && notesElement) {{
-                notesElement.value = notes;
+                    notesElement.value = notes;
+                }}
+                
+                // Restore correct OCLC field
+                const correctOclc = getStorage('correct-oclc-' + i);
+                const correctOclcElement = document.getElementById('correct-oclc-' + i);
+                if (correctOclc && correctOclcElement) {{
+                    correctOclcElement.value = correctOclc;
                 }}
             }}
 
             // Refresh "(N records)" counter
             updateDecisionCounts();
-            }}
-
+        }}
         
         document.addEventListener('DOMContentLoaded', function() {{
             updateDecisionCounts();
@@ -693,6 +749,11 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                 const recordId = e.target.id.split('-')[1];
                 setStorage('notes-' + recordId, e.target.value);
             }}
+            // Auto-save correct OCLC field on input
+            if (e.target.classList.contains('correct-oclc-input')) {{
+                const recordId = e.target.id.split('-')[2];
+                setStorage('correct-oclc-' + recordId, e.target.value);
+            }}
         }});
         
         function updateDecisionCounts() {{
@@ -702,10 +763,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                     decisionsCount++;
                 }}
             }}
-            const counterEl = document.getElementById('decisionsCount');
-            if (counterEl) {{
-                counterEl.textContent = decisionsCount;
-            }}
+            document.getElementById('decisionsCount').textContent = decisionsCount;
         }}
         
         function getDecisionLabel(decision) {{
@@ -716,7 +774,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                 'review': 'Further Review Needed'
             }};
             return labels[decision] || decision;
-        }}
+        }}   
         
         function exportDecisions() {{
             const catalogerName = prompt('Enter your name for the export file:');
@@ -734,23 +792,21 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                         continue;
                     }}
 
-                    const barcode = recordElement.getAttribute('data-barcode') || '';
-                    const confEl = recordElement.querySelector('.confidence');
-                    const confidenceText = confEl ? confEl.textContent : '';
-                    const confidence = confidenceText ? confidenceText.replace('% Confidence', '%') : 'N/A';
+                    const barcode = recordElement.getAttribute('data-barcode');
+                    const confidenceText = recordElement.querySelector('.confidence').textContent;
+                    const confidence = confidenceText.replace('% Confidence', '%');
                     const sortGroup = recordElement.getAttribute('data-sort-group') || 'N/A';
 
                     let oclcNumber = '';
+                    
                     const oclcSection = recordElement.querySelector('.oclc-section pre');
                     if (oclcSection) {{
-                        const oclcText = oclcSection.textContent || '';
-                        const oclcMatch = oclcText.match(/OCLC Number: (\d+)/);
+                        const oclcText = oclcSection.textContent;
+                        const oclcMatch = oclcText.match(/OCLC Number: (\\d+)/);
                         if (oclcMatch) {{
                             oclcNumber = oclcMatch[1];
                         }}
                     }}
-                    
-
                     
                     if (!oclcNumber) {{
                         const recordData = recordElement.dataset;
@@ -759,14 +815,33 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                         }}
                     }}
                     
+                    // Read cataloger-provided correct OCLC from storage
+                    const catalogerCorrectOclc = getStorage('correct-oclc-' + i) || '';
+                    
                     let correctOclc = '';
+                    let adjustedConfidence = confidence;
+                    
+                    // Determine correct OCLC and adjust confidence based on cataloger decision
                     if (decision === 'approved' && oclcNumber) {{
                         correctOclc = oclcNumber;
+                        adjustedConfidence = '100%';
+                    }} else if (decision === 'different' && catalogerCorrectOclc) {{
+                        correctOclc = catalogerCorrectOclc;
+                        adjustedConfidence = '100%';
+                    }} else if (decision === 'different' && !catalogerCorrectOclc) {{
+                        correctOclc = '';
+                        adjustedConfidence = '0%';
+                    }} else if (decision === 'original') {{
+                        correctOclc = '';
+                        adjustedConfidence = '0%';
+                    }} else if (decision === 'review') {{
+                        correctOclc = '';
+                        adjustedConfidence = '0%';
                     }}
                     
                     var enhancedRecordData = {{
                         barcode: barcode,
-                        confidence: confidence,
+                        confidence: adjustedConfidence,
                         sortGroup: sortGroup,
                         oclcNumber: oclcNumber,
                         pageNumber: {page_num}
@@ -776,7 +851,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                     decisions.push({{
                         record: i,
                         barcode: barcode,
-                        confidence: confidence,
+                        confidence: adjustedConfidence,
                         sortGroup: sortGroup,
                         decision: getDecisionLabel(decision) || 'Not reviewed',
                         aiSuggestedOclc: oclcNumber,
@@ -789,7 +864,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                 }}
             }}
             
-            const headers = ['Record', 'Barcode', 'Confidence', 'Initial Sort Group', 'Cataloger Decision', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
+            const headers = ['Record', 'Barcode', 'Confidence', 'Initial Sort Group', 'Cataloger Decision', 'AI-Suggested OCLC #', 'Correct OCLC #', 'Notes', 'Cataloger', 'Review Date', 'Page Number'];
             let csvContent = headers.join(',') + '\\n';
 
             decisions.forEach(row => {{
@@ -799,7 +874,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
                 '"' + row.confidence + '"',
                 '"' + row.sortGroup + '"',
                 '"' + row.decision + '"',
-                '"' + row.aiSuggestedOclc + '"',
+                '"' + row.aiSuggestedOclc + '"',  // Add this line
                 '"' + row.correctOclc + '"',
                 '"' + row.notes.replace(/"/g, '""') + '"',
                 '"' + row.cataloger + '"',
@@ -813,7 +888,7 @@ def create_single_review_page(page_path, page_records, current_date, workflow_js
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'cataloger-decisions-{images_folder_name}-{current_date}.csv';
+            a.download = 'cataloger-decisions-{images_folder_name}-{current_timestamp}.csv';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -860,6 +935,123 @@ def load_records_from_step5(step5_file):
     
     return all_records
 
+def create_decisions_history_spreadsheet(results_folder, workflow_json_path, current_timestamp):
+    """
+    Create decisions-history.xlsx with two sheets:
+    - Current Decisions: Latest decision for each barcode
+    - Decision History: Complete audit trail of all decisions
+    
+    Initially populated with AI decisions from workflow JSON.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from datetime import datetime
+    import json
+    
+    print("\nCreating decisions history spreadsheet...")
+    
+    deliverables_folder = os.path.join(results_folder, "deliverables")
+    decisions_file = os.path.join(deliverables_folder, "decisions-history.xlsx")
+    
+    wb = Workbook()
+    
+    current_sheet = wb.active
+    current_sheet.title = "Current Decisions"
+    
+    history_sheet = wb.create_sheet("Decision History")
+    
+    # UPDATED HEADERS - Removed Record ID
+    headers = [
+        "Barcode",
+        "AI Suggested OCLC",
+        "AI Confidence %",
+        "Cataloger Decision",
+        "Chosen OCLC",
+        "Final Confidence %",
+        "Held by IXA",
+        "Decided By",
+        "Decided At",
+        "Notes",
+        "Decision Version"
+    ]
+    
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    
+    for sheet in [current_sheet, history_sheet]:
+        for col_idx, header in enumerate(headers, start=1):
+            cell = sheet.cell(row=1, column=col_idx, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
+        
+        # UPDATED COLUMN WIDTHS - Removed Record ID column
+        sheet.column_dimensions['A'].width = 17  # Barcode
+        sheet.column_dimensions['B'].width = 18  # AI Suggested OCLC
+        sheet.column_dimensions['C'].width = 16  # AI Confidence %
+        sheet.column_dimensions['D'].width = 25  # Cataloger Decision
+        sheet.column_dimensions['E'].width = 18  # Chosen OCLC
+        sheet.column_dimensions['F'].width = 18  # Final Confidence %
+        sheet.column_dimensions['G'].width = 15  # Held by IXA
+        sheet.column_dimensions['H'].width = 20  # Decided By
+        sheet.column_dimensions['I'].width = 20  # Decided At
+        sheet.column_dimensions['J'].width = 40  # Notes
+        sheet.column_dimensions['K'].width = 16  # Decision Version
+    
+    with open(workflow_json_path, 'r', encoding='utf-8') as f:
+        workflow_data = json.load(f)
+    
+    records = workflow_data.get("records", {})
+    
+    # Get current timestamp in clean format
+    clean_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    row_idx = 2
+    for barcode, record_data in records.items():
+        if "step3_ai_analysis" not in record_data or "step5_final_classification" not in record_data:
+            continue
+        
+        step3 = record_data.get("step3_ai_analysis", {})
+        step5 = record_data.get("step5_final_classification", {})
+        
+        ai_oclc = step3.get("selected_oclc_number", "")
+        ai_confidence = step3.get("confidence_score", {}).get("final", 0)
+        
+        sort_group = step5.get("sort_group", "")
+        held_by_ixa = "Yes" if sort_group == "Held by UT Libraries (IXA)" else "No"
+        
+        # UPDATED ROW DATA - Removed Record ID, using clean timestamp
+        row_data = [
+            barcode,
+            ai_oclc,
+            ai_confidence,
+            "Not Reviewed",
+            "",  # Chosen OCLC blank
+            ai_confidence,
+            held_by_ixa,
+            "AI",
+            clean_timestamp,  # ← CLEAN TIMESTAMP
+            "",
+            "v1"
+        ]
+        
+        for sheet in [current_sheet, history_sheet]:
+            for col_idx, value in enumerate(row_data, start=1):
+                cell = sheet.cell(row=row_idx, column=col_idx, value=value)
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+        
+        row_idx += 1
+    
+    current_sheet.freeze_panes = "A2"
+    history_sheet.freeze_panes = "A2"
+    
+    wb.save(decisions_file)
+    print(f"   Created: {os.path.basename(decisions_file)}")
+    print(f"   Records initialized: {row_idx - 2}")
+    
+    return decisions_file
+
 def main():
     print("Step 6: Creating Interactive HTML Review Interface")
     print("=" * 60)
@@ -882,7 +1074,7 @@ def main():
     # Find the sorting spreadsheet from Step 5
     deliverables_folder = os.path.join(results_folder, "deliverables")
     sorting_files = [f for f in os.listdir(deliverables_folder) 
-                     if f.startswith("sorting-spreadsheet-") and f.endswith(".xlsx")]
+                 if f.startswith("cd-workflow-sorting-") and f.endswith(".xlsx")]
     
     if not sorting_files:
         print("No sorting spreadsheet found! Please run Step 5 first.")
@@ -902,25 +1094,35 @@ def main():
     
     print(f"Loaded {len(all_records)} records")
     
-    # Get current date
-    from lp_workflow_config import get_current_date
-    current_date = get_current_date()
-    
     # Create paginated HTML review
     result = create_paginated_review_html(
         results_folder, 
         all_records, 
-        current_date, 
+        current_timestamp, 
         workflow_json_path, 
         records_per_page=100
     )
     
+    # Create decisions history spreadsheet
+    decisions_file = create_decisions_history_spreadsheet(
+        results_folder,
+        workflow_json_path,
+        current_timestamp
+    )
     print(f"\n=== HTML Review Interface Created ===")
     print(f"Index page: {result['index_path']}")
     print(f"Total pages created: {result['total_pages']}")
     print(f"Total records: {len(all_records)}")
-    print(f"\nOpen the index page in a web browser to begin review.")
+    print(f"\nDownload the results folder to your machine, and then open the index page in a web browser to begin review.")
     
+   
+    
+    print(f"\nThe HTML interface allows a cataloger to make decisions regarding the workflow results.")
+    print(f"\nOnce decisions have been made, they may be exported to CSV.  ")
+    print(f"\nThis CSV should be moved to the results folder and will be processed and integrated into workflow files.")
+    print(f"\nAll cataloger decisions, once processed by Script 7, will be stored in the decisions history spreadsheet.")
+    print(f"\n=== Decisions History Spreadsheet Created ===")
+    print(f"File: {decisions_file}")
     return result
 
 if __name__ == "__main__":

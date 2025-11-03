@@ -112,10 +112,10 @@ def validate_image_files():
     
     # Get the directory where this runner script is located
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    validation_script = os.path.join(script_dir, "ai-music-step-.5-lp.py")
+    validation_script = os.path.join(script_dir, "step_.5_lp.py")
     
     if not os.path.exists(validation_script):
-        print(f"Warning: Could not find validation script 'ai-music-step-.5-lp.py'")
+        print(f"Warning: Could not find validation script 'step_.5_lp.py'")
         print(f"Skipping file validation...")
         return True
     
@@ -213,17 +213,17 @@ def main():
     
     # Define the workflow steps
     steps = [
-        ("ai-music-step-1-lp.py", 1, "Extract metadata from LP images using AI"),
-        ("ai-music-step-1.5-lp.py", 1.5, "Clean and normalize extracted metadata"),
-        ("ai-music-step-2-lp.py", 2, "Search OCLC database for matching records"),
-        ("ai-music-step-3-lp.py", 3, "Analyze OCLC matches using AI"),
-        ("ai-music-step-4-lp.py", 4, "Verify track listings and publication years"),
-        ("ai-music-step-5-lp.py", 5, "Create final sorted results and batch files")
+        ("step_1_lp.py", 1, "Extract metadata from LP images using AI"),
+        ("step_1.5_lp.py", 1.5, "Clean and normalize extracted metadata"),
+        ("step_2_lp.py", 2, "Search OCLC database for matching records"),
+        ("step_3_lp.py", 3, "Analyze OCLC matches using AI"),
+        ("step_4_lp.py", 4, "Verify track listings and publication years"),
+        ("step_5_lp.py", 5, "Create final sorted results and batch files")
     ]
     
     # Add Step 6 if user chose it
     if run_html_step:
-        steps.append(("ai-music-step-6-lp.py", 6, "Create interactive HTML review interface"))
+        steps.append(("step_6_lp.py", 6, "Create interactive HTML review interface"))
     
     # Track overall progress
     workflow_start_time = time.time()

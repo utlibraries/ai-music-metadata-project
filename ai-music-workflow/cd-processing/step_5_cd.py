@@ -278,11 +278,10 @@ def calculate_title_similarity(title1, title2):
 
 def create_low_confidence_review_text_log(results_folder, step4_file, all_records, workflow_json_path, current_timestamp):
     """
-    Create a review text log for unique low confidence matches with detailed information.
+    Create a review Excel spreadsheet for unique low confidence matches with detailed information.
     """
-    print("Creating low confidence review text log...")
+    print("Creating low confidence review spreadsheet...")
     
-    # Filter for unique low confidence matches (including those without OCLC numbers)
     low_confidence_records = [record for record in all_records 
                              if record["sort_group"] == "Cataloger Review (Low Confidence)"]
     
@@ -290,117 +289,115 @@ def create_low_confidence_review_text_log(results_folder, step4_file, all_record
         print("No low confidence matches found to review.")
         return None
     
-    # Open the original step 4 file to get additional data
     wb_src = load_workbook(step4_file)
     sheet_src = wb_src.active
     
-    # Create mapping from barcode to source row data
     barcode_to_source = {}
-    for row_idx in range(2, sheet_src.max_row + 1):  # Skip header row
-        barcode = sheet_src.cell(row=row_idx, column=4).value  # Column D
+    for row_idx in range(2, sheet_src.max_row + 1):
+        barcode = sheet_src.cell(row=row_idx, column=4).value
         if barcode:
-            # Get relevant columns: D (Barcode), E (AI-Generated Metadata), H (OCLC Number), other potential columns
             row_data = {
                 "barcode": barcode,
-                "metadata": sheet_src.cell(row=row_idx, column=5).value,  # Column E - AI-Generated Metadata
-                "other_oclc_numbers": sheet_src.cell(row=row_idx, column=11).value   # Column K - Other Potential Matches
+                "metadata": sheet_src.cell(row=row_idx, column=5).value,
+                "other_oclc_numbers": sheet_src.cell(row=row_idx, column=11).value
             }
             barcode_to_source[barcode] = row_data
     
-    # Create text log file in deliverables subfolder
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Low Confidence Review"
+    
+    headers = [
+        "Record #",
+        "Barcode",
+        "OCLC Number Chosen",
+        "Confidence Score",
+        "AI-Generated Metadata",
+        "Other Potential Matches",
+        "OCLC Record Details (JSON)",
+        "Total Holdings",
+        "Held by IXA"
+    ]
+    
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    
+    ws.column_dimensions['A'].width = 10
+    ws.column_dimensions['B'].width = 18
+    ws.column_dimensions['C'].width = 18
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 70
+    ws.column_dimensions['F'].width = 25
+    ws.column_dimensions['G'].width = 70
+    ws.column_dimensions['H'].width = 15
+    ws.column_dimensions['I'].width = 15
+    
+    ws.freeze_panes = 'A2'
+    
+    processed_count = 0
+    for idx, record in enumerate(low_confidence_records, start=2):
+        barcode = record["barcode"]
+        oclc_number = record["oclc_number"]
+        
+        print(f"Processing low confidence review record {processed_count + 1}/{len(low_confidence_records)} - Barcode: {barcode}")
+        
+        source_data = barcode_to_source.get(barcode, {})
+        metadata = source_data.get("metadata", "No AI-generated metadata available")
+        other_oclc_numbers = source_data.get("other_oclc_numbers", "No other candidates")
+        
+        ws.cell(row=idx, column=1, value=processed_count + 1)
+        ws.cell(row=idx, column=2, value=barcode)
+        ws.cell(row=idx, column=3, value=oclc_number if oclc_number else 'No OCLC number')
+        ws.cell(row=idx, column=4, value=record.get('confidence_score', 'No confidence score'))
+        
+        metadata_cell = ws.cell(row=idx, column=5, value=metadata if metadata and metadata.strip() else "No AI-generated metadata available")
+        metadata_cell.alignment = Alignment(wrap_text=True, vertical='top')
+        
+        other_cell = ws.cell(row=idx, column=6, value=other_oclc_numbers if other_oclc_numbers and other_oclc_numbers.strip() else "No other candidates")
+        other_cell.alignment = Alignment(wrap_text=True, vertical='top')
+        
+        if oclc_number and record["has_valid_oclc"]:
+            oclc_data = get_bib_info_from_workflow(oclc_number, workflow_json_path)
+            
+            import json
+            raw_oclc_json = json.dumps(oclc_data, indent=2, ensure_ascii=False)
+            oclc_cell = ws.cell(row=idx, column=7, value=raw_oclc_json)
+            oclc_cell.alignment = Alignment(wrap_text=True, vertical='top')
+            
+            holdings_info = get_holdings_info_from_workflow(oclc_number, workflow_json_path)
+            ws.cell(row=idx, column=8, value=holdings_info.get('total_holdings', 0))
+            ws.cell(row=idx, column=9, value='Yes' if holdings_info.get('held_by_ixa', False) else 'No')
+        else:
+            ws.cell(row=idx, column=7, value="No OCLC record available - no valid OCLC number found")
+            ws.cell(row=idx, column=8, value=0)
+            ws.cell(row=idx, column=9, value='No')
+        
+        processed_count += 1
+    
     deliverables_folder = os.path.join(results_folder, "deliverables")
-    review_file = f"low-confidence-matches-review-{current_timestamp}.txt"
+    review_file = f"low-confidence-matches-review-{current_timestamp}.xlsx"
     review_path = os.path.join(deliverables_folder, review_file)
     
-    # Process each low confidence record and write to text file
-    processed_count = 0
-    with open(review_path, 'w', encoding='utf-8') as f:
-        # Write header
-        f.write("=" * 80 + "\n")
-        f.write("LOW CONFIDENCE MATCHES REVIEW LOG\n")
-        f.write(f"Generated: {current_timestamp}\n")
-        f.write(f"Total Records: {len(low_confidence_records)}\n")
-        f.write("=" * 80 + "\n\n")
-        
-        for record in low_confidence_records:
-            barcode = record["barcode"]
-            oclc_number = record["oclc_number"]
-            
-            print(f"Processing low confidence review record {processed_count + 1}/{len(low_confidence_records)} - Barcode: {barcode}")
-            
-            # Get source data
-            source_data = barcode_to_source.get(barcode, {})
-            metadata = source_data.get("metadata", "No AI-generated metadata available")
-            other_oclc_numbers = source_data.get("other_oclc_numbers", "No other candidates")
-            
-            # Write record header
-            f.write("-" * 60 + "\n")
-            f.write(f"RECORD {processed_count + 1}\n")
-            f.write("-" * 60 + "\n")
-            f.write(f"Barcode: {barcode}\n")
-            f.write(f"OCLC Number Chosen: {oclc_number if oclc_number else 'No OCLC number'}\n")
-            f.write(f"Confidence Score: {record.get('confidence_score', 'No confidence score')}\n")
-            f.write("\n")
-            
-            # Write AI-generated metadata
-            f.write("AI-Generated Metadata:\n")
-            if metadata and metadata.strip():
-                # Format metadata with proper line breaks
-                metadata_lines = metadata.replace('\n', '\n  ')
-                f.write(f"  {metadata_lines}\n")
-            else:
-                f.write("  No AI-generated metadata available\n")
-            f.write("\n")
-            
-            # Write other potential matches
-            f.write("Other Potential Matches:\n")
-            if other_oclc_numbers and other_oclc_numbers.strip():
-                other_lines = other_oclc_numbers.replace('\n', '\n  ')
-                f.write(f"  {other_lines}\n")
-            else:
-                f.write("  No other candidates\n")
-            f.write("\n")
-            
-            # Get detailed OCLC record information from workflow JSON
-            if oclc_number and record["has_valid_oclc"]:
-                f.write("OCLC Record Details:\n")
-                oclc_data = get_bib_info_from_workflow(oclc_number, workflow_json_path)
-                
-                # Get holdings information
-                holdings_info = get_holdings_info_from_workflow(oclc_number, workflow_json_path)
-                
-                # Write raw OCLC data as JSON
-                import json
-                raw_oclc_json = json.dumps(oclc_data, indent=2, ensure_ascii=False)
-                f.write(f"  Raw OCLC Data:\n  {raw_oclc_json.replace(chr(10), chr(10) + '  ')}\n")
-                
-                # Add holdings information
-                holdings_text = f"\nHoldings Information:\nTotal Institutions Holding: {holdings_info.get('total_holdings', 0)}\nHeld by IXA: {'Yes' if holdings_info.get('held_by_ixa', False) else 'No'}"
-                f.write(f"  {holdings_text}\n")
-                
-            else:
-                f.write("OCLC Record Details:\n")
-                f.write("  No OCLC record available - no valid OCLC number found\n")
-            
-            f.write("\n")
-            processed_count += 1
-        
-        # Write summary footer
-        f.write("=" * 80 + "\n")
-        f.write("END OF REVIEW LOG\n")
-        f.write(f"Total Records Processed: {processed_count}\n")
-        f.write("=" * 80 + "\n")
+    wb.save(review_path)
     
-    print(f"Low confidence review text log created with {len(low_confidence_records)} records: {review_path}")
+    print(f"Low confidence review spreadsheet created with {len(low_confidence_records)} records: {review_path}")
     return review_path
 
 def create_marc_format_text_log(results_folder, all_records, workflow_json_path, current_timestamp):
     """
-    Create a MARC-formatted text log from the original JSON metadata for low confidence records.
+    Create a MARC-formatted Excel spreadsheet from the original JSON metadata for low confidence records.
     """
-    print("Creating MARC-formatted text log from original metadata...")
+    print("Creating MARC-formatted spreadsheet from original metadata...")
     
-    # Filter for unique low confidence matches (including those without OCLC numbers)
     low_confidence_records = [record for record in all_records 
                              if record["sort_group"] == "Cataloger Review (Low Confidence)"]
     
@@ -408,7 +405,6 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
         print("No low confidence matches found for MARC formatting.")
         return None
     
-    # Load workflow JSON to get original metadata
     import json
     try:
         with open(workflow_json_path, 'r', encoding='utf-8') as f:
@@ -417,13 +413,45 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
         print(f"Error reading workflow JSON: {e}")
         return None
     
-    # Create MARC text log file in deliverables subfolder
-    deliverables_folder = os.path.join(results_folder, "deliverables")
-    marc_file = f"low-confidence-marc-{current_timestamp}.txt"
-    marc_path = os.path.join(deliverables_folder, marc_file)
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "MARC Format"
+    
+    headers = [
+        "Barcode",
+        "100 - Main Entry",
+        "245 - Title Statement",
+        "264 - Publication",
+        "300 - Physical Description",
+        "500 - General Note",
+        "505 - Contents Note",
+        "650 - Subject"
+    ]
+    
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    
+    ws.column_dimensions['A'].width = 16
+    ws.column_dimensions['B'].width = 35
+    ws.column_dimensions['C'].width = 50
+    ws.column_dimensions['D'].width = 40
+    ws.column_dimensions['E'].width = 35
+    ws.column_dimensions['F'].width = 20
+    ws.column_dimensions['G'].width = 60
+    ws.column_dimensions['H'].width = 20
+    
+    ws.freeze_panes = 'A2'
     
     def is_valid_field(value):
-        """Check if a field value is valid (not None, empty, or 'Not visible')"""
         if value is None:
             return False
         if isinstance(value, str):
@@ -431,149 +459,117 @@ def create_marc_format_text_log(results_folder, all_records, workflow_json_path,
         return bool(value)
     
     def safe_get(obj, key, default=""):
-        """Safely get a value from a dictionary, handling None values."""
         if obj is None:
             return default
         value = obj.get(key, default)
         return value if value is not None else default
     
     processed_count = 0
-    with open(marc_path, 'w', encoding='utf-8') as f:
-        # Write header
-        f.write("=" * 80 + "\n")
-        f.write("MARC FORMAT - LOW CONFIDENCE RECORDS\n")
-        f.write("This is AI-Generated Metadata from Step 1 formatted in MARC to kickstart original cataloging\n")
-        f.write(f"Generated: {current_timestamp}\n")
-        f.write(f"Total Records: {len(low_confidence_records)}\n")
-        f.write("Note: Only fields with visible/available data are included\n")
-        f.write("=" * 80 + "\n\n")
+    for idx, record in enumerate(low_confidence_records, start=2):
+        barcode = record["barcode"]
         
-        for record in low_confidence_records:
-            barcode = record["barcode"]
-            
-            # Get original metadata from workflow JSON
-            workflow_record = workflow_data.get("records", {}).get(barcode)
-            if not workflow_record or "step1_metadata_extraction" not in workflow_record:
-                f.write(f"Record {processed_count + 1} - Barcode: {barcode}\n")
-                f.write("No original metadata available\n")
-                f.write("-" * 60 + "\n\n")
-                processed_count += 1
-                continue
-            
-            extracted_fields = workflow_record["step1_metadata_extraction"].get("extracted_fields", {})
-            
-            # Write record header
-            f.write(f"Record {processed_count + 1} - Barcode: {barcode}\n")
-            f.write("-" * 60 + "\n")
-            
-            # Get field values with safe handling
-            title_info = extracted_fields.get("title_information", {}) or {}
-            main_title = safe_get(title_info, "main_title")
-            subtitle = safe_get(title_info, "subtitle") 
-            primary_contributor = safe_get(title_info, "primary_contributor")
-            
-            publishers = extracted_fields.get("publishers", {}) or {}
-            place = safe_get(publishers, "place")
-            publisher_name_raw = safe_get(publishers, "name")
-            publisher_name = publisher_name_raw.replace("Name: ", "").strip() if publisher_name_raw else ""
-            
-            dates = extracted_fields.get("dates", {}) or {}
-            publication_date = safe_get(dates, "publication_date")
-            
-            physical = extracted_fields.get("physical_description", {}) or {}
-            contents = extracted_fields.get("contents", {}) or {}
-            tracks = contents.get("tracks", []) or []
-            
-            # 100 - Main Entry (Primary contributor)
-            if is_valid_field(primary_contributor):
-                f.write(f"100 1  {primary_contributor}, $ecomposer, $eperformer.\n")
-            
-            # 245 - Title Statement (check this before 264)
-            if is_valid_field(main_title):
-                title_field = f"245 1 0 {main_title}"
-                if is_valid_field(subtitle):
-                    title_field += f" : $b{subtitle}"
-                title_field += f" / $c{primary_contributor}." if is_valid_field(primary_contributor) else "."
-                f.write(f"{title_field}\n")
-            elif is_valid_field(primary_contributor):
-                # If no title but we have contributor, create minimal title field
-                f.write(f"245 1 0 [Title not visible] / $c{primary_contributor}.\n")
-            else:
-                # If neither title nor contributor, note for cataloger
-                f.write("245 1 0 [Title and contributor not visible]\n")
-            
-            # 264 - Publication Statement
-            if is_valid_field(place) or is_valid_field(publisher_name) or is_valid_field(publication_date):
-                pub_field = "264  1 "
-                
-                # Handle place
-                if is_valid_field(place):
-                    if is_valid_field(publisher_name):
-                        pub_field += f"{place} : "  # Colon only if publisher follows
-                    else:
-                        pub_field += f"{place} "    # No colon if no publisher
-                
-                # Handle publisher
-                if is_valid_field(publisher_name):
-                    pub_field += f"$b{publisher_name}"
-                    if is_valid_field(publication_date):
-                        pub_field += ", "  # Comma only if date follows
-                    else:
-                        pub_field += "."   # Period if no date follows
-                
-                # Handle date
-                if is_valid_field(publication_date):
-                    # Clean up date - remove copyright symbols and extra text
-                    date_clean = (publication_date or "").replace("©", "").replace("℗", "").strip()
-                    # Extract just the year if possible
-                    import re
-                    year_match = re.search(r'\b(19|20)\d{2}\b', date_clean)
-                    if year_match:
-                        date_clean = f"[{year_match.group()}]"
-                    pub_field += f"$c{date_clean}"
-                
-                # Remove any trailing comma and ensure proper punctuation
-                pub_field = pub_field.rstrip(', ') + "."
-                f.write(f"{pub_field}\n")
-            
-            # 300 - Physical Description
-            f.write("300    audio disc : $bdigital ; $c4 3/4 in.\n")
-            
-            # 500 - General Note
-            f.write("500    Compact disc.\n")
-            
-            # 505 - Contents Note (Track listing)
-            if tracks and isinstance(tracks, list):
-                track_list = []
-                for track in tracks:
-                    if isinstance(track, dict):
-                        track_title = safe_get(track, "title")
-                        if is_valid_field(track_title):
-                            # Filter out metadata that got mixed in with track titles
-                            if not any(x in track_title.lower() for x in ['standard cd', 'audio disc', '4.75', 'aluminum', 'polycarbonate']):
-                                track_list.append(track_title)
-                    elif isinstance(track, str) and is_valid_field(track):
-                        # Handle case where tracks might be stored as strings
-                        if not any(x in track.lower() for x in ['standard cd', 'audio disc', '4.75', 'aluminum', 'polycarbonate']):
-                            track_list.append(track)
-                
-                if track_list:
-                    contents_field = "505 0  " + " -- ".join(track_list) + "."
-                    f.write(f"{contents_field}\n")
-            
-            # 650 - Subject Added Entry (Genre/Form)
-            f.write("650  0  $aMusic.\n")
-            
-            f.write("-" * 60 + "\n\n")
+        workflow_record = workflow_data.get("records", {}).get(barcode)
+        if not workflow_record or "step1_metadata_extraction" not in workflow_record:
+            ws.cell(row=idx, column=1, value=barcode)
+            ws.cell(row=idx, column=2, value="No original metadata available")
             processed_count += 1
+            continue
         
-        # Write summary footer
-        f.write("=" * 80 + "\n")
-        f.write("END OF MARC FORMAT LOG\n") 
-        f.write(f"Total Records Processed: {processed_count}\n")
-        f.write("=" * 80 + "\n")
+        extracted_fields = workflow_record["step1_metadata_extraction"].get("extracted_fields", {})
+        
+        title_info = extracted_fields.get("title_information", {}) or {}
+        main_title = safe_get(title_info, "main_title")
+        subtitle = safe_get(title_info, "subtitle") 
+        primary_contributor = safe_get(title_info, "primary_contributor")
+        
+        publishers = extracted_fields.get("publishers", {}) or {}
+        place = safe_get(publishers, "place")
+        publisher_name_raw = safe_get(publishers, "name")
+        publisher_name = publisher_name_raw.replace("Name: ", "").strip() if publisher_name_raw else ""
+        
+        dates = extracted_fields.get("dates", {}) or {}
+        publication_date = safe_get(dates, "publication_date")
+        
+        physical = extracted_fields.get("physical_description", {}) or {}
+        contents = extracted_fields.get("contents", {}) or {}
+        tracks = contents.get("tracks", []) or []
+        
+        ws.cell(row=idx, column=1, value=barcode)
+        
+        if is_valid_field(primary_contributor):
+            field_100 = f"100 1  {primary_contributor}, $ecomposer, $eperformer."
+            ws.cell(row=idx, column=2, value=field_100)
+        
+        if is_valid_field(main_title):
+            title_field = f"245 1 0 {main_title}"
+            if is_valid_field(subtitle):
+                title_field += f" : $b{subtitle}"
+            title_field += f" / $c{primary_contributor}." if is_valid_field(primary_contributor) else "."
+            ws.cell(row=idx, column=3, value=title_field)
+        elif is_valid_field(primary_contributor):
+            ws.cell(row=idx, column=3, value=f"245 1 0 [Title not visible] / $c{primary_contributor}.")
+        else:
+            ws.cell(row=idx, column=3, value="245 1 0 [Title and contributor not visible]")
+        
+        if is_valid_field(place) or is_valid_field(publisher_name) or is_valid_field(publication_date):
+            pub_field = "264  1 "
+            
+            if is_valid_field(place):
+                if is_valid_field(publisher_name):
+                    pub_field += f"{place} : "
+                else:
+                    pub_field += f"{place} "
+            
+            if is_valid_field(publisher_name):
+                pub_field += f"$b{publisher_name}"
+                if is_valid_field(publication_date):
+                    pub_field += ", "
+                else:
+                    pub_field += "."
+            
+            if is_valid_field(publication_date):
+                date_clean = (publication_date or "").replace("©", "").replace("℗", "").strip()
+                import re
+                year_match = re.search(r'\b(19|20)\d{2}\b', date_clean)
+                if year_match:
+                    date_clean = f"[{year_match.group()}]"
+                pub_field += f"$c{date_clean}"
+            
+            pub_field = pub_field.rstrip(', ') + "."
+            ws.cell(row=idx, column=4, value=pub_field)
+        
+        ws.cell(row=idx, column=5, value="300    audio disc : $bdigital ; $c4 3/4 in.")
+        
+        ws.cell(row=idx, column=6, value="500    Compact disc.")
+        
+        if tracks and isinstance(tracks, list):
+            track_list = []
+            for track in tracks:
+                if isinstance(track, dict):
+                    track_title = safe_get(track, "title")
+                    if is_valid_field(track_title):
+                        if not any(x in track_title.lower() for x in ['standard cd', 'audio disc', '4.75', 'aluminum', 'polycarbonate']):
+                            track_list.append(track_title)
+                elif isinstance(track, str) and is_valid_field(track):
+                    if not any(x in track.lower() for x in ['standard cd', 'audio disc', '4.75', 'aluminum', 'polycarbonate']):
+                        track_list.append(track)
+            
+            if track_list:
+                contents_field = "505 0  " + " -- ".join(track_list) + "."
+                contents_cell = ws.cell(row=idx, column=7, value=contents_field)
+                contents_cell.alignment = Alignment(wrap_text=True, vertical='top')
+        
+        ws.cell(row=idx, column=8, value="650  0  $aMusic.")
+        
+        processed_count += 1
     
-    print(f"MARC format text log created with {processed_count} records: {marc_path}")
+    deliverables_folder = os.path.join(results_folder, "deliverables")
+    marc_file = f"low-confidence-marc-{current_timestamp}.xlsx"
+    marc_path = os.path.join(deliverables_folder, marc_file)
+    
+    wb.save(marc_path)
+    
+    print(f"MARC format spreadsheet created with {processed_count} records: {marc_path}")
     return marc_path
 
 def create_cataloger_review_spreadsheet(results_folder, all_records, current_timestamp):
@@ -661,14 +657,18 @@ def create_cataloger_review_spreadsheet(results_folder, all_records, current_tim
     
     # Apply conditional formatting for highlighting
     from openpyxl.formatting.rule import FormulaRule
-    
-    # Create conditional formatting rule: highlight if Correct OCLC Number column is empty
+        
     highlight_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
-    formula_rule = FormulaRule(formula=[f'$G2=""'], fill=highlight_fill)
-    
-    # Apply conditional formatting to all data rows
-    data_range = f"A2:H{len(low_confidence_records) + 1}"
-    ws.conditional_formatting.add(data_range, formula_rule)
+        
+    rule = FormulaRule(
+        formula=['AND($F2<>"Approved", $G2="")'],
+        fill=highlight_fill
+    )
+        
+    # Apply to all data rows
+    max_row = len(low_confidence_records) + 1
+    data_range = f'A2:H{max_row}'
+    ws.conditional_formatting.add(data_range, rule)
     
     # Save the workbook in deliverables subfolder
     deliverables_folder = os.path.join(results_folder, "deliverables")

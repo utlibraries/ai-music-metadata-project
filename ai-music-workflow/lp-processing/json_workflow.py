@@ -1,8 +1,8 @@
 """
 JSON Workflow Management for AI Music Metadata Project
 
-Manages structured logging and state tracking for the 6-step LP processing workflow.
-Maintains processing status, timestamps, results, and audit trails for each LP record.
+Manages structured logging and state tracking for the 6-step lp processing workflow.
+Maintains processing status, timestamps, results, and audit trails for each lp record.
 """
 
 import json
@@ -20,10 +20,10 @@ def initialize_workflow_json(results_folder_path: str) -> str:
     Returns:
         str: Path to the created JSON file
     """
+    current_date = datetime.now().strftime("%Y-%m-%d")
     json_file = f"full-workflow-data-lp-{current_timestamp}.json"
     json_path = os.path.join(results_folder_path, json_file)
     
-    current_date = datetime.now().strftime("%Y-%m-%d")
     initial_structure = {
         "batch_info": {
             "created_at": datetime.now().isoformat(),
@@ -205,6 +205,109 @@ def update_record_step5(json_path: str, barcode: str, sort_group: str,
                                                       if r.get("processing_status") == "completed"])
         
         save_workflow_json(json_path, data)
+
+# Update JSON with cataloger decision results   
+def update_record_step7(json_path, barcode, cataloger_decision, original_status, new_status, 
+                       original_oclc, new_oclc, cataloger_name, review_date, notes):
+    """
+    Update workflow JSON with Step 7 cataloger decision data.
+    
+    Parameters:
+    - json_path: Path to the workflow JSON file
+    - barcode: Record barcode
+    - cataloger_decision: The decision made by cataloger (Approved, Different OCLC, etc.)
+    - original_status: Original sort group status
+    - new_status: New sort group status (if changed)
+    - original_oclc: Original OCLC number
+    - new_oclc: New OCLC number (if changed)
+    - cataloger_name: Name of cataloger who reviewed
+    - review_date: Date of review
+    - notes: Cataloger notes
+    """
+    workflow_data = load_workflow_json(json_path)
+    
+    barcode_str = str(barcode)
+    
+    if barcode_str not in workflow_data["records"]:
+        workflow_data["records"][barcode_str] = {
+            "barcode": barcode_str,
+            "created_at": datetime.now().isoformat()
+        }
+    
+    # Create Step 7 data structure
+    step7_data = {
+        "cataloger_decision": cataloger_decision,
+        "cataloger_name": cataloger_name,
+        "review_date": review_date,
+        "notes": notes,
+        "status_change": {
+            "original_status": original_status,
+            "new_status": new_status if new_status else original_status
+        },
+        "oclc_change": {
+            "original_oclc": original_oclc,
+            "new_oclc": new_oclc if new_oclc else original_oclc,
+            "oclc_changed": bool(new_oclc and new_oclc != original_oclc)
+        },
+        "processing_timestamp": datetime.now().isoformat()
+    }
+    
+    # Add Step 7 data to the record
+    workflow_data["records"][barcode_str]["step7_cataloger_review"] = step7_data
+    
+    # Update overall record timestamp
+    workflow_data["records"][barcode_str]["updated_at"] = datetime.now().isoformat()
+    
+    # Update workflow-level metadata
+    if "step7_summary" not in workflow_data:
+        workflow_data["step7_summary"] = {
+            "total_reviews_processed": 0,
+            "decisions": {
+                "approved": 0,
+                "different_oclc": 0,
+                "original_cataloging": 0,
+                "further_review": 0
+            },
+            "status_changes": {
+                "promoted_to_high_confidence": 0,
+                "demoted_to_low_confidence": 0,
+                "changed_to_held": 0
+            },
+            "oclc_numbers_changed": 0,
+            "last_updated": None
+        }
+    
+    # Increment counters
+    workflow_data["step7_summary"]["total_reviews_processed"] += 1
+    
+    # Track decision type
+    decision_key_map = {
+        "Approved": "approved",
+        "Different OCLC # Needed": "different_oclc",
+        "Original Cataloging Needed": "original_cataloging",
+        "Further Review Needed": "further_review"
+    }
+    
+    decision_key = decision_key_map.get(cataloger_decision)
+    if decision_key:
+        workflow_data["step7_summary"]["decisions"][decision_key] += 1
+    
+    # Track status changes
+    if new_status and new_status != original_status:
+        if new_status == "Alma Batch Upload (High Confidence)" and original_status == "Cataloger Review (Low Confidence)":
+            workflow_data["step7_summary"]["status_changes"]["promoted_to_high_confidence"] += 1
+        elif new_status == "Cataloger Review (Low Confidence)" and original_status != "Cataloger Review (Low Confidence)":
+            workflow_data["step7_summary"]["status_changes"]["demoted_to_low_confidence"] += 1
+        elif new_status == "Held by UT Libraries (IXA)" and original_status != "Held by UT Libraries (IXA)":
+            workflow_data["step7_summary"]["status_changes"]["changed_to_held"] += 1
+    
+    # Track OCLC changes
+    if new_oclc and new_oclc != original_oclc:
+        workflow_data["step7_summary"]["oclc_numbers_changed"] += 1
+    
+    workflow_data["step7_summary"]["last_updated"] = datetime.now().isoformat()
+    
+    save_workflow_json(json_path, workflow_data)
 
 def log_oclc_data(results_folder_path: str, oclc_number: str, bib_data: Dict[str, Any], 
                   holdings_data: Dict[str, Any]):
