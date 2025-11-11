@@ -49,17 +49,23 @@ All output files are organized in three subfolders within your results folder:
    - Once you enter an OCLC number, highlighting disappears
    - Contains dropdown menu and notes for each item
 
-4. **LOW CONFIDENCE REVIEW TEXT FILE**: `low-confidence-matches-review-[date].txt`
+4. **LOW CONFIDENCE REVIEW SPREADSHEET**: `low-confidence-matches-review-[date].xlsx`
    - Detailed text log with:
      - AI-generated metadata
      - AI-suggested OCLC record
      - Other potential matches found
      - Full OCLC record details
 
-5. **MARC TEXT FILE**: `marc-formatted-low-confidence-matches-[date].txt`
+5. **MARC SPREADSHEET**: `marc-formatted-low-confidence-matches-[date].xlsx`
    - MARC-formatted records based on AI-extracted metadata
    - Starting point for original cataloging
    - Pared down to basics with only visible/available data
+
+6. **DECISIONS HISTORY**: `decisions-history.xlsx`
+   - Audit log & **source of truth** for all cataloger decisions (per barcode)
+   - Can re-run. Contains two sheets: **Current Decisions** (latest) and **Decision History** (all)
+   - Populated by **Step 7** from the CSV; **don’t hand-edit**
+   - Drives updates to sorting, batch upload, and low-confidence files
 
 ### **`guides/` folder** - Documentation
 
@@ -152,7 +158,7 @@ If you chose to generate the HTML interface (Step 6), you'll find these files in
 3. **Double-click** `review-index-[date].html` to open in your web browser
 4. Review items with images displayed alongside OCLC records
 5. Make decisions and add notes directly in the interface
-6. **Export decisions to CSV** when done (save the file!)
+6. **Export decisions to CSV** when done
 
 ### Important notes about HTML:
 - Runs entirely on your local machine (no internet connection needed for viewing)
@@ -161,6 +167,53 @@ If you chose to generate the HTML interface (Step 6), you'll find these files in
 - Not recommended for batches over 500 records (folder size becomes very large)
 - Best with JPEG images (smaller file sizes)
 
+
+## PROCESSING CATALOGER DECISIONS (STEP 7)
+
+After you've reviewed low-confidence matches and made your decisions, you need to process those decisions to update the workflow deliverable files.
+
+### EXPORTING DECISIONS FROM HTML INTERFACE
+
+1. **Make your decisions** on review pages
+2. **Export to CSV** using the "Export All Decisions to CSV" button on the index page
+3. **Save the CSV file** to the **results folder**
+
+
+### RUNNING STEP 7 TO APPLY DECISIONS
+
+Once your cataloger decision CSV is saved in the results folder:
+
+1. **Run Step 7** of the workflow (apply cataloger decisions script)
+2. **Provide the CSV path** when prompted
+3. **Provide the results folder path** when prompted
+
+### WHAT STEP 7 DOES
+
+Step 7 processes your cataloger decisions and updates all deliverable files:
+
+- **Sorting spreadsheet** - Updates status, OCLC numbers, and confidence scores
+- **Batch upload file** - Adds newly approved items, removes rejected items
+- **Low confidence files** - Removes approved items, keeps items still needing review
+- **Tracking spreadsheet** - Updates review dates and status
+- **Decisions history** - Creates permanent audit trail of all decisions
+
+### IMPORTANT NOTES
+
+- **Original files are backed up** - Your original outputs are copied to `original-outputs/` folder before any changes
+- **Decision history is tracked** - All decisions are versioned (v1, v2, v3, etc.) in `decisions-history.xlsx`
+- **You can run Step 7 multiple times** - As you complete more reviews, re-run Step 7 to integrate new decisions
+- **Confidence scores update automatically**
+
+### AFTER STEP 7 COMPLETES
+
+Your updated files in the `deliverables/` folder are now ready:
+
+1. **Updated batch upload file** - Contains all verified high-confidence matches
+2. **Updated sorting spreadsheet** - Reflects all cataloger decisions
+3. **Updated tracking spreadsheet** - Shows current review status
+4. **Decisions history** - Complete audit trail of all changes
+
+You can now proceed with uploading verified records to your Library Services Platform with the Alma Batch Upload script.
 ---
 
 ## TROUBLESHOOTING
@@ -171,9 +224,8 @@ If you chose to generate the HTML interface (Step 6), you'll find these files in
 - Verify against physical CD/LP
 
 ### If OCLC numbers seem wrong:
-- The workflow uses multiple verification layers
-- Low confidence items are flagged for human review
-- Trust your professional judgment over AI suggestions
+- The workflow uses multiple verification layers and low confidence items are flagged for human review
+- However, trust your professional judgment over AI suggestions
 
 ---
 
@@ -187,6 +239,7 @@ The AI workflow provides multiple verification layers:
 - **Step 4**: Verifies track listings and publication dates
 - **Step 5**: Flags low-confidence matches for human review
 - **Step 6** (Optional): Visual review with HTML interface
+- **Step 7** (Optional): Use cataloger decision exports to update deliverables
 
 **Remember**: AI is a tool to accelerate cataloging, not to replace professional judgment. When in doubt, follow standard cataloging practices and institutional policies.
 
@@ -196,6 +249,6 @@ The AI workflow provides multiple verification layers:
 
 ```
 Images → Metadata Extraction → OCLC Search → AI Analysis → 
-Verification → Classification → Output Files (+ Optional HTML)
+Verification → Classification → Output Files → Optional HTML → Optional Deliverable Updates → Optional Batch Uploads
 ```
 

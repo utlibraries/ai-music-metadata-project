@@ -238,7 +238,7 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
             batch_requests=formatted_requests,
             custom_id_mapping=custom_id_mapping,
             description=f"LP Metadata Extraction - {total_items} items - {datetime.now().strftime('%Y-%m-%d')}",
-            max_file_size_mb=180  # Conservative limit under 200 MB
+            max_file_size_mb=40  
         )
         
         if results:

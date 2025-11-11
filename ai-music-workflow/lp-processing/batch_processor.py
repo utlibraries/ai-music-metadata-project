@@ -35,13 +35,20 @@ class BatchProcessor:
     Features:
     - Automatic batch submission and monitoring
     - Cost tracking and logging
-    - Error recovery and retry logic
+    - Error recovery and retry logic with exponential backoff
     - Progress monitoring with status updates
     - Integration with existing token logging system
+    - Configurable chunk sizes for large file handling
+    - Extended timeouts for large file uploads
     """
     
     def __init__(self, api_key: Optional[str] = None, default_step: str = "step1"):
-        self.client = OpenAI(api_key=api_key or os.getenv('OPENAI_API_KEY'))
+        # Initialize with extended timeouts for large file uploads
+        self.client = OpenAI(
+            api_key=api_key or os.getenv('OPENAI_API_KEY'),
+            timeout=3600.0,  # 1 hour timeout for large file uploads
+            max_retries=0  # Handle retries manually with custom logic
+        )
         self.batch_jobs = {}
         self.default_step = default_step
 
@@ -154,6 +161,68 @@ class BatchProcessor:
             is_batch=True
         )
 
+    def _upload_file_with_retry(self, file_path: str, max_retries: int = 5) -> Any:
+        """
+        Upload a file to OpenAI with retry logic for timeouts and server errors.
+        
+        Args:
+            file_path: Path to the file to upload
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            Uploaded file object
+        """
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                with open(file_path, 'rb') as f:
+                    file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+                    
+                    if attempt > 0:
+                        # Exponential backoff with longer waits: 10s, 20s, 40s, 80s, 160s
+                        wait_time = 10 * (2 ** (attempt - 1))
+                        print(f"   Retry attempt {attempt}/{max_retries} after {wait_time}s wait...")
+                        time.sleep(wait_time)
+                    
+                    print(f"   Uploading {file_size_mb:.1f} MB file... (attempt {attempt + 1}/{max_retries})")
+                    batch_input_file = self.client.files.create(
+                        file=f,
+                        purpose="batch"
+                    )
+                    print(f"   Upload successful! File ID: {batch_input_file.id}")
+                    return batch_input_file
+                    
+            except Exception as e:
+                error_str = str(e)
+                last_error = e
+                
+                # Log the actual error for debugging
+                print(f"   Error: {error_str[:200]}")  # First 200 chars of error
+                
+                # Check if it's a retryable error (504, 500, 502, 503, timeout, rate limit)
+                error_lower = error_str.lower()
+                is_timeout = "504" in error_str or "time" in error_lower or "timeout" in error_lower
+                is_server_error = any(code in error_str for code in ["500", "502", "503"])
+                is_rate_limit = "rate" in error_lower or "429" in error_str
+                
+                if is_timeout or is_server_error or is_rate_limit:
+                    if attempt < max_retries - 1:
+                        wait_time = 10 * (2 ** attempt)
+                        error_type = "timeout" if is_timeout else ("rate limit" if is_rate_limit else "server error")
+                        print(f"   Upload failed ({error_type}), will retry in {wait_time}s...")
+                        continue
+                    else:
+                        print(f"   Upload failed after {max_retries} attempts: {error_str}")
+                        raise
+                else:
+                    # Non-retryable error
+                    print(f"   Upload failed with non-retryable error: {error_str}")
+                    raise
+        
+        # If we got here, all retries failed
+        raise last_error
+
     
     def submit_batch(self, batch_requests: List[Dict[str, Any]], 
                     description: str = "") -> str:
@@ -174,14 +243,10 @@ class BatchProcessor:
             temp_file_path = f.name
         
         try:
-            print(f"📤 Uploading batch file with {len(batch_requests)} requests...")
+            print(f"Uploading batch file with {len(batch_requests)} requests...")
             
-            # Upload the batch file
-            with open(temp_file_path, 'rb') as f:
-                batch_input_file = self.client.files.create(
-                    file=f,
-                    purpose="batch"
-                )
+            # Upload the batch file with retry logic
+            batch_input_file = self._upload_file_with_retry(temp_file_path)
             
             # Create the batch job
             batch_job = self.client.batches.create(
@@ -204,7 +269,7 @@ class BatchProcessor:
                 "temp_file_path": temp_file_path
             }
             
-            print(f" Batch job submitted successfully!")
+            print(f"Batch job submitted successfully!")
             print(f"   Batch ID: {batch_job.id}")
             print(f"   Requests: {len(batch_requests)}")
             print(f"   Status: {batch_job.status}")
@@ -212,7 +277,7 @@ class BatchProcessor:
             return batch_job.id
             
         except Exception as e:
-            print(f" Failed to submit batch job: {str(e)}")
+            print(f"Failed to submit batch job: {str(e)}")
             # Clean up temporary file
             if os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
@@ -221,7 +286,7 @@ class BatchProcessor:
     def submit_adaptive_batch(self, batch_requests: List[Dict[str, Any]], 
                             custom_id_mapping: Dict[str, Any],
                             description: str = "",
-                            max_file_size_mb: int = 180) -> List[Dict[str, Any]]:
+                            max_file_size_mb: int = 50) -> List[Dict[str, Any]]:
         """
         Submit batch requests with adaptive splitting based on file size.
         Creates the full batch file, then splits if needed, maintaining order.
@@ -230,7 +295,7 @@ class BatchProcessor:
             batch_requests: List of formatted batch requests
             custom_id_mapping: Mapping of custom IDs to original data
             description: Optional description for the batch job
-            max_file_size_mb: Maximum file size in MB before splitting
+            max_file_size_mb: Maximum file size in MB before splitting (default: 50 MB)
             
         Returns:
             Combined results from all batches
@@ -252,7 +317,7 @@ class BatchProcessor:
         try:
             if file_size_mb <= max_file_size_mb:
                 # Single batch processing
-                print("File size within limits, processing as single batch")
+                print(f"File size within {max_file_size_mb} MB limit, processing as single batch")
                 return self._process_single_batch_file(full_batch_path, description)
             else:
                 # Split into multiple batches
@@ -266,8 +331,8 @@ class BatchProcessor:
 
     def _process_single_batch_file(self, batch_file_path: str, description: str) -> List[Dict[str, Any]]:
         """Process a single batch file."""
-        with open(batch_file_path, 'rb') as f:
-            batch_input_file = self.client.files.create(file=f, purpose="batch")
+        # Use retry logic for upload
+        batch_input_file = self._upload_file_with_retry(batch_file_path)
         
         batch_job = self.client.batches.create(
             input_file_id=batch_input_file.id,
@@ -281,7 +346,9 @@ class BatchProcessor:
 
     def _process_split_batches(self, full_batch_path: str, batch_requests: List[Dict[str, Any]], 
                             description: str, max_file_size_mb: int) -> List[Dict[str, Any]]:
-        """Split batch file and process chunks concurrently, maintaining order."""
+        """
+        Split batch file and process chunks sequentially to avoid overwhelming API.
+        """
         
         # Calculate optimal chunk size based on file size
         file_size_mb = os.path.getsize(full_batch_path) / (1024 * 1024)
@@ -289,6 +356,7 @@ class BatchProcessor:
         chunk_size = len(batch_requests) // estimated_chunks + 1
         
         print(f"Splitting into approximately {estimated_chunks} chunks of ~{chunk_size} requests each")
+        print(f"Note: Chunks will be submitted sequentially to avoid API overload")
         
         chunk_files = []
         batch_ids = []
@@ -312,15 +380,16 @@ class BatchProcessor:
                 
                 print(f"Chunk {chunk_num}/{total_chunks}: {len(chunk_requests)} requests, {chunk_size_mb:.1f} MB")
             
-            # Submit all batches concurrently
-            print(f"\nSubmitting all {len(chunk_files)} batches concurrently...")
+            # Submit all batches in parallel for faster processing
+            print(f"\nSubmitting all {len(chunk_files)} batches in parallel...")
             for i, chunk_file_path in enumerate(chunk_files):
                 chunk_num = i + 1
                 chunk_description = f"{description} - Chunk {chunk_num}/{len(chunk_files)}"
                 
-                # Submit batch without waiting
-                with open(chunk_file_path, 'rb') as f:
-                    batch_input_file = self.client.files.create(file=f, purpose="batch")
+                print(f"Submitting chunk {chunk_num}/{len(chunk_files)}...")
+                
+                # Upload with retry logic
+                batch_input_file = self._upload_file_with_retry(chunk_file_path)
                 
                 batch_job = self.client.batches.create(
                     input_file_id=batch_input_file.id,
@@ -330,7 +399,9 @@ class BatchProcessor:
                 )
                 
                 batch_ids.append(batch_job.id)
-                print(f"Submitted chunk {chunk_num}: {batch_job.id}")
+                print(f"   Submitted: {batch_job.id}")
+            
+            print(f"\nAll {len(batch_ids)} chunks submitted successfully!")
             
             # Wait for all batches to complete
             print(f"\nWaiting for all {len(batch_ids)} batches to complete...")
@@ -352,49 +423,31 @@ class BatchProcessor:
                         status = status_info["status"]
                         
                         if status == "completed":
-                            chunk_results = self._retrieve_batch_results(batch_id, status_info)
-                            completed_batches[batch_id] = chunk_results
-                            print(f"Chunk {i+1} completed: {len(chunk_results) if chunk_results else 0} results")
-                        
-                        elif status == "failed":
-                            print(f"Chunk {i+1} failed!")
-                            self._handle_batch_errors(batch_id, status_info)
-                            completed_batches[batch_id] = None
-                        
-                        elif status in ["expired", "cancelled"]:
+                            print(f"Chunk {i+1} completed!")
+                            results = self._retrieve_batch_results(batch_id, status_info)
+                            completed_batches[batch_id] = results
+                            all_results.extend(results or [])
+                            
+                        elif status in ["failed", "expired", "cancelled"]:
                             print(f"Chunk {i+1} {status}!")
                             completed_batches[batch_id] = None
                 
-                # Show overall progress
-                completed_count = len(completed_batches)
-                if completed_count < len(batch_ids):
-                    print(f"Progress: {completed_count}/{len(batch_ids)} batches completed")
-                    time.sleep(30)  # Check every 30 seconds
+                # If not all completed, wait before next check
+                if len(completed_batches) < len(batch_ids):
+                    completed_count = len(completed_batches)
+                    total_count = len(batch_ids)
+                    print(f"Progress: {completed_count}/{total_count} chunks completed. Checking again in 30s...")
+                    time.sleep(30)
             
-            # Combine results in order
-            for batch_id in batch_ids:
-                chunk_results = completed_batches.get(batch_id)
-                if chunk_results:
-                    all_results.extend(chunk_results)
-                else:
-                    print(f"Warning: Batch {batch_id} failed, some results may be missing")
-            
-            print(f"\nAll batches completed. Total results: {len(all_results)}")
-            
-            # Check if any batches failed
-            failed_batches = [bid for bid, results in completed_batches.items() if results is None]
-            if failed_batches:
-                print(f"Warning: {len(failed_batches)} out of {len(batch_ids)} batches failed")
-                return None if len(failed_batches) == len(batch_ids) else all_results
-            
+            print(f"\nAll chunks completed! Total results: {len(all_results)}")
             return all_results
             
         finally:
-            # Clean up chunk files
+            # Clean up all chunk files
             for chunk_file in chunk_files:
                 if os.path.exists(chunk_file):
                     os.unlink(chunk_file)
-        
+
     def check_batch_status(self, batch_id: str) -> Dict[str, Any]:
         """
         Check the status of a batch job.
@@ -403,32 +456,27 @@ class BatchProcessor:
             batch_id: ID of the batch job
             
         Returns:
-            Dictionary containing batch status information
+            Dictionary with batch status information
         """
         try:
-            batch_job = self.client.batches.retrieve(batch_id)
+            batch = self.client.batches.retrieve(batch_id)
             
-            status_info = {
-                "id": batch_job.id,
-                "status": batch_job.status,
-                "created_at": batch_job.created_at,
-                "request_counts": batch_job.request_counts,
-                "metadata": batch_job.metadata
+            return {
+                "batch_id": batch_id,
+                "status": batch.status,
+                "request_counts": batch.request_counts,
+                "created_at": batch.created_at,
+                "completed_at": batch.completed_at,
+                "expires_at": batch.expires_at,
+                "output_file_id": batch.output_file_id,
+                "error_file_id": batch.error_file_id
             }
             
-            # Add completion info if available
-            if hasattr(batch_job, 'completed_at') and batch_job.completed_at:
-                status_info["completed_at"] = batch_job.completed_at
-                status_info["output_file_id"] = batch_job.output_file_id
-                
-            if hasattr(batch_job, 'error_file_id') and batch_job.error_file_id:
-                status_info["error_file_id"] = batch_job.error_file_id
-                
-            return status_info
-            
         except Exception as e:
-            print(f" Failed to check batch status: {str(e)}")
-            return {"error": str(e)}
+            return {
+                "batch_id": batch_id,
+                "error": str(e)
+            }
     
     def wait_for_completion(self, batch_id: str, 
                           max_wait_hours: int = 24,
@@ -448,7 +496,7 @@ class BatchProcessor:
         max_wait_time = timedelta(hours=max_wait_hours)
         check_interval = timedelta(minutes=check_interval_minutes)
         
-        print(f" Waiting for batch completion (ID: {batch_id})")
+        print(f"Waiting for batch completion (ID: {batch_id})")
         print(f"   Max wait time: {max_wait_hours} hours")
         print(f"   Check interval: {check_interval_minutes} minutes")
         
@@ -459,7 +507,7 @@ class BatchProcessor:
             status_info = self.check_batch_status(batch_id)
             
             if "error" in status_info:
-                print(f" Error checking batch status: {status_info['error']}")
+                print(f"Error checking batch status: {status_info['error']}")
                 return None
             
             status = status_info["status"]
@@ -467,7 +515,7 @@ class BatchProcessor:
             
             # Print progress update
             if datetime.now() - last_check >= check_interval:
-                print(f" Batch Status: {status}")
+                print(f"Batch Status: {status}")
                 if request_counts:
                     total = getattr(request_counts, "total", 0)
                     completed = getattr(request_counts, "completed", 0)
@@ -477,22 +525,22 @@ class BatchProcessor:
             
             # Check if completed
             if status == "completed":
-                print(f" Batch completed successfully!")
+                print(f"Batch completed successfully!")
                 return self._retrieve_batch_results(batch_id, status_info)
             
             elif status == "failed":
-                print(f" Batch failed!")
+                print(f"Batch failed!")
                 self._handle_batch_errors(batch_id, status_info)
                 return None
             
             elif status in ["expired", "cancelled"]:
-                print(f" Batch {status}!")
+                print(f"Batch {status}!")
                 return None
             
             # Wait before next check
             time.sleep(60)  # Check every minute, but only print updates per interval
         
-        print(f" Timeout waiting for batch completion after {max_wait_hours} hours")
+        print(f"Timeout waiting for batch completion after {max_wait_hours} hours")
         return None
     
     def _retrieve_batch_results(self, batch_id: str, 
@@ -501,10 +549,10 @@ class BatchProcessor:
         try:
             output_file_id = status_info.get("output_file_id")
             if not output_file_id:
-                print(f" No output file ID found for batch {batch_id}")
+                print(f"No output file ID found for batch {batch_id}")
                 return []
             
-            print(f" Downloading batch results...")
+            print(f"Downloading batch results...")
             
             # Download the results file
             result_content = self.client.files.content(output_file_id)
@@ -516,7 +564,7 @@ class BatchProcessor:
                     result = json.loads(line)
                     results.append(result)
             
-            print(f" Retrieved {len(results)} batch results")
+            print(f"Retrieved {len(results)} batch results")
             
             # Clean up temporary file if it exists
             if batch_id in self.batch_jobs:
@@ -527,7 +575,7 @@ class BatchProcessor:
             return results
             
         except Exception as e:
-            print(f" Failed to retrieve batch results: {str(e)}")
+            print(f"Failed to retrieve batch results: {str(e)}")
             return []
     
     def _handle_batch_errors(self, batch_id: str, status_info: Dict[str, Any]):
@@ -536,13 +584,13 @@ class BatchProcessor:
             error_file_id = status_info.get("error_file_id")
             if error_file_id:
                 error_content = self.client.files.content(error_file_id)
-                print(f" Batch Error Details:")
+                print(f"Batch Error Details:")
                 print(error_content.text)
             else:
-                print(f" Batch failed but no error file available")
+                print(f"Batch failed but no error file available")
                 
         except Exception as e:
-            print(f" Failed to retrieve error details: {str(e)}")
+            print(f"Failed to retrieve error details: {str(e)}")
     
     def process_batch_results(self, results: List[Dict[str, Any]], 
                             custom_id_mapping: Dict[str, Any]) -> Dict[str, Any]:
@@ -616,7 +664,7 @@ class BatchProcessor:
                 failed_results += 1
         
         # Print summary
-        print(f" Batch Processing Summary:")
+        print(f"Batch Processing Summary:")
         print(f"   Successful: {successful_results}")
         print(f"   Failed: {failed_results}")
         print(f"   Total prompt tokens: {total_prompt_tokens:,}")

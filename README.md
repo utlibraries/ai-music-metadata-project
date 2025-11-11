@@ -1,7 +1,11 @@
 # AI Music Metadata Project
 
 ## Overview
-Automates metadata extraction and OCLC matching for CD and LP collections. This project uses AI as a tool for basic metadata extraction from images and for analyzing OCLC match results. It also searches OCLC WorldCat with the generated metadata and creates ready-to-use cataloging files.  In addition, there are now scripts in each workflow folder for experimenting with batch uploading to Alma Sandbox if desired.
+Automates metadata extraction and OCLC matching for CD and LP collections. This project uses AI for basic metadata extraction from images and for analyzing OCLC match results. It also searches OCLC WorldCat using the generated metadata and creates ready-to-use cataloging files.
+
+Optionally, users can generate an HTML review interface. The upside is that it provides a convenient way to review low-confidence or high-confidence matches before moving forward. The downside is that it is served locally on your computer; to support this, the script copies all required images into the results folder, making it best for batches under 500 items. To support the review work done using the HTML site, there is also a script to incorporate cataloger decisions into the cataloging files (details below). 
+
+Another optional component is the batch upload to Alma Sandbox, which is designed to use the generated alma-batch-upload CSV file as the input set.
 
 **Separate workflows for CDs and LPs** - each format has its own processing folder with dedicated scripts and configurations.
 
@@ -9,13 +13,31 @@ Automates metadata extraction and OCLC matching for CD and LP collections. This 
 
 
 ---
+
+## Processing Pipeline
+
+1. **Step 0.5**: Validate image file naming
+2. **Step 1**: Extract metadata from images using AI
+3. **Step 1.5**: Clean and normalize extracted metadata
+4. **Step 2**: Query OCLC WorldCat API
+5. **Step 3**: AI analysis of OCLC matches with confidence scoring
+6. **Step 4**: Verify track listings and publication years
+7. **Step 5**: Create final output files organized in subfolders
+8. **Step 6** (optional): Generate HTML review interface with images.  Also creates a decisions-history spreadsheet, necessary to track changes to output files. 
+9. **Step 7** (not in run script): Creates an 'original-outputs' folder and copies original cataloging files to it.  Updates the decisions-history spreadsheet with cataloger decisions and updates cataloging files, including the batch upload file and sorting spreadsheet.  
+9. **Alma Batch Processing** (not in run script): Takes the high confidence matches not already held by the institution and uses the OCLC number to create bibliographic, holding, and item records in Alma.   
+
+*****The Alma batch upload scripts are provided for sandbox experimentation only.*****
+
+
+---
 ## Features
 - **AI Metadata Extraction**: LLM extracts title, artist, publisher, tracks, dates, and physical description from CD/LP images
 - **OCLC Integration**: Automated WorldCat searches return up to 10 matching records per item
-- **AI Match Analysis**: LLM evaluates matches, assigns confidence scores, and explains reasoning
-- **Verification**: Automatic track listing and publication year validation
+- **AI Match Analysis**: LLM evaluates matches, assigns confidence scores, and briefly explains reasoning
+- **Additional Verification**: Automatic track listing and publication year validation
 - **Batch Processing**: 50% cost savings for batches over 10 items (automatic)
-- **HTML Review Interface** (Optional but a very convenient tool): Visual review of matches with images
+- **HTML Review Interface** (Optional but a very convenient tool): Visual review of matches with images.  Export decisions to CSV and process using script 7 to automatically edit cataloging files accordingly.
 - **Alma Batch Uploads**: Creates new bibs, holdings, and items by importing bibliographic information from OCLC. Intended for experimentation in Alma SANDBOX and excluded from the automated run script.
 ---
 
@@ -56,81 +78,35 @@ python ai-music-workflow/cd-processing/run_cd_processing.py
 python ai-music-workflow/lp-processing/run_lp_processing.py
 ```
 
-The script will:
+The run script will:
 - Automatically choose batch vs. real-time processing (you can change threshold in configuration file)
-- Prompt for whether to generate HTML review interface (Step 6)
-- Run processing steps in sequence
+- Prompt in terminal for whether to generate HTML review interface (Step 6)
+- Run processing steps in sequence, not including step 7 (to incorporate cataloger decision CSV into cataloging files) and batch upload script
 - Create organized output files
-
-### Force Processing Mode (Optional)
-
-**Force batch processing** (50% cost savings):
-```bash
-USE_BATCH_PROCESSING=true python run_cd_processing.py
-```
-
-**Force real-time processing** (faster for small batches):
-```bash
-USE_BATCH_PROCESSING=false python run_cd_processing.py
-```
 
 ---
 
-## Image Directory Structure
+## Image Input Files
 
-Save each collection of images in its own subfolder within `[cd/lp]-image-folders/`.
+### Organization
+Place all images for a collection in a single folder.
 
 **Example path:** 
 `ai-music-metadata-project/ai-music-workflow/cd-processing/cd-image-folders/cd-scans-100/`
 
 The workflow will automatically generate an outputs folder with organized results.
 
----
-
-## Image Requirements
-
 ### Naming Convention
 Images must be named with barcode + letter suffix:
-- `barcode_a.jpeg` - Front image (required)
-- `barcode_b.jpeg` - Back image (optional)
-- `barcode_c.jpeg` - Additional image (optional)
-
 **Examples:**
-- `39015012345678a.jpeg`
-- `39015012345678b.jpeg`
-- `39015012345678c.jpeg`
+- `39015012345678a.jpeg`- Front image (required)
+- `39015012345678b.jpeg`- Back image (optional)
+- `39015012345678c.jpeg`- Additional image (optional)
 
 ### Format
 - **Supported**: JPEG (.jpg, .jpeg) or PNG (.png)
 - **Best quality**: Clear, legible text, minimal glare
 - **Recommendation**: JPEG for smaller file sizes (especially if generating HTML)
-
-### Organization
-Place all images for a collection in a single folder:
-```
-cd-image-folders/
-└── spring2024_collection/
-    ├── barcode1a.jpeg
-    ├── barcode1b.jpeg
-    ├── barcode2a.jpeg
-    └── ...
-```
-
----
-
-## Processing Pipeline
-
-1. **Step 0.5**: Validate image file naming (optional pre-check)
-2. **Step 1**: Extract metadata from images using AI
-3. **Step 1.5**: Clean and normalize extracted metadata
-4. **Step 2**: Query OCLC WorldCat API
-5. **Step 3**: AI analysis of OCLC matches with confidence scoring
-6. **Step 4**: Verify track listings and publication years
-7. **Step 5**: Create final output files organized in subfolders
-8. **Step 6** (Optional): Generate HTML review interface with images
-9. **Alma Batch Processing**: Takes the generated high confidence matches and uses the OCLC number to create bib, holding, and item records in Alma.   
-
-*****The Alma batch upload scripts are provided for sandbox experimentation only, and are not part of the default automated workflow.*****
 
 ---
 
@@ -151,16 +127,19 @@ cd-image-folders/
    - Yellow highlighting for items needing review
    - Dropdown status menu, auto-populated OCLC numbers
 
-4. **low-confidence-matches-review-[date].txt**
+4. **low-confidence-matches-review-[date].xlsx**
    - Detailed review information for each LOW CONFIDENCE item
    - AI-generated metadata, suggested matches, alternatives
 
-5. **marc-formatted-low-confidence-matches-[date].txt**
+5. **marc-formatted-low-confidence-matches-[date].xlsx**
    - Basic MARC records for original cataloging
    - Based on AI-extracted metadata
    - For LOW CONFIDENCE items only 
 
-*****If you choose to use the batch uploading script, a report on that batch upload will be saved in this folder as well*****
+6. **decisions-history.xlsx**
+   - On ly created if user opts in to generate the HTML review interface
+   - Initially contains only AI decisions, automatically edited if user makes decisions, downloads the CSV file of their decisions and uses script 7 to process the CSV
+   - If automatically edited, the newest decisions are prioritized, older decisions are kept in Decisions History worksheet
 
 ### `guides/` folder - Documentation
 
@@ -173,7 +152,7 @@ cd-image-folders/
 - **full-workflow-data-[cd/lp]-[timestamp].xlsx** - Excel version with thumbnails
 
 ### `logs/` folder - Contains all main workflow logs 
-- including API response logs, token usage logs, error logs, and metrics
+- Including API response logs, token usage logs, error logs, and metrics
 
 ### Main results folder (if HTML is generated)
 
@@ -214,7 +193,7 @@ Settings include:
 ### During Processing
 5. **Use run script** - Ensures all core steps execute correctly
 6. **Monitor large jobs** - Check periodically for errors
-7. **Allow time for batch** - Up to 24 hours per AI step (usually much faster)
+7. **Allow time for batch** - Up to 24 hours per AI step (usually much faster!)
 
 ### After Processing
 8. **Review outputs** - Start with sorting spreadsheet
@@ -237,6 +216,7 @@ Settings include:
 5. Open `review-index-[date].html` in web browser
 6. Make decisions and add notes
 7. **Export to CSV** to save your work
+8. Run Script 7 to automatically edit output files with cataloger decisions and to save decisions history - prompts in terminal for paths to cataloger decisions CSV and results folder
 
 ### Important Notes
 - HTML runs locally (no internet connection needed for viewing)
@@ -245,12 +225,6 @@ Settings include:
 - Not recommended for batches over 500 items (large folder size)
 - Use JPEG images when possible (smaller files)
 - Items may be sorted by confidence and then put back in their original order. 
-
----
-
-## Troubleshooting
-
-**For troubleshooting guidance, see TECHNICAL_GUIDE.txt in the guides folder.**
 
 ---
 
