@@ -201,7 +201,7 @@ def format_oclc_results(json_response, access_token):
             include_record = False
             if 'format' in record and 'specificFormat' in record['format']:
                 specific_format = record['format']['specificFormat']
-                if isinstance(specific_format, str) and any(lp_term in specific_format for lp_term in ["LP", "vinyl", "Long Play"]):
+                if isinstance(specific_format, str) and any(lp_term in specific_format.lower() for lp_term in ["lp", "vinyl", "long play", "audiobook", "spoken", "spoken word", "talking book", "sound recording"]):
                     include_record = True
             
             if include_record:
@@ -338,7 +338,7 @@ def format_oclc_api_response_for_accumulation(data, access_token, seen_oclc_numb
             include_record = False
             if 'format' in record and 'specificFormat' in record['format']:
                 specific_format = record['format']['specificFormat']
-                if isinstance(specific_format, str) and any(lp_term in specific_format for lp_term in ["LP", "vinyl", "Long Play"]):
+                if isinstance(specific_format, str) and any(lp_term in specific_format.lower() for lp_term in ["lp", "vinyl", "long play", "audiobook", "spoken", "spoken word", "talking book", "sound recording"]):
                     include_record = True
             
             if include_record:
@@ -641,8 +641,8 @@ def query_oclc_api(queries, barcode, limit=10):
             "limit": limit,
             "offset": 1,
             "itemType": "music",
-            "inCatalogLanguage": "eng",
-            "itemSubType": "music-lp"
+            "inCatalogLanguage": "eng"
+            # Removed itemSubType to allow both music-lp and audiobook-lp
         }
 
         try:
@@ -672,7 +672,9 @@ def query_oclc_api(queries, barcode, limit=10):
                     include_record = False
                     if 'format' in record and 'specificFormat' in record['format']:
                         specific_format = record['format']['specificFormat']
-                        if isinstance(specific_format, str) and any(lp_term in specific_format for lp_term in ["LP", "vinyl", "Long Play"]):
+                        if isinstance(specific_format, str) and any(lp_term in specific_format.lower() for lp_term in [
+    "lp", "vinyl", "long play", "audiobook", "spoken", "spoken word", "talking book", "sound recording"
+]):
                             include_record = True
                     
                     if not include_record:

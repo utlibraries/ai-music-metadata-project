@@ -129,17 +129,17 @@ def get_bib_info_from_workflow(oclc_number: str, workflow_json_path: str) -> Dic
 def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
     """
     Parse AI-generated metadata string into structured fields for JSON storage.
-    Handles both JSON format and text format responses.
-    
+    Handles YAML, JSON, and text format responses.
+
     Args:
         metadata_str: Raw AI-generated metadata text
-    
+
     Returns:
         Dictionary with structured metadata fields
     """
     if not metadata_str:
         return {}
-    
+
     fields = {
         "title_information": {
             "main_title": None,
@@ -178,137 +178,282 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
             "general_notes": []
         }
     }
-    
-    def clean_value(value: str) -> Optional[str]:
+
+    def clean_value(value: Any) -> Optional[str]:
         """Clean extracted values and return None for invalid entries."""
         if not value:
             return None
-        
+
+        # If value is a list, it shouldn't be here - convert to string representation
+        if isinstance(value, list):
+            # This shouldn't happen but handle it gracefully
+            value = ', '.join(str(v) for v in value)
+
+        # Convert to string if not already
+        if not isinstance(value, str):
+            value = str(value)
+
         # Remove leading/trailing whitespace and dashes
         cleaned = value.strip().lstrip('-').strip()
-        
+
+        # Remove surrounding brackets like [text] if present
+        if cleaned.startswith('[') and cleaned.endswith(']'):
+            cleaned = cleaned[1:-1].strip()
+
+        # Remove "Name:" prefix that sometimes appears
+        if cleaned.startswith('Name:'):
+            cleaned = cleaned[5:].strip()
+
         # Check for invalid values
         invalid_indicators = [
-            "not visible", "not available", "n/a", "unavailable", 
-            "unknown", "[none]", "none", "not present", "not listed", 
+            "not visible", "not available", "n/a", "unavailable",
+            "unknown", "[none]", "none", "not present", "not listed",
             "not applicable", "unclear", "partially visible"
         ]
-        
+
         if cleaned.lower() in invalid_indicators:
             return None
-            
+
         return cleaned if cleaned else None
     
-    # Try to parse as JSON first
+    # Try to parse as YAML first (since AI often returns YAML format)
     try:
-        # Look for JSON content between ```json and ``` or just try to parse the whole thing
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', metadata_str, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1)
+        import yaml
+
+        # Look for YAML content between ```yaml and ```
+        yaml_match = re.search(r'```yaml\s*\n(.*?)\n```', metadata_str, re.DOTALL)
+        if yaml_match:
+            yaml_str = yaml_match.group(1)
         else:
-            # Try to find JSON-like structure
-            json_match = re.search(r'(\{.*\})', metadata_str, re.DOTALL)
+            # Look for any code block
+            code_block_match = re.search(r'```\s*\n(.*?)\n```', metadata_str, re.DOTALL)
+            if code_block_match:
+                yaml_str = code_block_match.group(1)
+            else:
+                yaml_str = metadata_str
+
+        # Try YAML parsing first
+        try:
+            parsed_json = yaml.safe_load(yaml_str)
+        except yaml.YAMLError:
+            # If YAML fails, try JSON
+            import json
+            # Look for JSON content between ```json and ```
+            json_match = re.search(r'```json\s*(\{.*?\})\s*```', metadata_str, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
             else:
-                json_str = metadata_str
+                # Try to find JSON-like structure
+                json_match = re.search(r'(\{.*\})', metadata_str, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(1)
+                else:
+                    json_str = metadata_str
+            parsed_json = json.loads(json_str)
         
-        import json
-        parsed_json = json.loads(json_str)
-        
-        # Extract from JSON structure
+        def parse_list_field(value: Any) -> List[str]:
+            """Parse a field that might be a list, bracketed string, or comma-separated string."""
+            if not value:
+                return []
+
+            if isinstance(value, list):
+                # Already a list, need to handle different item types
+                result = []
+                for item in value:
+                    if isinstance(item, str):
+                        cleaned = clean_value(item)
+                        if cleaned:
+                            result.append(cleaned)
+                    elif item is not None:
+                        cleaned = clean_value(str(item))
+                        if cleaned:
+                            result.append(cleaned)
+                return result
+
+            # Convert to string and clean
+            str_value = str(value).strip()
+
+            # Remove outer brackets if present
+            if str_value.startswith('[') and str_value.endswith(']'):
+                str_value = str_value[1:-1].strip()
+
+            # Split by comma and clean each part
+            parts = [p.strip() for p in str_value.split(',')]
+            return [clean_value(p) for p in parts if clean_value(p)]
+
+        def extract_from_yaml_list(yaml_list):
+            """Convert YAML list format (with dashes) to dictionary."""
+            result = {}
+            if isinstance(yaml_list, list):
+                for item in yaml_list:
+                    if isinstance(item, dict):
+                        result.update(item)
+                    elif isinstance(item, str) and ':' in item:
+                        # Handle string format like "Main Title: Free EP"
+                        key, value = item.split(':', 1)
+                        result[key.strip()] = value.strip()
+            return result
+
+        # Extract from JSON/YAML structure
         if "Title Information" in parsed_json:
             title_info = parsed_json["Title Information"]
+
+            # Handle list format (YAML with dashes)
+            if isinstance(title_info, list):
+                title_info = extract_from_yaml_list(title_info)
+
             fields["title_information"]["main_title"] = clean_value(title_info.get("Main Title"))
             fields["title_information"]["subtitle"] = clean_value(title_info.get("Subtitle"))
             fields["title_information"]["primary_contributor"] = clean_value(title_info.get("Primary Contributor"))
-            
+
             additional = title_info.get("Additional Contributors")
-            if additional and clean_value(str(additional)):
-                if isinstance(additional, list):
-                    fields["title_information"]["additional_contributors"] = [clean_value(c) for c in additional if clean_value(c)]
-                else:
-                    contrib_list = [c.strip() for c in str(additional).split(',') if clean_value(c.strip())]
-                    fields["title_information"]["additional_contributors"] = contrib_list
+            if additional:
+                fields["title_information"]["additional_contributors"] = parse_list_field(additional)
         
         if "Publishers" in parsed_json:
             pub_info = parsed_json["Publishers"]
-            fields["publishers"]["name"] = clean_value(pub_info.get("Name"))
+            if isinstance(pub_info, list):
+                pub_info = extract_from_yaml_list(pub_info)
+
+            # Handle both single values and lists for publisher name
+            name_value = pub_info.get("Name")
+            if isinstance(name_value, list):
+                # If it's a list, join with commas
+                cleaned_names = [clean_value(str(n)) for n in name_value if clean_value(str(n))]
+                fields["publishers"]["name"] = ", ".join(cleaned_names) if cleaned_names else None
+            else:
+                fields["publishers"]["name"] = clean_value(name_value)
+
             fields["publishers"]["place"] = clean_value(pub_info.get("Place"))
             fields["publishers"]["numbers"] = clean_value(pub_info.get("Numbers"))
-        
+
         if "Dates" in parsed_json:
             date_info = parsed_json["Dates"]
+            if isinstance(date_info, list):
+                date_info = extract_from_yaml_list(date_info)
             fields["dates"]["publication_date"] = clean_value(date_info.get("publicationDate"))
-        
+
         if "Language" in parsed_json:
             lang_info = parsed_json["Language"]
+            if isinstance(lang_info, list):
+                lang_info = extract_from_yaml_list(lang_info)
             fields["language"]["sung_language"] = clean_value(lang_info.get("sungLanguage"))
             fields["language"]["printed_language"] = clean_value(lang_info.get("printedLanguage"))
-        
+
         if "Format" in parsed_json:
             format_info = parsed_json["Format"]
+            if isinstance(format_info, list):
+                format_info = extract_from_yaml_list(format_info)
             fields["format"]["general_format"] = clean_value(format_info.get("generalFormat"))
             fields["format"]["specific_format"] = clean_value(format_info.get("specificFormat"))
-            
+
             material_types = format_info.get("materialTypes")
-            if material_types and clean_value(str(material_types)):
-                if isinstance(material_types, list):
-                    fields["format"]["material_types"] = [clean_value(m) for m in material_types if clean_value(m)]
-                else:
-                    fields["format"]["material_types"] = [clean_value(str(material_types))]
-        
+            if material_types:
+                fields["format"]["material_types"] = parse_list_field(material_types)
+
         if "Physical Description" in parsed_json:
             phys_info = parsed_json["Physical Description"]
+            if isinstance(phys_info, list):
+                phys_info = extract_from_yaml_list(phys_info)
             fields["physical_description"]["size"] = clean_value(phys_info.get("size"))
             fields["physical_description"]["material"] = clean_value(phys_info.get("material"))
             fields["physical_description"]["label_design"] = clean_value(phys_info.get("labelDesign"))
             fields["physical_description"]["physical_condition"] = clean_value(phys_info.get("physicalCondition"))
             fields["physical_description"]["special_features"] = clean_value(phys_info.get("specialFeatures"))
         
-        # Fixed track parsing logic
+        # Improved track parsing logic
         if "Contents" in parsed_json:
             content_info = parsed_json["Contents"]
+            if isinstance(content_info, list):
+                content_info = extract_from_yaml_list(content_info)
+
             tracks = content_info.get("tracks")
             if tracks and isinstance(tracks, list):
                 for track in tracks:
                     if isinstance(track, dict):
-                        track_title = clean_value(track.get("title"))
-                        track_number = track.get("number")
-                        
+                        # Handle both "title" and "Title" keys
+                        track_title = clean_value(track.get("title") or track.get("Title"))
+                        track_number = track.get("number") or track.get("Number")
+
                         # Ensure we have both number and title, and title is valid
                         if track_title and track_number is not None:
                             try:
                                 # Convert number to int, handling various input types
-                                if isinstance(track_number, str):
-                                    track_num = int(track_number)
-                                else:
-                                    track_num = int(track_number)
-                                
+                                track_num = int(track_number)
+
                                 # Only add valid tracks (positive track numbers)
                                 if track_num > 0:
-                                    fields["contents"]["tracks"].append({
+                                    track_entry = {
                                         "number": track_num,
                                         "title": track_title
-                                    })
+                                    }
+
+                                    # Add transliteration if present and valid
+                                    transliteration = clean_value(
+                                        track.get("titleTransliteration") or track.get("TitleTransliteration")
+                                    )
+                                    if transliteration:
+                                        track_entry["titleTransliteration"] = transliteration
+
+                                    fields["contents"]["tracks"].append(track_entry)
                             except (ValueError, TypeError):
                                 # Skip tracks with invalid numbers
                                 continue
-        
+
+            # If no tracks were parsed from structured data, try regex fallback on raw metadata
+            if not fields["contents"]["tracks"]:
+                # Try to extract tracks using regex from the original metadata string
+                tracks_section = re.search(r'tracks:\s*\[(.*?)\]', metadata_str, re.DOTALL)
+                if tracks_section:
+                    tracks_content = tracks_section.group(1)
+
+                    # Pattern 1: Properly quoted titles
+                    track_pattern_quoted = r'\{\s*"number":\s*(\d+),\s*"title":\s*"([^"]+)"'
+                    track_matches = list(re.finditer(track_pattern_quoted, tracks_content, re.DOTALL))
+
+                    # Pattern 2: Unquoted titles (malformed)
+                    if not track_matches:
+                        track_pattern_unquoted = r'\{\s*"number":\s*(\d+),\s*"title":\s*([^,}]+)[,}]'
+                        track_matches = list(re.finditer(track_pattern_unquoted, tracks_content, re.DOTALL))
+
+                    for match in track_matches:
+                        try:
+                            track_number = int(match.group(1))
+                            track_title = match.group(2).strip().strip('"\'').strip()
+                            track_title = clean_value(track_title)
+
+                            if track_title and track_number > 0:
+                                fields["contents"]["tracks"].append({
+                                    "number": track_number,
+                                    "title": track_title
+                                })
+                        except (ValueError, TypeError):
+                            continue
+
         if "Notes" in parsed_json:
             notes_info = parsed_json["Notes"]
+            if isinstance(notes_info, list):
+                notes_info = extract_from_yaml_list(notes_info)
+
             notes = notes_info.get("generalNotes", [])
             if isinstance(notes, list):
                 for note in notes:
-                    if isinstance(note, dict) and "text" in note:
-                        note_text = clean_value(note.get("text"))
+                    if isinstance(note, dict):
+                        note_text = clean_value(note.get("text") or note.get("Text"))
                         if note_text:
                             fields["notes"]["general_notes"].append({"text": note_text})
-        
+                    elif isinstance(note, str):
+                        # Handle cases where notes are just strings
+                        note_text = clean_value(note)
+                        if note_text:
+                            fields["notes"]["general_notes"].append({"text": note_text})
+
         return fields
-        
-    except (json.JSONDecodeError, KeyError, AttributeError):
-        # Fall back to regex parsing for non-JSON format
+
+    except Exception as e:
+        # Fall back to regex parsing for non-JSON/YAML format
+        # Log the parsing error for debugging
+        print(f"Warning: YAML/JSON parsing failed ({str(e)}), falling back to regex parsing")
         pass
     
     # Fallback regex-based parsing for non-JSON format (keep existing regex logic)
@@ -412,16 +557,30 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
     tracks_section = re.search(r'tracks:\s*\[(.*?)\]', metadata_str, re.DOTALL)
     if tracks_section:
         tracks_content = tracks_section.group(1)
-        
-        # Look for track objects in JSON-like format within the text
-        track_pattern = r'\{\s*"number":\s*(\d+),\s*"title":\s*"([^"]+)"[^}]*\}'
-        track_matches = re.finditer(track_pattern, tracks_content, re.DOTALL)
-        
+
+        # Try multiple patterns to handle different formatting styles
+
+        # Pattern 1: Properly quoted titles: {"number": 1, "title": "Track Name"}
+        track_pattern_quoted = r'\{\s*"number":\s*(\d+),\s*"title":\s*"([^"]+)"[^}]*\}'
+        track_matches = list(re.finditer(track_pattern_quoted, tracks_content, re.DOTALL))
+
+        # Pattern 2: Unquoted titles (malformed but common): {"number": 1, "title": Track Name,}
+        if not track_matches:
+            track_pattern_unquoted = r'\{\s*"number":\s*(\d+),\s*"title":\s*([^,}]+)[,}]'
+            track_matches = list(re.finditer(track_pattern_unquoted, tracks_content, re.DOTALL))
+
+        # Pattern 3: Try alternative key names: {"number": 1, title: Track Name}
+        if not track_matches:
+            track_pattern_alt = r'\{\s*(?:"number"|number):\s*(\d+)[^}]*(?:"title"|title):\s*([^,}]+)[,}]'
+            track_matches = list(re.finditer(track_pattern_alt, tracks_content, re.DOTALL))
+
         for match in track_matches:
             try:
                 track_number = int(match.group(1))
-                track_title = clean_value(match.group(2))
-                
+                # Clean the title - remove quotes if present and strip whitespace
+                track_title = match.group(2).strip().strip('"\'').strip()
+                track_title = clean_value(track_title)
+
                 if track_title and track_number > 0:
                     fields["contents"]["tracks"].append({
                         "number": track_number,

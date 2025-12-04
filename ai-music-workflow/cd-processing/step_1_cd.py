@@ -44,7 +44,7 @@ client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 def get_llm_prompt():
     return """Analyze these images of a compact disc and extract the following key metadata fields in the specified format. You are a music cataloger, and know that you are responsible for the accuracy of the information you produce.  If ANY information is unclear, partially visible, or not visible: mark it as 'Not visible' in the metadadata. If you have reason to believe that a sticker may be covering part of a key field, like the title or primary contributor, either mark it as 'Not visible' or make an educated guess based on the visible information and note that it may be partially obscured in parentheses.
 
-Match this format:
+Match this format exactly (use markdown with YAML code block):
 Title Information:
   - Main Title: [Main Title in original language if using latin characters.  Transliterated if in non-latin characters.]
   - Subtitle: [Subtitle in original language if using latin characters.  Transliterated if in non-latin characters.]
@@ -70,12 +70,17 @@ Physical Description:
   - physicalCondition: [Condition notes]
   - specialFeatures: [Booklet details, packaging type (jewel case/digipak), inserts, bonus materials]
 Contents:
-  - tracks: [
+  - tracks (include ALL): [
       {
         "number": [Track number],
         "title": [Title in original language],
         "titleTransliteration": [Title transliteration if applicable],
-      }
+      }, 
+      {
+        "number": [Track number],
+        "title": [Title in original language],
+        "titleTransliteration": [Title transliteration if applicable],
+      }, ...
     ]
 Notes:
   - generalNotes: [{'text': [Note Text]}]
