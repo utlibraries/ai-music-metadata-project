@@ -50,6 +50,18 @@ MODEL_PRICING = {
         "input_per_1k": 0.0004,
         "output_per_1k": 0.0016,
         "batch_discount": 0.5
+    }, 
+    
+    # GPT-5 models
+    "gpt-5.1": {
+        "input_per_1k": 0.00125,
+        "output_per_1k": 0.01,
+        "batch_discount": 0.5
+    },
+    "gpt-5-mini": {
+        "input_per_1k": 0.00025,
+        "output_per_1k": 0.002,
+        "batch_discount": 0.5
     }
 }
 

@@ -8,23 +8,23 @@ from typing import Dict, Any
 # Model configurations for each step
 MODEL_CONFIGS = {
     "step1_metadata_extraction": {
-        "model": "gpt-4.1-mini",
+        "model": "gpt-4o",
         "max_tokens": 2000,
         "temperature": 0.0,
-        "batch_threshold": 100  # Use batch processing if more than this many items
+        "batch_threshold": 10  # Use batch processing if more than this many items
     },
     "step3_ai_analysis": {
         "model": "gpt-4.1-mini",
         "max_tokens": 1500,
         "temperature": 0.5,
-        "batch_threshold": 100
+        "batch_threshold": 10
     }
 }
 
 # File path configurations
 FILE_PATHS = {
     "base_dir": "ai-music-workflow/lp-processing",
-    "images_folder": "lp-image-folders/lp-scans-5",
+    "images_folder": "local-lp-image-folders/lp-scans-all-checked-smaller",
     "output_folders": "lp-output-folders",
     "results_folder_prefix": "results-",
     "logs_subfolder": "logs"
@@ -34,7 +34,7 @@ FILE_PATHS = {
 PROCESSING_THRESHOLDS = {
     "confidence": {
         "high_confidence": 80,  # Threshold for high confidence matches
-        "review_threshold": 79,  # Below this requires manual review
+        "review_threshold": 79,  # This or below this requires manual review
         "minimum_score": 0      # Minimum possible confidence score
     },
     "duplicate_detection": {
