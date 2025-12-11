@@ -1008,23 +1008,30 @@ def create_decisions_history_spreadsheet(results_folder, workflow_json_path, cur
     clean_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     row_idx = 2
+    skipped_count = 0
     for barcode, record_data in records.items():
-        if "step3_ai_analysis" not in record_data or "step5_final_classification" not in record_data:
-            continue
-        
+        # Check if record has required data, but allow records with failures to pass through
         step3 = record_data.get("step3_ai_analysis", {})
         step5 = record_data.get("step5_final_classification", {})
-        
-        ai_oclc = step3.get("selected_oclc_number", "")
-        ai_confidence = step3.get("confidence_score", {}).get("final", 0)
-        
-        sort_group = step5.get("sort_group", "")
+
+        # Skip ONLY if record has no step1 data at all (never processed)
+        # Records that failed in step1 or step3 will have placeholder data and should be included
+        if "step1_metadata_extraction" not in record_data:
+            skipped_count += 1
+            continue
+
+        # Get OCLC and confidence - default to empty/0 if failed
+        ai_oclc = step3.get("selected_oclc_number", "") if step3 else ""
+        ai_confidence = step3.get("confidence_score", {}).get("final", 0) if step3 else 0
+
+        # Get sort group - default to "Processing Failed" if step5 missing
+        sort_group = step5.get("sort_group", "Processing Failed") if step5 else "Processing Failed"
         held_by_ixa = "Yes" if sort_group == "Held by UT Libraries (IXA)" else "No"
-        
+
         # UPDATED ROW DATA - Removed Record ID, using clean timestamp
         row_data = [
             barcode,
-            ai_oclc,
+            ai_oclc if ai_oclc else "",  # Empty if no OCLC
             ai_confidence,
             "Not Reviewed",
             "",  # Chosen OCLC blank
@@ -1049,7 +1056,10 @@ def create_decisions_history_spreadsheet(results_folder, workflow_json_path, cur
     wb.save(decisions_file)
     print(f"   Created: {os.path.basename(decisions_file)}")
     print(f"   Records initialized: {row_idx - 2}")
-    
+
+    if skipped_count > 0:
+        print(f"   ⚠ Skipped {skipped_count} records that were never processed (no Step 1 data)")
+
     return decisions_file
 
 def main():

@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 import tempfile
-from cd_workflow_config import get_model_config
+from cd_workflow_config import get_model_config, get_token_limit_param, get_temperature_param
 
 # Custom module
 from model_pricing import estimate_cost
@@ -87,16 +87,23 @@ class BatchProcessor:
         default_model = _get_step_model(step)
 
         for i, req_data in enumerate(requests_data):
+            model_name = req_data.get("model", default_model)
+            max_tokens_value = req_data.get("max_tokens", get_model_config(step).get("max_tokens", 2000))
+            temperature_value = req_data.get("temperature", get_model_config(step).get("temperature", 0))
+
+            # Build the body with model-appropriate token and temperature parameters
+            body = {
+                "model": model_name,
+                "messages": req_data["messages"],
+                **get_token_limit_param(model_name, max_tokens_value),
+                **get_temperature_param(model_name, temperature_value)
+            }
+
             batch_request = {
                 "custom_id": f"{custom_id_prefix}_{i}_{uuid.uuid4().hex[:8]}",
                 "method": "POST",
                 "url": "/v1/chat/completions",
-                "body": {
-                    "model": req_data.get("model", default_model),
-                    "messages": req_data["messages"],
-                    "max_tokens": req_data.get("max_tokens", get_model_config(step).get("max_tokens", 2000)),
-                    "temperature": req_data.get("temperature", get_model_config(step).get("temperature", 0))
-                }
+                "body": body
             }
             if "response_format" in req_data:
                 batch_request["body"]["response_format"] = req_data["response_format"]

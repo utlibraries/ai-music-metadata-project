@@ -13,11 +13,12 @@ from openai import OpenAI
 
 # Import custom modules
 from token_logging import create_token_usage_log, log_individual_response
-from batch_processor import BatchProcessor  
+from batch_processor import BatchProcessor
 from model_pricing import calculate_cost, get_model_info
 from json_workflow import initialize_workflow_json, update_record_step1, log_error, log_processing_metrics
 from shared_utilities import get_workflow_json_path, extract_metadata_fields, group_images_by_barcode, create_batch_summary
-from lp_workflow_config import get_current_timestamp, get_file_path_config, get_model_config
+from lp_workflow_config import get_current_timestamp, get_file_path_config, get_model_config, get_token_limit_param
+from retry_utils import retry_api_call, log_failure
 
 STEP_NAME = "step1"
 bp = BatchProcessor(default_step=STEP_NAME)
@@ -433,8 +434,10 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
                         "type": "image_url",
                         "image_url": {"url": f"data:{content_types[i]};base64,{base64_image}"}
                     })
-                
-                response = client.chat.completions.create(
+
+                # Use retry wrapper for API call (3 attempts with exponential backoff)
+                success, response, error = retry_api_call(
+                    client.chat.completions.create,
                     model=model_name,
                     messages=[{
                         "role": "user",
@@ -443,11 +446,47 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
                             *image_contents
                         ]
                     }],
-                    max_tokens=2000
+                    barcode=barcode,
+                    **get_token_limit_param(model_name, 2000)
                 )
-                
+
                 api_duration = time.time() - api_start_time
-                
+
+                if not success:
+                    # All retries failed - log and continue with placeholder
+                    print(f"   ⚠ All retries failed for {barcode} - recording failure and continuing")
+                    log_failure(barcode, "step1", error, "Will create placeholder record with 0 confidence")
+
+                    # Log error to workflow
+                    log_error(
+                        results_folder_path=results_folder_path,
+                        step="step1",
+                        barcode=barcode,
+                        error_type="api_error_max_retries",
+                        error_message=error
+                    )
+
+                    # Create placeholder record in workflow JSON
+                    update_record_step1(
+                        json_path=workflow_json_path,
+                        barcode=barcode,
+                        raw_metadata=f"FAILED: All retry attempts exhausted. Error: {error[:500]}",
+                        extracted_fields={},
+                        model=model_name,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        processing_time=0
+                    )
+
+                    # Add error to spreadsheet
+                    error_message = f"FAILED after retries: {error[:200]}"
+                    ws.append(['', '', '', barcode, error_message])
+                    ws.row_dimensions[ws.max_row].height = 50
+                    for cell in ws[ws.max_row]:
+                        cell.alignment = Alignment(vertical='top', wrap_text=True)
+
+                    continue  # Skip to next item
+
                 prompt_tokens = response.usage.prompt_tokens
                 completion_tokens = response.usage.completion_tokens
                 total_item_tokens = prompt_tokens + completion_tokens

@@ -10,11 +10,12 @@ import re
 
 # Custom modules
 from token_logging import create_token_usage_log, log_individual_response
-from batch_processor import BatchProcessor 
+from batch_processor import BatchProcessor
 from model_pricing import calculate_cost, get_model_info
 from json_workflow import update_record_step3, log_error, log_processing_metrics
 from shared_utilities import find_latest_results_folder, get_workflow_json_path, create_batch_summary
-from cd_workflow_config import get_model_config, get_file_path_config, get_threshold_config, get_step_config
+from cd_workflow_config import get_model_config, get_file_path_config, get_threshold_config, get_step_config, get_token_limit_param, get_temperature_param
+from retry_utils import retry_api_call, log_failure
 
 STEP_NAME = "step3"
 
@@ -131,19 +132,21 @@ def prepare_batch_requests(sheet, model_name, workflow_json_path):
     ''')
         
         # Create request data in the correct format for OpenAI's batch API
+        request_body = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and also have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
+                {"role": "user", "content": prompt}
+            ],
+            **get_token_limit_param(model_name, 1500),
+            **get_temperature_param(model_name, 0.5)
+        }
+
         request_data = {
             "custom_id": f"oclc_analysis_{i}",
             "method": "POST",
             "url": "/v1/chat/completions",
-            "body": {
-                "model": model_name,
-                "messages": [
-                    {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and also have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": 1500,
-                "temperature": 0.5
-            }
+            "body": request_body
         }
         
         batch_requests.append(request_data)
@@ -430,21 +433,60 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
     ''')
         try:
             print(f"   Calling OpenAI API for analysis...")
-            
+
             # Time the API call
             api_call_start = time.time()
-            response = client.chat.completions.create(
+
+            # Use retry wrapper for API call (3 attempts with exponential backoff)
+            success, response, error = retry_api_call(
+                client.chat.completions.create,
                 model=model_name,
                 messages=[
                     {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=2000,
-                temperature=0.3
+                barcode=barcode,
+                **get_token_limit_param(model_name, 2000),
+                **get_temperature_param(model_name, 0.3)
             )
+
             api_call_duration = time.time() - api_call_start
             total_api_time += api_call_duration
-        
+
+            if not success:
+                # All retries failed - log and create placeholder with 0 confidence
+                print(f"   ⚠ All retries failed for {barcode} - recording as 0% confidence")
+                log_failure(barcode, "step3", error, "Creating placeholder with 0% confidence")
+
+                # Log error
+                log_error(
+                    results_folder_path=results_folder_path,
+                    step="step3",
+                    barcode=barcode,
+                    error_type="api_error_max_retries",
+                    error_message=error
+                )
+
+                # Create placeholder record with 0 confidence
+                update_record_step3(
+                    json_path=workflow_json_path,
+                    barcode=barcode,
+                    selected_oclc="",
+                    initial_confidence=0.0,
+                    explanation=f"Failed after all retry attempts: {error[:300]}",
+                    alternative_matches=[],
+                    model=model_name,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    processing_time=0
+                )
+
+                # Add to spreadsheet
+                error_message = f"FAILED after retries: {error[:200]}"
+                ws.append([barcode, "Not found", "0%", error_message, ""])
+
+                continue  # Skip to next record
+
             # Extract token information
             prompt_tokens = response.usage.prompt_tokens
             completion_tokens = response.usage.completion_tokens

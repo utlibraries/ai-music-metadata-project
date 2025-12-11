@@ -640,9 +640,7 @@ def query_oclc_api(queries, barcode, limit=10):
             "q": query,
             "limit": limit,
             "offset": 1,
-            "itemType": "music",
             "inCatalogLanguage": "eng"
-            # Removed itemSubType to allow both music-lp and audiobook-lp
         }
 
         try:

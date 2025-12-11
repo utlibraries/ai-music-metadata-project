@@ -18,7 +18,7 @@ import tempfile
 
 # Custom module
 from model_pricing import estimate_cost
-from lp_workflow_config import get_model_config
+from lp_workflow_config import get_model_config, get_token_limit_param, get_temperature_param
 
 def _get_batch_threshold(step_name: str) -> int:
     cfg = get_model_config(step_name)
@@ -75,11 +75,16 @@ class BatchProcessor:
         default_temperature = step_cfg.get("temperature", 0)
 
         for i, req_data in enumerate(requests_data):
+            model_name = req_data.get("model", default_model)
+            max_tokens_value = req_data.get("max_tokens", default_max_tokens)
+            temperature_value = req_data.get("temperature", default_temperature)
+
+            # Build the body with model-appropriate token and temperature parameters
             body = {
-                "model": req_data.get("model", default_model),
+                "model": model_name,
                 "messages": req_data["messages"],
-                "max_tokens": req_data.get("max_tokens", default_max_tokens),
-                "temperature": req_data.get("temperature", default_temperature),
+                **get_token_limit_param(model_name, max_tokens_value),
+                **get_temperature_param(model_name, temperature_value)
             }
             if "response_format" in req_data:
                 body["response_format"] = req_data["response_format"]
