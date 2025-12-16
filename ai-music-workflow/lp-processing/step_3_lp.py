@@ -312,7 +312,16 @@ def process_with_batch(sheet, temp_sheet, logs_folder_path, model_name, results_
             
             # Handle skipped rows (no valid data)
             total_rows = process_skipped_rows(sheet, temp_sheet)
-            
+
+            # RETRY FAILED RESPONSES
+            retry_successful, retry_failed = retry_failed_responses(
+                sheet, temp_sheet, workflow_json_path, logs_folder_path, model_name
+            )
+
+            # Update metrics with retry results
+            successful_calls += retry_successful
+            failed_calls = max(0, failed_calls - retry_successful)  # Reduce failed count by successful retries
+
             # Return batch processing metrics
             summary = processed_results["summary"]
             return (total_rows, successful_calls, failed_calls, 0,  # 0 for total_time
@@ -453,7 +462,7 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
 
                 # Log error
                 log_error(
-                    results_folder_path=results_folder_path,
+                    results_folder_path=results_folder,
                     step="step3",
                     barcode=barcode,
                     error_type="api_error_max_retries",
@@ -476,8 +485,15 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
 
                 # Add to spreadsheet
                 error_message = f"FAILED after retries: {error[:200]}"
-                ws.append([barcode, "Not found", "0%", error_message, ""])
+                update_workbook_row(sheet, temp_sheet, row, "Not found", 0,
+                                  error_message, "", 0, 0, 0, 0)
 
+                # Copy data from other columns to temp sheet
+                for col in range(1, 8):  # Columns A-G
+                    col_letter = openpyxl.utils.get_column_letter(col)
+                    temp_sheet[f'{col_letter}{row}'].value = sheet[f'{col_letter}{row}'].value
+
+                failed_calls += 1
                 continue  # Skip to next record
 
             # Extract token information
@@ -607,14 +623,36 @@ def process_individual(sheet, temp_sheet, logs_folder_path, model_name, results_
                 col_letter = openpyxl.utils.get_column_letter(col)
                 temp_sheet[f'{col_letter}{row}'].value = sheet[f'{col_letter}{row}'].value
 
+    # RETRY FAILED RESPONSES (after individual processing completes)
+    retry_successful, retry_failed = retry_failed_responses(
+        sheet, temp_sheet, workflow_json_path, logs_folder_path, model_name
+    )
+
+    # Update metrics with retry results
+    successful_calls += retry_successful
+    failed_calls = max(0, failed_calls - retry_successful)  # Reduce failed count by successful retries
+
     return total_rows, successful_calls, failed_calls, total_api_time, total_prompt_tokens, total_completion_tokens, total_tokens
+
+def is_response_valid(analysis_result, explanation):
+    """
+    Check if an AI response is valid and parseable.
+    Returns True if valid, False if empty or unparseable.
+    """
+    if not analysis_result or analysis_result.strip() == "":
+        return False
+    if explanation == "Could not parse response":
+        return False
+    if "OCLC number:" not in analysis_result:
+        return False
+    return True
 
 def parse_analysis_result(analysis_result, oclc_results):
     """Parse the AI analysis result into structured components."""
     # Extract confidence and explanation only (not using shared utility for alternatives)
     confidence_score = 0.0
     explanation = "Could not parse response"
-    
+
     try:
         # Extract confidence score
         if "Confidence score:" in analysis_result:
@@ -766,6 +804,188 @@ def update_workbook_row(sheet, temp_sheet, row, oclc_number, confidence_score, e
                 PROCESSING_TIME_COLUMN, PROMPT_TOKENS_COLUMN, COMPLETION_TOKENS_COLUMN, TOTAL_TOKENS_COLUMN]:
         sheet[f'{col}{row}'].alignment = Alignment(wrap_text=True)
         temp_sheet[f'{col}{row}'].alignment = Alignment(wrap_text=True)
+
+def retry_failed_responses(sheet, temp_sheet, workflow_json_path, logs_folder_path, model_name):
+    """
+    Retry any records that had empty or unparseable responses.
+    Returns counts of successful retries and remaining failures.
+    """
+    print("\n" + "="*80)
+    print("CHECKING FOR FAILED RESPONSES TO RETRY")
+    print("="*80)
+
+    failed_rows = []
+    EXPLANATION_COLUMN = 'J'
+    BARCODE_COLUMN = 'D'
+
+    # Identify rows that need retry
+    for row in range(2, sheet.max_row + 1):
+        explanation = sheet[f'{EXPLANATION_COLUMN}{row}'].value
+        barcode = sheet[f'{BARCODE_COLUMN}{row}'].value
+
+        if explanation and ("Could not parse response" in str(explanation) or
+                           explanation.startswith("Error:") or
+                           explanation == "Skipped: No valid OCLC results to analyze"):
+            # Skip if it's a legitimate skip (no OCLC data)
+            if explanation == "Skipped: No valid OCLC results to analyze":
+                continue
+
+            # Load data from JSON
+            extracted_fields, formatted_oclc_results = load_workflow_data_from_json(workflow_json_path, barcode)
+
+            if extracted_fields and formatted_oclc_results:
+                failed_rows.append({
+                    'row': row,
+                    'barcode': barcode,
+                    'extracted_fields': extracted_fields,
+                    'formatted_oclc_results': formatted_oclc_results
+                })
+
+    if not failed_rows:
+        print("✓ No failed responses found - all records processed successfully!")
+        return 0, 0
+
+    print(f"Found {len(failed_rows)} failed/empty responses to retry")
+    print(f"Retrying with individual API calls...")
+
+    retry_successful = 0
+    retry_failed = 0
+    total_retry_tokens = 0
+
+    for idx, failed_record in enumerate(failed_rows, 1):
+        row = failed_record['row']
+        barcode = failed_record['barcode']
+        extracted_fields = failed_record['extracted_fields']
+        formatted_oclc_results = failed_record['formatted_oclc_results']
+
+        print(f"\n   Retry {idx}/{len(failed_rows)} - Row {row} - Barcode {barcode}")
+
+        # Build the prompt
+        prompt = (
+    f'''Analyze the following OCLC results based on the given metadata and determine which result is the best match. Methodically go through each record, choose the top 3, then consider them again and choose the record that matches the most elements in the metadata. If two or more records tie for best match, prioritize records that have more holdings and that are held by IXA. If there is no likely match, write "No matching records found".
+
+    **Important Instructions**:
+    1. Confidence Score: 0% indicates no confidence, and 100% indicates high confidence that we have found the correct OCLC number. If the confidence is below 79%, the record will be checked by a cataloger.
+    2. ***Key Fields in order of importance***:
+    - UPC/Product Code (a match is HIGHEST priority if available in both metadata and OCLC record - if not available in one or the other, skip this field.  Occasionally, the UPC is partially obscured in the metadata - if some of the numbers in a UPC are incorrect but other fields are matching, it is still a match)
+    - Title
+    - Artist/Performer
+    - Contributors (some matching - not all need to match)
+    - Publisher Name (the metadata record may include multiple names of publishers and distributor.  These do not all need to match the OCLC record, but there should be at least one exact match unless there are no visible publishers in the metadata; corporate ownership relationships like "Columbia is part of Sony" should NOT be considered a match.)
+    - Physical Description (should make sense for an LP)
+    - Content (track listings - these should be mostly similar, with small differences in spelling or punctuation)
+    - Year (Should be an exact match if present in both the metadata and oclc record. If there are two years written in a record, the latter of the years is the reissue date, which is what we want to match)
+    3. ***Notes on Matching Special Cases***:
+    - Titles in non-Latin scripts that match in meaning or transliteration should also be considered equivalent.
+    - If a field is marked as partially obscured, lessen the importance of that field in the matching process.
+    - Different releases in different regions (e.g., Japanese release vs. US release) should be treated as different records even if title and content match.
+    4. When information is not visible in the metadata, DO NOT use that field in your consideration of a match. It may be written in the metadata as 'not visible' or 'not available', etc.
+    5. If there is a publisher in the OCLC record but it cannot be found anywhere in the metadata, the OCLC record or the LP may be a reissue - mark it as 79 because that way it will be checked by a cataloger.
+    6. The publisher should have at least one match between the metadata and OCLC record.  This may be a partial match, but it needs to be at least a fuzzy match.  No corporate relationships or associations unless explicitly mentioned in both the metadata and the OCLC record.  If the publisher is not visible in the metadata, do not use this field in your consideration of a match.
+    7. If there is no likely match, write "No matching records found" and set the confidence score as 0.
+
+    Format for Response:
+    - Your response must follow this format exactly:
+    1. OCLC number: [number or 'No matching records found']
+    2. Confidence score: [%]
+    3. Explanation: [List of things that match as key value pairs. If there are multiple records that could be a match, explain why you chose the one you did. If there are no matches, explain why.]
+    4. Other potential good matches: [List of other OCLC numbers that could be good matches and a one sentence explanation for each match as key value pairs. If there are no other potential matches, write 'No other potential good matches.']
+
+    Once you have responded, go back through the response that you wrote and carefully verify each piece of information. If you find a mistake, look for a better record. If there isn't one, reduce the confidence score to 79% or lower. If there is one, once again carefully verify all the facts that support your choice. If you still can't find a match, write "No matching records found" and set the confidence score as 0.
+
+    Metadata: {extracted_fields}
+
+    OCLC Results: {formatted_oclc_results}
+    ''')
+
+        try:
+            # Use retry wrapper for API call
+            api_call_start = time.time()
+            success, response, error = retry_api_call(
+                client.chat.completions.create,
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You are a music cataloger.  You are very knowledgeable about music cataloging best practices, and also have incredible attention to detail.  Read through the metadata and OCLC results carefully, and determine which of the OCLC results looks like the best match. If there is no likely match, write 'No matching records found'.  If you make a mistake, you would feel very bad about it, so you always double check your work."},
+                    {"role": "user", "content": prompt}
+                ],
+                barcode=barcode,
+                **get_token_limit_param(model_name, 2000),
+                **get_temperature_param(model_name, 0.3)
+            )
+            api_call_duration = time.time() - api_call_start
+
+            if not success:
+                print(f"   ✗ Retry failed for {barcode}: {error}")
+                retry_failed += 1
+                continue
+
+            # Extract response
+            analysis_result = response.choices[0].message.content.strip()
+            prompt_tokens = response.usage.prompt_tokens
+            completion_tokens = response.usage.completion_tokens
+            tokens_used = prompt_tokens + completion_tokens
+            total_retry_tokens += tokens_used
+
+            # Parse the results
+            oclc_number, confidence_score, explanation, other_matches, alternative_oclc_numbers = parse_analysis_result(
+                analysis_result, formatted_oclc_results
+            )
+
+            # Check if the retry was successful
+            if is_response_valid(analysis_result, explanation):
+                print(f"   ✓ Retry successful! OCLC: {oclc_number}, Confidence: {confidence_score}%")
+                retry_successful += 1
+
+                # Update JSON workflow
+                try:
+                    update_record_step3(
+                        json_path=workflow_json_path,
+                        barcode=barcode,
+                        selected_oclc=str(oclc_number) if oclc_number != "Not found" else "",
+                        initial_confidence=float(confidence_score),
+                        explanation=explanation,
+                        alternative_matches=alternative_oclc_numbers,
+                        model=model_name,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        processing_time=api_call_duration
+                    )
+                except Exception as json_error:
+                    print(f"   Warning: JSON update error: {json_error}")
+
+                # Log the response
+                log_individual_response(
+                    logs_folder_path=logs_folder_path,
+                    script_name="step3_retry",
+                    row_number=row,
+                    barcode=barcode,
+                    response_text=analysis_result,
+                    model_name=model_name,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    processing_time=api_call_duration
+                )
+
+                # Update workbook
+                update_workbook_row(sheet, temp_sheet, row, oclc_number, confidence_score,
+                                  explanation, other_matches, api_call_duration, prompt_tokens,
+                                  completion_tokens, tokens_used)
+            else:
+                print(f"   ✗ Retry still returned invalid response")
+                retry_failed += 1
+
+        except Exception as e:
+            print(f"   ✗ Retry exception: {str(e)}")
+            retry_failed += 1
+
+    print(f"\n" + "="*80)
+    print(f"RETRY SUMMARY:")
+    print(f"  Successful retries: {retry_successful}")
+    print(f"  Failed retries: {retry_failed}")
+    print(f"  Total retry tokens: {total_retry_tokens:,}")
+    print("="*80 + "\n")
+
+    return retry_successful, retry_failed
 
 def process_skipped_rows(sheet, temp_sheet):
     """Process rows that were skipped due to missing data."""

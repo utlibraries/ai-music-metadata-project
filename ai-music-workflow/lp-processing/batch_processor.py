@@ -201,20 +201,25 @@ class BatchProcessor:
             except Exception as e:
                 error_str = str(e)
                 last_error = e
-                
+
                 # Log the actual error for debugging
                 print(f"   Error: {error_str[:200]}")  # First 200 chars of error
-                
-                # Check if it's a retryable error (504, 500, 502, 503, timeout, rate limit)
+
+                # Check if it's a retryable error (connection errors, timeouts, server errors, rate limits)
                 error_lower = error_str.lower()
+                is_connection_error = "connection" in error_lower or "remoteprotocolerror" in error_lower or "apiconnectionerror" in error_lower
                 is_timeout = "504" in error_str or "time" in error_lower or "timeout" in error_lower
                 is_server_error = any(code in error_str for code in ["500", "502", "503"])
                 is_rate_limit = "rate" in error_lower or "429" in error_str
-                
-                if is_timeout or is_server_error or is_rate_limit:
+
+                # Connection errors, timeouts, server errors, and rate limits are all retryable
+                if is_connection_error or is_timeout or is_server_error or is_rate_limit:
                     if attempt < max_retries - 1:
                         wait_time = 10 * (2 ** attempt)
-                        error_type = "timeout" if is_timeout else ("rate limit" if is_rate_limit else "server error")
+                        error_type = ("connection error" if is_connection_error else
+                                     "timeout" if is_timeout else
+                                     "rate limit" if is_rate_limit else
+                                     "server error")
                         print(f"   Upload failed ({error_type}), will retry in {wait_time}s...")
                         continue
                     else:
