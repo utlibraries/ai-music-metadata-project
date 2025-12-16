@@ -168,6 +168,29 @@ The system automatically chooses processing mode based on batch size.  The thres
 
 ---
 
+## Batch Recovery
+
+If your batch processing is interrupted (power outage, computer shutdown), you can recover it:
+
+**List active batches:**
+```bash
+python ai-music-workflow/batch_recovery.py list
+```
+
+**Resume an interrupted batch:**
+```bash
+python ai-music-workflow/batch_recovery.py resume batch_abc123xyz456
+```
+
+**Clean up completed batches:**
+```bash
+python ai-music-workflow/batch_recovery.py cleanup
+```
+
+Batch IDs are automatically saved to `~/.ai-music-batch-state/` when submitted. Your batches continue processing on OpenAI's servers even if your script stops, and you can resume them anytime within 24 hours.
+
+---
+
 ## Configuration
 
 Edit format-specific config files to customize:

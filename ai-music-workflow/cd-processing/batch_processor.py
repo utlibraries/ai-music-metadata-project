@@ -32,21 +32,145 @@ def _get_step_model(step_name: str) -> str:
 class BatchProcessor:
     """
     Handles OpenAI Batch API operations with robust error handling and monitoring.
-    
+
     Features:
     - Automatic batch submission and monitoring
     - Cost tracking and logging
     - Error recovery and retry logic
     - Progress monitoring with status updates
     - Integration with existing token logging system
+    - Persistent batch ID tracking for recovery after interruptions
     """
-    
-    def __init__(self, api_key: Optional[str] = None, default_step: str = "step1"):
-        """Initialize batch processor with OpenAI client."""
+
+    def __init__(self, api_key: Optional[str] = None, default_step: str = "step1", persistence_dir: Optional[str] = None):
+        """
+        Initialize batch processor with OpenAI client.
+
+        Args:
+            api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
+            default_step: Default workflow step name
+            persistence_dir: Directory to store batch state (defaults to ~/.ai-music-batch-state)
+        """
         self.client = OpenAI(api_key=api_key or os.getenv('OPENAI_API_KEY'))
         self.batch_jobs = {}  # Track active batch jobs
         self.default_step = default_step  # used when caller doesn't pass step_name
-        
+
+        # Set up persistence directory
+        if persistence_dir is None:
+            persistence_dir = os.path.expanduser("~/.ai-music-batch-state")
+        self.persistence_dir = persistence_dir
+        os.makedirs(self.persistence_dir, exist_ok=True)
+
+        self.state_file = os.path.join(self.persistence_dir, "batch_state.json")
+        self._load_state()
+
+    def _load_state(self):
+        """Load batch state from disk if it exists."""
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, 'r') as f:
+                    state = json.load(f)
+                    # Convert ISO format strings back to datetime objects
+                    for batch_id, info in state.items():
+                        if "created_at" in info and isinstance(info["created_at"], str):
+                            info["created_at"] = datetime.fromisoformat(info["created_at"])
+                        self.batch_jobs[batch_id] = info
+                    if self.batch_jobs:
+                        print(f"Loaded {len(self.batch_jobs)} existing batch job(s) from state file")
+            except Exception as e:
+                print(f"Warning: Failed to load batch state: {e}")
+
+    def _save_state(self):
+        """Save current batch state to disk."""
+        try:
+            # Convert datetime objects to ISO format strings for JSON serialization
+            serializable_state = {}
+            for batch_id, info in self.batch_jobs.items():
+                serializable_info = info.copy()
+                if "created_at" in serializable_info and isinstance(serializable_info["created_at"], datetime):
+                    serializable_info["created_at"] = serializable_info["created_at"].isoformat()
+                serializable_state[batch_id] = serializable_info
+
+            with open(self.state_file, 'w') as f:
+                json.dump(serializable_state, f, indent=2)
+        except Exception as e:
+            print(f"Warning: Failed to save batch state: {e}")
+
+    def list_active_batches(self) -> List[Dict[str, Any]]:
+        """
+        List all active batches from state file.
+
+        Returns:
+            List of batch information dictionaries
+        """
+        active_batches = []
+        for batch_id, info in self.batch_jobs.items():
+            try:
+                status_info = self.check_batch_status(batch_id)
+                if "error" not in status_info:
+                    batch_info = {
+                        "batch_id": batch_id,
+                        "status": status_info.get("status"),
+                        "description": info.get("description"),
+                        "request_count": info.get("request_count"),
+                        "created_at": info.get("created_at")
+                    }
+                    active_batches.append(batch_info)
+            except Exception as e:
+                print(f"Warning: Could not check status for batch {batch_id}: {e}")
+        return active_batches
+
+    def resume_batch(self, batch_id: str, max_wait_hours: int = 24, check_interval_minutes: int = 5) -> Optional[List[Dict[str, Any]]]:
+        """
+        Resume waiting for a batch that was interrupted.
+
+        Args:
+            batch_id: ID of the batch to resume
+            max_wait_hours: Maximum hours to wait
+            check_interval_minutes: Minutes between status checks
+
+        Returns:
+            Batch results or None if failed
+        """
+        print(f"Resuming batch {batch_id}...")
+
+        # Check if batch exists in state
+        if batch_id not in self.batch_jobs:
+            # Try to get info from OpenAI directly
+            status_info = self.check_batch_status(batch_id)
+            if "error" in status_info:
+                print(f"Batch {batch_id} not found in state or OpenAI")
+                return None
+
+            # Add to state
+            self.batch_jobs[batch_id] = {
+                "created_at": datetime.now(),
+                "description": "Resumed batch",
+                "request_count": status_info.get("request_counts", {}).get("total", 0)
+            }
+            self._save_state()
+
+        return self.wait_for_completion(batch_id, max_wait_hours, check_interval_minutes)
+
+    def cleanup_completed_batches(self):
+        """Remove completed/failed/expired batches from state file."""
+        batches_to_remove = []
+
+        for batch_id in self.batch_jobs.keys():
+            status_info = self.check_batch_status(batch_id)
+            if "error" not in status_info:
+                status = status_info.get("status")
+                if status in ["completed", "failed", "expired", "cancelled"]:
+                    batches_to_remove.append(batch_id)
+
+        for batch_id in batches_to_remove:
+            del self.batch_jobs[batch_id]
+
+        if batches_to_remove:
+            self._save_state()
+            print(f"Cleaned up {len(batches_to_remove)} completed batch(es) from state")
+
+
     def should_use_batch(self, num_requests: int, force_batch: bool = False, step_name: Optional[str] = None) -> bool:
         """
         Determine whether to use batch processing based on request count and settings.
@@ -225,12 +349,16 @@ class BatchProcessor:
                 "input_file_id": batch_input_file.id,
                 "temp_file_path": temp_file_path
             }
-            
+
+            # Persist to disk immediately
+            self._save_state()
+
             print(f" Batch job submitted successfully!")
             print(f"   Batch ID: {batch_job.id}")
             print(f"   Requests: {len(batch_requests)}")
             print(f"   Status: {batch_job.status}")
-            
+            print(f"   Batch state saved to: {self.state_file}")
+
             return batch_job.id
             
         except Exception as e:
@@ -290,15 +418,24 @@ class BatchProcessor:
         """Process a single batch file."""
         with open(batch_file_path, 'rb') as f:
             batch_input_file = self.client.files.create(file=f, purpose="batch")
-        
+
         batch_job = self.client.batches.create(
             input_file_id=batch_input_file.id,
             endpoint="/v1/chat/completions",
             completion_window="24h",
             metadata={"description": description}
         )
-        
+
+        # Store batch job info and persist
+        self.batch_jobs[batch_job.id] = {
+            "created_at": datetime.now(),
+            "description": description,
+            "input_file_id": batch_input_file.id
+        }
+        self._save_state()
+
         print(f"Batch job submitted: {batch_job.id}")
+        print(f"Batch state saved to: {self.state_file}")
         return self.wait_for_completion(batch_job.id)
 
     def _process_split_batches(self, full_batch_path: str, batch_requests: List[Dict[str, Any]], 
@@ -350,9 +487,22 @@ class BatchProcessor:
                     completion_window="24h",
                     metadata={"description": chunk_description}
                 )
-                
+
+                # Store batch job info
+                self.batch_jobs[batch_job.id] = {
+                    "created_at": datetime.now(),
+                    "description": chunk_description,
+                    "input_file_id": batch_input_file.id,
+                    "chunk_num": chunk_num,
+                    "total_chunks": len(chunk_files)
+                }
+
                 batch_ids.append(batch_job.id)
                 print(f"Submitted chunk {chunk_num}: {batch_job.id}")
+
+            # Save state after all chunks are submitted
+            self._save_state()
+            print(f"All {len(batch_ids)} batch chunks saved to state: {self.state_file}")
             
             # Wait for all batches to complete
             print(f"\nWaiting for all {len(batch_ids)} batches to complete...")
@@ -539,13 +689,18 @@ class BatchProcessor:
                     results.append(result)
             
             print(f" Retrieved {len(results)} batch results")
-            
+
             # Clean up temporary file if it exists
             if batch_id in self.batch_jobs:
                 temp_file_path = self.batch_jobs[batch_id].get("temp_file_path")
                 if temp_file_path and os.path.exists(temp_file_path):
                     os.unlink(temp_file_path)
-                    
+
+                # Remove completed batch from state
+                del self.batch_jobs[batch_id]
+                self._save_state()
+                print(f" Batch {batch_id} removed from state (completed)")
+
             return results
             
         except Exception as e:
