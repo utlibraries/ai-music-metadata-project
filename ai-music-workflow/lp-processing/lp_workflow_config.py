@@ -11,20 +11,20 @@ MODEL_CONFIGS = {
         "model": "gpt-4o",
         "max_tokens": 2000,
         "temperature": 0.0,
-        "batch_threshold": 10  # Use batch processing if more than this many items
+        "batch_threshold": 20  # Use batch processing if more than this many items
     },
     "step3_ai_analysis": {
-        "model": "gpt-4.1-mini",
-        "max_tokens": 1500,
+        "model": "gpt-5-mini",
+        "max_tokens": 4000,
         "temperature": 0.5,
-        "batch_threshold": 10
+        "batch_threshold": 20
     }
 }
 
 # File path configurations
 FILE_PATHS = {
     "base_dir": "ai-music-workflow/lp-processing",
-    "images_folder": "local-lp-image-folders/lp-scans-all-checked-smaller",
+    "images_folder": "lp-image-folders/lp-scans-5",
     "output_folders": "lp-output-folders",
     "results_folder_prefix": "results-",
     "logs_subfolder": "logs"
@@ -185,11 +185,101 @@ def get_file_path_config() -> Dict[str, str]:
 def get_threshold_config(category: str) -> Dict[str, Any]:
     """
     Get threshold configuration for a specific category.
-    
+
     Args:
         category: Category of thresholds (e.g., 'confidence', 'verification')
-    
+
     Returns:
         Threshold configuration dictionary
     """
     return PROCESSING_THRESHOLDS.get(category, {})
+
+def uses_max_completion_tokens(model_name: str) -> bool:
+    """
+    Determine if a model uses max_completion_tokens instead of max_tokens.
+
+    OpenAI models from 2024-08-06 onwards use max_completion_tokens.
+    Older models use max_tokens.
+
+    Args:
+        model_name: Name of the OpenAI model
+
+    Returns:
+        True if model uses max_completion_tokens, False if it uses max_tokens
+    """
+    # Models that use max_completion_tokens (newer models)
+    new_models = [
+        "gpt-5",
+        "gpt-5-mini",
+        "gpt-5.1",
+        "chatgpt-4o-latest",
+        "gpt-4o-2024-08-06",
+        "gpt-4o-mini-2024-07-18"
+    ]
+
+    # Check if model name starts with any of the new model prefixes
+    for new_model in new_models:
+        if model_name.startswith(new_model):
+            return True
+
+    # Check for date-based versioning (models from 2024-08-06 onwards)
+    if "2024-08-" in model_name or "2024-09-" in model_name or "2024-1" in model_name or "2025-" in model_name:
+        return True
+
+    # All other models use max_tokens
+    return False
+
+def supports_temperature_param(model_name: str) -> bool:
+    """
+    Determine if a model supports custom temperature values.
+
+    Some newer models (like gpt-5-mini) only support the default temperature of 1.
+
+    Args:
+        model_name: Name of the OpenAI model
+
+    Returns:
+        True if model supports custom temperature, False otherwise
+    """
+    # Models that don't support custom temperature
+    no_temp_models = [
+        "gpt-5-mini",
+    ]
+
+    for no_temp_model in no_temp_models:
+        if model_name.startswith(no_temp_model):
+            return False
+
+    return True
+
+def get_token_limit_param(model_name: str, max_tokens: int) -> Dict[str, int]:
+    """
+    Get the appropriate token limit parameter for a model.
+
+    Args:
+        model_name: Name of the OpenAI model
+        max_tokens: Token limit value
+
+    Returns:
+        Dictionary with either 'max_tokens' or 'max_completion_tokens' as key
+    """
+    if uses_max_completion_tokens(model_name):
+        return {"max_completion_tokens": max_tokens}
+    else:
+        return {"max_tokens": max_tokens}
+
+def get_temperature_param(model_name: str, temperature: float) -> Dict[str, float]:
+    """
+    Get the temperature parameter if supported by the model.
+
+    Args:
+        model_name: Name of the OpenAI model
+        temperature: Desired temperature value
+
+    Returns:
+        Dictionary with 'temperature' key if supported, empty dict otherwise
+    """
+    if supports_temperature_param(model_name):
+        return {"temperature": temperature}
+    else:
+        return {}
