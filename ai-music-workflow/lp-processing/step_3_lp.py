@@ -86,7 +86,7 @@ def prepare_batch_requests(sheet, model_name, workflow_json_path):
     # Second pass: create batch requests for valid rows
     for i, (row, extracted_fields, formatted_oclc_results, barcode) in enumerate(valid_rows):
         prompt = (
-    f'''Analyze the following OCLC results based on the given metadata and determine which result is the best match. Methodically go through each record, choose the top 3, then consider them again and choose the record that matches the most elements in the metadata. If two or more records tie for best match, prioritize records that have more holdings and that are held by IXA. If there is no likely match, write "No matching records found".
+    f'''Analyze the following OCLC results based on the given metadata and determine which result is the best match. Methodically go through each record, choose the top 3, then consider them again and choose the record that matches the most elements in the metadata. If two or more records tie for best match, prioritize records that have more holdings and that are held by IXA. If there is no likely match, write "No matching records found". The goal is to find the single best matching OCLC record for this LP. 
 
     **Important Instructions**:
     1. Confidence Score: 0% indicates no confidence, and 100% indicates high confidence that we have found the correct OCLC number. If the confidence is below 79%, the record will be checked by a cataloger. 

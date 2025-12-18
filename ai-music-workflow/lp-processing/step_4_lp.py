@@ -178,6 +178,85 @@ def normalize_track(track):
     norm = re.sub(r'\s+', ' ', norm).strip()
     return norm
 
+def normalize_for_phonetic(text):
+    """Additional normalization for phonetic comparison - handles OCR/transcription variations."""
+    text = text.lower()
+    # Normalize accented characters
+    text = re.sub(r'[àáâãäå]', 'a', text)
+    text = re.sub(r'[èéêë]', 'e', text)
+    text = re.sub(r'[ìíîï]', 'i', text)
+    text = re.sub(r'[òóôõö]', 'o', text)
+    text = re.sub(r'[ùúûü]', 'u', text)
+    text = re.sub(r'[ç]', 'c', text)
+    text = re.sub(r'[ñ]', 'n', text)
+    # Remove repeated letters (e.g., 'teraa' -> 'tera')
+    text = re.sub(r'(.)\1+', r'\1', text)
+    # Collapse similar-sounding letter combinations
+    text = text.replace('ck', 'k')
+    text = text.replace('ph', 'f')
+    return text
+
+def get_consonant_skeleton(text):
+    """Get consonant skeleton for comparing structure - useful for OCR errors."""
+    return re.sub(r'[aeiou\s]', '', text.lower())
+
+def calculate_enhanced_track_similarity(meta_track, oclc_track, position_match=False):
+    """
+    Calculate similarity between two track titles using multiple strategies.
+    More forgiving of minor spelling/OCR variations while still catching real mismatches.
+
+    Returns (similarity_score, match_type) where match_type explains how the match was determined.
+    """
+    norm_meta = normalize_track(meta_track)
+    norm_oclc = normalize_track(oclc_track)
+
+    # Strategy 1: Direct SequenceMatcher (exact/near-exact matches)
+    direct_sim = SequenceMatcher(None, norm_meta, norm_oclc).ratio()
+    if direct_sim >= 0.8:
+        return (direct_sim, 'direct')
+
+    # Strategy 2: Word overlap (for multi-word titles)
+    meta_words = set(norm_meta.split())
+    oclc_words = set(norm_oclc.split())
+    common_words = meta_words.intersection(oclc_words)
+    shorter_length = min(len(meta_words), len(oclc_words))
+    if shorter_length > 0:
+        word_sim = len(common_words) / shorter_length
+        if word_sim >= 0.6:
+            return (max(0.8, word_sim), 'word_overlap')
+
+    # Strategy 3: Phonetic/normalized comparison (handles accents, repeated letters)
+    phonetic_meta = normalize_for_phonetic(norm_meta)
+    phonetic_oclc = normalize_for_phonetic(norm_oclc)
+    phonetic_sim = SequenceMatcher(None, phonetic_meta, phonetic_oclc).ratio()
+    if phonetic_sim >= 0.75:
+        return (phonetic_sim, 'phonetic')
+
+    # Strategy 4: Consonant skeleton comparison (for OCR errors like vowel confusion)
+    skeleton_meta = get_consonant_skeleton(norm_meta)
+    skeleton_oclc = get_consonant_skeleton(norm_oclc)
+    if skeleton_meta and skeleton_oclc:  # Avoid empty skeleton comparison
+        skeleton_sim = SequenceMatcher(None, skeleton_meta, skeleton_oclc).ratio()
+        if skeleton_sim >= 0.7:
+            return (skeleton_sim, 'consonant_skeleton')
+    else:
+        skeleton_sim = 0.0
+
+    # Strategy 5: Character-level comparison for short titles (more forgiving)
+    if len(norm_meta) <= 12 or len(norm_oclc) <= 12:
+        char_sim = SequenceMatcher(None, norm_meta.replace(' ', ''), norm_oclc.replace(' ', '')).ratio()
+        if char_sim >= 0.65:
+            return (char_sim, 'short_title')
+
+    # Strategy 6: Position boost - if tracks are at same position and somewhat similar
+    if position_match and direct_sim >= 0.55:
+        boosted = min(direct_sim + 0.15, 0.85)
+        return (boosted, 'position_boost')
+
+    # Fall back to best score found
+    best_score = max(direct_sim, phonetic_sim * 0.9, skeleton_sim * 0.85)
+    return (best_score, 'fallback')
+
 def calculate_track_similarity(metadata_tracks, oclc_tracks):
     """Calculate the similarity between two track listings."""
     if not metadata_tracks or not oclc_tracks:
@@ -243,54 +322,56 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
     for i, meta_track in enumerate(norm_metadata_tracks):
         best_match = 0
         best_match_index = -1
-        is_substring_match = False
+        best_match_type = 'none'
         is_part_match = False
-        
+
+        orig_meta_track = processed_metadata_tracks[i]
+
         if "with" in meta_track and "parts" in meta_track:
             main_title = re.sub(r'\s+with \d+ parts', '', meta_track)
             for j, oclc_track in enumerate(norm_oclc_tracks):
                 if (main_title in oclc_track) or (oclc_track in main_title):
                     similarity = 0.95
+                    match_type = 'multi-part'
                     is_part_match = True
                 else:
                     similarity = SequenceMatcher(None, main_title, oclc_track).ratio()
-                
+                    match_type = 'direct'
+
                 if similarity > best_match:
                     best_match = similarity
                     best_match_index = j
+                    best_match_type = match_type
         else:
-            meta_words = set(meta_track.split())
+            # Use enhanced similarity matching for better handling of OCR/spelling variations
             for j, oclc_track in enumerate(norm_oclc_tracks):
-                oclc_words = set(oclc_track.split())
-                common_words = meta_words.intersection(oclc_words)
-                
-                shorter_length = min(len(meta_words), len(oclc_words))
-                if shorter_length > 0 and len(common_words) >= max(1, int(shorter_length * 0.6)):
-                    word_similarity = len(common_words) / shorter_length
-                    similarity = max(0.8, word_similarity)
-                    is_substring_match = True
-                elif (meta_track in oclc_track) or (oclc_track in meta_track):
-                    similarity = max(0.85, SequenceMatcher(None, meta_track, oclc_track).ratio())
-                    is_substring_match = True
-                else:
-                    similarity = SequenceMatcher(None, meta_track, oclc_track).ratio()
-                
+                orig_oclc_track = processed_oclc_tracks[j]
+                # Check if this is a position match (same track number)
+                position_match = (i == j)
+                similarity, match_type = calculate_enhanced_track_similarity(
+                    orig_meta_track, orig_oclc_track, position_match=position_match
+                )
+
                 if similarity > best_match:
                     best_match = similarity
                     best_match_index = j
-        
-        orig_track = processed_metadata_tracks[i]
-        match_info = f"{i+1}. {orig_track} => "
-        if best_match >= 0.8:
+                    best_match_type = match_type
+
+        match_info = f"{i+1}. {orig_meta_track} => "
+        # Use a lower threshold (0.65) for the enhanced matching
+        match_threshold = 0.65
+        if best_match >= match_threshold:
             match_symbol = "✓"
             if is_part_match:
                 match_symbol += "(multi-part)"
-            elif is_substring_match:
-                match_symbol += "(substring)"
+            else:
+                match_symbol += f"({best_match_type})"
             match_info += f"{match_symbol} {processed_oclc_tracks[best_match_index]} ({best_match:.2f})"
-            matches += best_match
+            # Scale matches to give full credit for matches above threshold
+            scaled_match = min(1.0, best_match / 0.8) if best_match < 0.8 else 1.0
+            matches += scaled_match
             metadata_tracks_found += 1
-            
+
             # Store position mapping
             metadata_track_to_oclc_position[i] = best_match_index
         else:
@@ -298,7 +379,7 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
                 match_info += f"✗ {processed_oclc_tracks[best_match_index]} ({best_match:.2f})"
             else:
                 match_info += "✗ No match"
-        
+
         matched_tracks.append(match_info)
     
     if len(norm_metadata_tracks) == 0:
@@ -819,27 +900,17 @@ def main():
                 matching_tracks = 0
                 for i, meta_track in enumerate(metadata_tracks):
                     best_match = 0
-                    for oclc_track in oclc_tracks:
-                        norm_meta = normalize_track(meta_track)
-                        norm_oclc = normalize_track(oclc_track)
-                        
-                        meta_words = set(norm_meta.split())
-                        oclc_words = set(norm_oclc.split())
-                        common_words = meta_words.intersection(oclc_words)
-                        
-                        shorter_length = min(len(meta_words), len(oclc_words))
-                        if shorter_length > 0 and len(common_words) >= max(1, int(shorter_length * 0.6)):
-                            word_similarity = len(common_words) / shorter_length
-                            similarity = max(0.8, word_similarity)
-                        elif (norm_meta in norm_oclc) or (norm_oclc in norm_meta):
-                            similarity = max(0.85, SequenceMatcher(None, norm_meta, norm_oclc).ratio())
-                        else:
-                            similarity = SequenceMatcher(None, norm_meta, norm_oclc).ratio()
-                        
+                    for j, oclc_track in enumerate(oclc_tracks):
+                        # Use enhanced matching with position awareness
+                        position_match = (i == j)
+                        similarity, _ = calculate_enhanced_track_similarity(
+                            meta_track, oclc_track, position_match=position_match
+                        )
                         if similarity > best_match:
                             best_match = similarity
-                    
-                    if best_match >= 0.8:
+
+                    # Use the same threshold as the main matching function
+                    if best_match >= 0.65:
                         matching_tracks += 1
                 
                 verification_result = f"Metadata tracks: {len(metadata_tracks)}\nOCLC tracks: {len(oclc_tracks)}\nMatching tracks: {matching_tracks}/{len(metadata_tracks)}\nSimilarity: {track_similarity:.2f}%"
@@ -906,30 +977,22 @@ def main():
                     for i, meta_track in enumerate(metadata_tracks):
                         best_match = 0
                         best_match_track = "No match"
-                        
-                        for oclc_track in oclc_tracks:
-                            norm_meta = normalize_track(meta_track)
-                            norm_oclc = normalize_track(oclc_track)
-                            
-                            meta_words = set(norm_meta.split())
-                            oclc_words = set(norm_oclc.split())
-                            common_words = meta_words.intersection(oclc_words)
-                            
-                            shorter_length = min(len(meta_words), len(oclc_words))
-                            if shorter_length > 0 and len(common_words) >= max(1, int(shorter_length * 0.6)):
-                                word_similarity = len(common_words) / shorter_length
-                                similarity = max(0.8, word_similarity)
-                            elif (norm_meta in norm_oclc) or (norm_oclc in norm_meta):
-                                similarity = max(0.85, SequenceMatcher(None, norm_meta, norm_oclc).ratio())
-                            else:
-                                similarity = SequenceMatcher(None, norm_meta, norm_oclc).ratio()
-                            
+                        best_match_type = "none"
+
+                        for j, oclc_track in enumerate(oclc_tracks):
+                            # Use enhanced matching with position awareness
+                            position_match = (i == j)
+                            similarity, match_type = calculate_enhanced_track_similarity(
+                                meta_track, oclc_track, position_match=position_match
+                            )
                             if similarity > best_match:
                                 best_match = similarity
                                 best_match_track = oclc_track
-                        
-                        match_status = "✓" if best_match >= 0.8 else "✗"
-                        note += f"\n{i+1}. {meta_track} {match_status} {best_match_track} ({best_match:.2f})"
+                                best_match_type = match_type
+
+                        # Use the same threshold as the main matching function
+                        match_status = "✓" if best_match >= 0.65 else "✗"
+                        note += f"\n{i+1}. {meta_track} {match_status} {best_match_track} ({best_match:.2f}, {best_match_type})"
                 
                 # Add year comparison details if needed
                 if metadata_year and oclc_year and metadata_year != oclc_year:
