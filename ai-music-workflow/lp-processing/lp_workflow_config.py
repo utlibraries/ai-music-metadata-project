@@ -8,13 +8,13 @@ from typing import Dict, Any
 # Model configurations for each step
 MODEL_CONFIGS = {
     "step1_metadata_extraction": {
-        "model": "gpt-4o",
+        "model": "gpt-4.1-mini",
         "max_tokens": 2000,
         "temperature": 0.0,
         "batch_threshold": 20  # Use batch processing if more than this many items
     },
     "step3_ai_analysis": {
-        "model": "gpt-5-mini",
+        "model": "gpt-4.1",
         "max_tokens": 4000,
         "temperature": 0.5,
         "batch_threshold": 20
@@ -24,7 +24,7 @@ MODEL_CONFIGS = {
 # File path configurations
 FILE_PATHS = {
     "base_dir": "ai-music-workflow/lp-processing",
-    "images_folder": "lp-image-folders/lp-scans-5",
+    "images_folder": "local-lp-image-folders/lp-scans-469-smaller",
     "output_folders": "lp-output-folders",
     "results_folder_prefix": "results-",
     "logs_subfolder": "logs"

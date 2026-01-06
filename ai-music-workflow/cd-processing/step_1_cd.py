@@ -609,18 +609,21 @@ def main():
     )
     
     # Create standardized token usage log with enhanced metrics
+    # Use script_duration for batch processing (total_time is 0 for batch since individual timing isn't tracked)
+    log_time = script_duration if was_batch_processed else total_time
+
     create_token_usage_log(
         logs_folder_path=logs_folder_path,
         script_name="step1",
         model_name=model_name,
         total_items=total_items,
         items_with_issues=items_with_issues,
-        total_time=total_time,
+        total_time=log_time,
         total_prompt_tokens=total_prompt_tokens,
         total_completion_tokens=total_completion_tokens,
         additional_metrics={
             "Total script execution time": f"{script_duration:.2f}s",
-            "Processing time percentage": f"{(total_time/script_duration)*100:.1f}%" if script_duration > 0 else "0%",
+            "Processing time percentage": f"{(log_time/script_duration)*100:.1f}%" if script_duration > 0 else "0%",
             "Items successfully processed": total_items - items_with_issues,
             "Processing mode": "BATCH" if was_batch_processed else "INDIVIDUAL",
             "Actual cost": f"${estimated_cost:.4f}",
