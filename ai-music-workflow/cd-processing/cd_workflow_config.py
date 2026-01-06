@@ -11,13 +11,13 @@ MODEL_CONFIGS = {
         "model": "gpt-4.1-mini",
         "max_tokens": 4000,
         "temperature": 0.0,
-        "batch_threshold": 20  # Use batch processing if more than this many items
+        "batch_threshold": 10  # Use batch processing if more than this many items
     },
     "step3_ai_analysis": {
         "model": "gpt-4.1",
         "max_tokens": 4000,
         "temperature": 0.5,
-        "batch_threshold": 20
+        "batch_threshold": 10
     }
 }
 
