@@ -1,9 +1,9 @@
 # AI Music Metadata Project
 
 ## Overview
-Automates metadata extraction and OCLC matching for CD and LP collections. This project uses AI for basic metadata extraction from images and for analyzing OCLC match results. It also searches OCLC WorldCat using the generated metadata and creates ready-to-use cataloging files.
+Automates metadata extraction and OCLC matching for CD and LP collections. This project uses AI for basic metadata extraction from images and for analyzing OCLC match results. It then searches OCLC WorldCat using the generated metadata and creates ready-to-use cataloging files.
 
-Optionally, users can generate an HTML review interface. The upside is that it provides a convenient way to review low-confidence or high-confidence matches before moving forward. The downside is that it is served locally on your computer; to support this, the script copies all required images into the results folder, making it best for batches under 500 items. To support the review work done using the HTML site, there is also a script to incorporate cataloger decisions into the cataloging files (details below). 
+Optionally, users can generate an HTML review interface. The upside is that it provides a convenient way to review results before moving forward. The downside is that it is served locally on your computer; to support this, the script copies all required images into the results folder, making it best for batches of 500 items or less. To support the review work done using the HTML site, there is a script to incorporate the cataloger decisions into the cataloging files (details below). 
 
 Another optional component is the batch upload to Alma Sandbox, which is designed to use the generated alma-batch-upload CSV file as the input set.
 
@@ -23,7 +23,7 @@ Another optional component is the batch upload to Alma Sandbox, which is designe
 5. **Step 3**: AI analysis of OCLC matches with confidence scoring
 6. **Step 4**: Verify track listings and publication years
 7. **Step 5**: Create final output files organized in subfolders
-8. **Step 6** (optional): Generate HTML review interface with images.  Also creates a decisions-history spreadsheet, necessary to track changes to output files. 
+8. **Step 6** (optional, but included in run script if approved): Generate HTML review interface with images.  Also creates a decisions-history spreadsheet, necessary to track changes to output files. 
 9. **Step 7** (not in run script): Creates an 'original-outputs' folder and copies original cataloging files to it.  Updates the decisions-history spreadsheet with cataloger decisions and updates cataloging files, including the batch upload file and sorting spreadsheet.  
 9. **Alma Batch Processing** (not in run script): Takes the high confidence matches not already held by the institution and uses the OCLC number to create bibliographic, holding, and item records in Alma.   
 
@@ -37,7 +37,7 @@ Another optional component is the batch upload to Alma Sandbox, which is designe
 - **AI Match Analysis**: LLM evaluates matches, assigns confidence scores, and briefly explains reasoning
 - **Additional Verification**: Automatic track listing and publication year validation
 - **Batch Processing**: 50% cost savings for batches over 10 items (automatic)
-- **HTML Review Interface** (Optional but a very convenient tool): Visual review of matches with images.  Export decisions to CSV and process using script 7 to automatically edit cataloging files accordingly.
+- **HTML Review Interface** (Optional but a very convenient tool): Visual review of matches with images.  Make decisions on the page, then export decisions to CSV and process using script 7 to automatically edit cataloging files.
 - **Alma Batch Uploads**: Creates new bibs, holdings, and items by importing bibliographic information from OCLC. Intended for experimentation in Alma SANDBOX and excluded from the automated run script.
 ---
 
@@ -55,12 +55,30 @@ Another optional component is the batch upload to Alma Sandbox, which is designe
    ```
 
 3. **Set environment variables**
-Each batch processing script documents additional environment variables it requires. Otherwise, you’ll need to set:
+
+   **Required for main workflow:**
    ```bash
    export OPENAI_API_KEY="your-openai-api-key"
    export OCLC_CLIENT_ID="your-oclc-client-id"
    export OCLC_SECRET="your-oclc-secret"
    ```
+
+   **Required for Alma batch upload (sandbox only):**
+   ```bash
+   export ALMA_SANDBOX_API_KEY="your-alma-sandbox-api-key"
+   export ALMA_LIBRARY_CODE="your-library-code"
+   export ALMA_LOCATION_CODE="your-location-code"
+   export ALMA_CD_ITEM_POLICY="your-cd-item-policy"
+   export ALMA_LP_ITEM_POLICY="your-lp-item-policy"
+   export ALMA_CATALOGING_INSTITUTION="your-cataloging-institution"
+   ```
+
+   **Optional for Alma batch upload:**
+   ```bash
+   export ALMA_REGION="api-na"
+   export ALMA_INTERNAL_NOTE_2="AI-assisted cataloging"
+   ```
+   These default to "api-na" (North America) and "AI-assisted cataloging" if not set.
 
 ---
 
@@ -105,8 +123,8 @@ Images must be named with barcode + letter suffix:
 
 ### Format
 - **Supported**: JPEG (.jpg, .jpeg) or PNG (.png)
-- **Best quality**: Clear, legible text, minimal glare
-- **Recommendation**: JPEG for smaller file sizes (especially if generating HTML)
+- **Aim for metadata clarity**: Images with clear, legible text, minimal glare, multiple elements for the pipeline to use when generating metadata/searching for item
+- **Recommendation**: JPEG files, which will be faster and cheaper to process 
 
 ---
 
@@ -137,7 +155,7 @@ Images must be named with barcode + letter suffix:
    - For LOW CONFIDENCE items only 
 
 6. **decisions-history.xlsx**
-   - On ly created if user opts in to generate the HTML review interface
+   - Only created if user opts in to generate the HTML review interface
    - Initially contains only AI decisions, automatically edited if user makes decisions, downloads the CSV file of their decisions and uses script 7 to process the CSV
    - If automatically edited, the newest decisions are prioritized, older decisions are kept in Decisions History worksheet
 
@@ -220,7 +238,7 @@ Settings include:
 
 ### After Processing
 8. **Review outputs** - Start with sorting spreadsheet
-9. **Verify high confidence** - Spot-check before batch upload
+9. **Verify high confidence** - Check before batch upload
 10. **Document issues** - Note patterns for workflow improvement
 
 ---
@@ -229,7 +247,7 @@ Settings include:
 
 ### When to Use
 - Visual interface to assess AI matches
-- For batch sizes under 500 items
+- For batch sizes of 500 items or fewer
 
 ### How to Use
 1. Choose "yes" when prompted during workflow run
@@ -242,7 +260,7 @@ Settings include:
 8. Run Script 7 to automatically edit output files with cataloger decisions and to save decisions history - prompts in terminal for paths to cataloger decisions CSV and results folder
 
 ### Important Notes
-- HTML runs locally (no internet connection needed for viewing)
+- HTML runs locally 
 - Decisions stored in browser local storage only
 - **Must export to CSV to permanently save decisions**
 - Not recommended for batches over 500 items (large folder size)

@@ -63,9 +63,13 @@ This JSON file tracks every processing step for each barcode. It contains:
 
 ## LOGS FOLDER CONTENTS
 
-**Location**: `data/logs/`
+**Location**: `results-folder/logs/`
 
 ### Processing Logs:
+- **`file_validation_log.txt`** - Step 0.5 file validation results
+  - Lists valid and invalid image files
+  - Shows naming convention issues
+
 - **`step1_llm_response_log.txt`** - Full AI responses from metadata extraction
   - Shows what the AI "saw" in each image
   - Useful for understanding extraction errors
@@ -75,7 +79,7 @@ This JSON file tracks every processing step for each barcode. It contains:
   - Shows confidence score justifications
   - Helpful for understanding why certain records were rated low
 
-- **`oclc_api_search_log.txt`** - All OCLC API queries and results
+- **`oclc-api-search-log-[date].json`** - All OCLC API queries and results
   - Lists every search query attempted
   - Shows which searches succeeded/failed
   - Contains total number of holdings for each record
@@ -89,14 +93,14 @@ This JSON file tracks every processing step for each barcode. It contains:
 - **`step3_token_usage_log.txt`** - Analysis step metrics
   - Similar tracking for the analysis phase
 
-- **`processing_metrics.json`** - Structured performance data
+- **`processing-metrics-[date].json`** - Structured performance data
   - Success/failure rates for each step
   - Processing times and bottlenecks
   - Confidence score distributions
   - OCLC API hit rates
 
 ### Error Tracking:
-- **`error_log.txt`** - Comprehensive error log
+- **`error-log-[date].json`** - Comprehensive error log
   - All errors categorized by type
   - Timestamps and affected barcodes
   - Detailed error messages for troubleshooting
@@ -107,7 +111,7 @@ This JSON file tracks every processing step for each barcode. It contains:
 
 ### 1. Review Confidence Score Patterns
 
-Check `processing_metrics.json` for:
+Check `processing-metrics-[date].json` for:
 - Distribution of confidence scores (how many high vs. low)
 - Average confidence by batch
 - Records where confidence was reduced in Step 4
@@ -127,7 +131,7 @@ For low-confidence matches, review the workflow JSON:
 
 ### 3. Investigate OCLC Search Patterns
 
-Use `oclc_api_search_log.txt` to identify:
+Use `oclc-api-search-log-[date].json` to identify:
 - Searches that returned no results
 - Searches that returned too many results (may need refinement)
 - Common search terms that work well vs. poorly
@@ -135,7 +139,7 @@ Use `oclc_api_search_log.txt` to identify:
 
 ### 4. Analyze AI Extraction Quality
 
-Review `step1_llm_response_log.txt` for patterns:
+Review `step1_llm_responses_log.txt` for patterns:
 - Fields consistently extracted incorrectly (e.g., dates, UPCs)
 - Image quality issues affecting extraction
 - Specific label designs that cause problems
@@ -148,10 +152,10 @@ Review `step1_llm_response_log.txt` for patterns:
 ### Issue: High percentage of low-confidence matches
 
 **Investigation steps**:
-1. Check error_log.txt for API errors or rate limiting
-2. Review step1 extraction log - is metadata quality poor?
-3. Look at OCLC search log - are searches finding records?
-4. Review step3 analysis - is AI being too conservative?
+1. Check `error-log-[date].json` for API errors or rate limiting
+2. Review `step1_llm_responses_log.txt` - is metadata quality poor?
+3. Look at `oclc-api-search-log-[date].json` - are searches finding records?
+4. Review `step3_llm_responses_log.txt` - is AI being too conservative?
 
 **Possible causes**:
 - Poor image quality in batch
@@ -162,7 +166,7 @@ Review `step1_llm_response_log.txt` for patterns:
 ### Issue: AI suggestions disagree with cataloger review
 
 **Investigation steps**:
-1. Review AI's reasoning in step3_llm_response_log.txt
+1. Review AI's reasoning in `step3_llm_responses_log.txt`
 2. Check what OCLC records were available in step2 results
 3. Look at confidence score calculation
 4. Compare AI's analysis to actual record details
@@ -231,10 +235,85 @@ When catalogers correct AI suggestions:
 
 ---
 
+## BATCH RECOVERY
+
+If batch processing is interrupted (power outage, network issues, computer shutdown), you can recover:
+
+### List active batches:
+```bash
+python ai-music-workflow/batch_recovery.py list
+```
+
+### Resume an interrupted batch:
+```bash
+python ai-music-workflow/batch_recovery.py resume batch_abc123xyz456
+```
+
+### Clean up completed batches:
+```bash
+python ai-music-workflow/batch_recovery.py cleanup
+```
+
+**Notes:**
+- Batch IDs are automatically saved to `~/.ai-music-batch-state/` when submitted
+- Batches continue processing on OpenAI's servers even if your script stops
+- You can resume batches anytime within 24 hours
+
+---
+
+## ALMA BATCH UPLOAD (SANDBOX ONLY)
+
+The Alma batch upload scripts create bibliographic, holding, and item records in Alma Sandbox using OCLC numbers from the workflow.
+
+### Scripts:
+- **CD workflow**: `ai-music-workflow/cd-processing/alma_batch_upload_cd.py`
+- **LP workflow**: `ai-music-workflow/lp-processing/alma_batch_upload_script_lp.py`
+
+### Required Environment Variables:
+```bash
+ALMA_SANDBOX_API_KEY    # Your Alma sandbox API key
+OCLC_CLIENT_ID          # OCLC API credentials
+OCLC_SECRET             # OCLC API credentials
+ALMA_LIBRARY_CODE       # Your library code
+ALMA_LOCATION_CODE      # Shelving location code
+ALMA_CD_ITEM_POLICY     # Item policy for CDs
+ALMA_LP_ITEM_POLICY     # Item policy for LPs
+ALMA_CATALOGING_INSTITUTION  # Cataloging institution code
+```
+
+### Optional Environment Variables:
+```bash
+ALMA_REGION             # Default: api-na (North America)
+ALMA_INTERNAL_NOTE_2    # Default: "AI-assisted cataloging"
+```
+
+### Usage:
+```bash
+python path/to/alma_batch_upload_cd.py path/to/batch-upload-file.txt [options]
+```
+
+### Options:
+- `--delimiter '|'` - Override default delimiter
+- `--yes` - Skip confirmation prompt (for non-interactive runs)
+- `--report` - Print summary only, no imports
+- `--restrict-dir /path` - Limit inputs to specific directory
+
+### What it does:
+1. Fetches WorldCat records using OCLC numbers
+2. Builds MARCXML and imports new bibs to Alma
+3. Creates holdings at your configured library/location
+4. Creates item records with appropriate material type
+5. Skips titles already in your Alma instance
+6. Writes a CSV of created IDs (MMS, holding, item)
+
+**Important**: These scripts are for sandbox experimentation only. Test thoroughly before considering production use.
+
+---
+
 ## MONITORING RECOMMENDATIONS
 
 ### Per Batch:
-- Check error_log.txt for serious issues
+- Check `error-log-[date].json` for serious issues
 - Review confidence score distribution
 - Verify OCLC API success rate
 - Scan for unusual patterns
@@ -268,8 +347,8 @@ This system is designed to:
 ## GETTING HELP
 
 ### For technical issues:
-- Check error_log.txt first
-- Review processing_metrics.json for patterns
+- Check `error-log-[date].json` first
+- Review `processing-metrics-[date].json` for patterns
 - Consult workflow JSON for specific record details
 
 ### For workflow questions:

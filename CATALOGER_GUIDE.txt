@@ -69,7 +69,7 @@ All output files are organized in three subfolders within your results folder:
 
 ### **`guides/` folder** - Documentation
 
-- `CATALOGER_GUIDE.txt` - This guide
+- `CATALOGER_GUIDE.txt` - This guide, intended to help catalogers effectively use results
 - `TECHNICAL_GUIDE.txt` - Technical documentation for troubleshooting
 
 ### **`data/` folder** - Workflow data files
@@ -181,7 +181,7 @@ After you've reviewed low-confidence matches and made your decisions, you need t
 
 ### RUNNING STEP 7 TO APPLY DECISIONS
 
-Once your cataloger decision CSV is saved in the results folder:
+Once your cataloger decision CSV is saved in the results folder, you can either request that the administrator of the pipeline run step 7 on your decision CSV or, if you have access to the script, you can:
 
 1. **Run Step 7** of the workflow (apply cataloger decisions script)
 2. **Provide the CSV path** when prompted
@@ -231,17 +231,9 @@ You can now proceed with uploading verified records to your Library Services Pla
 
 ## QUALITY CONTROL
 
-The AI workflow provides multiple verification layers:
+The AI workflow provides multiple verification layers.
 
-- **Step 1**: AI extracts metadata from images
-- **Step 2**: Searches OCLC database
-- **Step 3**: AI cross-references multiple data points
-- **Step 4**: Verifies track listings and publication dates
-- **Step 5**: Flags low-confidence matches for human review
-- **Step 6** (Optional): Visual review with HTML interface
-- **Step 7** (Optional): Use cataloger decision exports to update deliverables
-
-**Remember**: AI is a tool to accelerate cataloging, not to replace professional judgment. When in doubt, follow standard cataloging practices and institutional policies.
+**However**: AI is a tool to accelerate cataloging, not to replace professional judgment. When in doubt, follow standard cataloging practices and institutional policies.
 
 ---
 
