@@ -46,9 +46,8 @@ ai-music-workflow/outdated-code
 
 # Project-specific files
 *.docx
-move-jpeg-files.sh
 *.xlsx
 CLAUDE.local.md
 CLAUDE.md
-
+.claude
 .vscode/
