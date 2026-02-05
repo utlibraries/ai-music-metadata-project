@@ -13,21 +13,22 @@ from lp_workflow_config import get_current_timestamp
 
 current_timestamp = get_current_timestamp()
 
-def initialize_workflow_json(results_folder_path: str) -> str:
+def initialize_workflow_json(results_folder_path: str, images_folder: str = "") -> str:
     """
     Initialize the main workflow JSON file for a processing batch.
-    
+
     Returns:
         str: Path to the created JSON file
     """
     current_date = datetime.now().strftime("%Y-%m-%d")
     json_file = f"full-workflow-data-lp-{current_timestamp}.json"
     json_path = os.path.join(results_folder_path, json_file)
-    
+
     initial_structure = {
         "batch_info": {
             "created_at": datetime.now().isoformat(),
             "batch_date": current_date,
+            "images_folder": images_folder,
             "total_records": 0,
             "completed_records": 0,
             "workflow_version": "1.0"
@@ -66,7 +67,8 @@ def update_record_step1(json_path: str, barcode: str, raw_metadata: str,
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat()
         }
-    
+        data["batch_info"]["total_records"] = len(data["records"])
+
     data["records"][barcode]["step1_metadata_extraction"] = {
         "raw_ai_metadata": raw_metadata,
         "extracted_fields": extracted_fields,

@@ -559,7 +559,7 @@ def main():
         os.makedirs(results_folder_path)
     
     # Initialize workflow JSON
-    workflow_json_path = initialize_workflow_json(results_folder_path)
+    workflow_json_path = initialize_workflow_json(results_folder_path, images_folder)
     print(f"Initialized workflow JSON: {workflow_json_path}")
     
     logs_folder_path = os.path.join(results_folder_path, "logs")

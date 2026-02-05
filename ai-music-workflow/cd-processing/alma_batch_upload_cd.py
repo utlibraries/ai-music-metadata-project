@@ -130,7 +130,7 @@ def get_marcxml_from_oclc(oclc_number: str, access_token: str):
 
     for params in query_attempts:
         try:
-            r = requests.get(base_url, headers=headers, params=params, timeout=30)
+            r = requests.get(base_url, headers=headers, params=params, timeout=60)
             if r.status_code in (401, 403):
                 raise RuntimeError(f"OCLC auth error ({r.status_code}): {r.text}")
             r.raise_for_status()
@@ -469,7 +469,7 @@ def check_if_oclc_exists_in_alma(oclc_number):
         }
         
         try:
-            r = requests.get(url, headers=HEADERS_XML, params=params, timeout=30)
+            r = requests.get(url, headers=HEADERS_XML, params=params, timeout=60)
             r.raise_for_status()
             
             root = ET.fromstring(r.text)
@@ -518,7 +518,7 @@ def unsuppress_bib(mms_id: str):
     url = f"{ALMA_BASE}/bibs/{mms_id}"
 
     # GET existing bib
-    r = requests.get(url, headers=HEADERS_XML, timeout=30)
+    r = requests.get(url, headers=HEADERS_XML, timeout=60)
     r.raise_for_status()
     bib_xml = ET.fromstring(r.text)
 
@@ -533,7 +533,7 @@ def unsuppress_bib(mms_id: str):
         url,
         headers=HEADERS_XML,
         data=ET.tostring(bib_xml, encoding='unicode'),
-        timeout=30
+        timeout=60
     )
     r2.raise_for_status()
 
@@ -541,7 +541,7 @@ def get_holdings(mms_id, location_code):
     """Check if holding exists for the specified location."""
     url_holdings = f"{ALMA_BASE}/bibs/{mms_id}/holdings"
     
-    r = requests.get(url_holdings, headers=HEADERS_XML, timeout=30)
+    r = requests.get(url_holdings, headers=HEADERS_XML, timeout=60)
     r.raise_for_status()
     
     root = ET.fromstring(r.text)
@@ -572,7 +572,7 @@ def create_holding(mms_id, library_code, location_code):
   </record>
 </holding>'''
 
-    r = requests.post(url_holdings, headers=HEADERS_XML, data=data, timeout=30)
+    r = requests.post(url_holdings, headers=HEADERS_XML, data=data, timeout=60)
     r.raise_for_status()
     root = ET.fromstring(r.text)
     hid = root.findtext('holding_id')
@@ -603,7 +603,7 @@ def create_item(mms_id, holding_id, barcode, item_policy_code, material_value="C
   </item_data>
 </item>'''
 
-    r = requests.post(url_items, headers=HEADERS_XML, data=data, timeout=30)
+    r = requests.post(url_items, headers=HEADERS_XML, data=data, timeout=60)
     r.raise_for_status()
 
     root = ET.fromstring(r.text)
@@ -659,7 +659,7 @@ def _classify_oclc_source(rec: dict) -> str:
 '''
 def print_physical_material_type_codes():
     url = f"{ALMA_BASE}/conf/code-tables/PhysicalMaterialType"
-    r = requests.get(url, headers=HEADERS_XML, timeout=30)
+    r = requests.get(url, headers=HEADERS_XML, timeout=60)
     r.raise_for_status()
     root = ET.fromstring(r.text)
     print("PhysicalMaterialType codes:")
@@ -724,73 +724,89 @@ def process_file(input_file, delimiter='|'):
             'title': title
         }
         
-        try:
-            # Step 1: Check if record already exists
-            print(f"         Checking if OCLC #{oclc_num} exists in Alma...")
-            existing_mms_id = check_if_oclc_exists_in_alma(oclc_num)
-            
-            if existing_mms_id:
-                print(f"         ALREADY EXISTS in Alma (MMS ID: {existing_mms_id})")
-                print(f"         Item will NOT be processed")
-                print(f"         Check physical item or add to giveaway pile\n")
-                result['mms_id'] = existing_mms_id
-                result['status'] = 'already_exists'
-                result['action'] = 'Verify physical item or discard'
-            else:
-                print(f"         Record not found, fetching from OCLC...")
-                marcxml, discovery_rec = get_marcxml_from_oclc(oclc_num, oclc_token)
-                result['oclc_source'] = _classify_oclc_source(discovery_rec)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Step 1: Check if record already exists
+                print(f"         Checking if OCLC #{oclc_num} exists in Alma...")
+                existing_mms_id = check_if_oclc_exists_in_alma(oclc_num)
 
-                # Hard-code CD for this workflow
-                result['format'] = "CD"
-                result['material_type'] = "CD"
-                mat_value = "CD"
-
-
-                print(f"         Importing to Alma...")
-                mms_id = import_to_alma(marcxml)
-                result['mms_id'] = mms_id
-                print(f"         MMS ID created: {mms_id}")
-
-                # NEW: immediately unsuppress so it's not hidden in Primo VE
-                print(f"         Unsuppressing bib in Alma...")
-                unsuppress_bib(mms_id)
-                print(f"         Bib is visible (Suppress from Discovery = OFF)")
-                
-                # Step 3: Check/create holding
-                print(f"         Checking holdings...")
-                holding_id = get_holdings(mms_id, LOCATION_CODE)
-
-                if holding_id:
-                    print(f"         Found existing holding: {holding_id}")
+                if existing_mms_id:
+                    print(f"         ALREADY EXISTS in Alma (MMS ID: {existing_mms_id})")
+                    print(f"         Item will NOT be processed")
+                    print(f"         Check physical item or add to giveaway pile\n")
+                    result['mms_id'] = existing_mms_id
+                    result['status'] = 'already_exists'
+                    result['action'] = 'Verify physical item or discard'
                 else:
-                    print(f"         Creating holding...")
-                    holding_id = create_holding(mms_id, LIBRARY_CODE, LOCATION_CODE)
-                    print(f"         Created holding: {holding_id}")
+                    print(f"         Record not found, fetching from OCLC...")
+                    marcxml, discovery_rec = get_marcxml_from_oclc(oclc_num, oclc_token)
+                    result['oclc_source'] = _classify_oclc_source(discovery_rec)
 
-                result['holding_id'] = holding_id
+                    # Hard-code CD for this workflow
+                    result['format'] = "CD"
+                    result['material_type'] = "CD"
+                    mat_value = "CD"
 
-                # Step 4: Create item
-                print(f"         Creating item (material: {mat_value})...")
-                item_pid = create_item(mms_id, holding_id, barcode, ITEM_POLICY_CODE, material_value=mat_value)
-                result['item_pid'] = item_pid
-                print(f"         Item created: {barcode}")
 
-                result['status'] = 'success'
-                print(f"         SUCCESS (new record imported)\n")
-                print(f"         Source used: {result.get('oclc_source','Unknown')}\n")
+                    print(f"         Importing to Alma...")
+                    mms_id = import_to_alma(marcxml)
+                    result['mms_id'] = mms_id
+                    print(f"         MMS ID created: {mms_id}")
 
-                
-        except requests.exceptions.HTTPError as e:
-            error_msg = f"HTTP {e.response.status_code}: {e.response.text}"
-            result['status'] = 'error'
-            result['error'] = error_msg
-            print(f"         ERROR: {error_msg}\n")
-            
-        except Exception as e:
-            result['status'] = 'error'
-            result['error'] = str(e)
-            print(f"         ERROR: {e}\n")
+                    # NEW: immediately unsuppress so it's not hidden in Primo VE
+                    print(f"         Unsuppressing bib in Alma...")
+                    unsuppress_bib(mms_id)
+                    print(f"         Bib is visible (Suppress from Discovery = OFF)")
+
+                    # Step 3: Check/create holding
+                    print(f"         Checking holdings...")
+                    holding_id = get_holdings(mms_id, LOCATION_CODE)
+
+                    if holding_id:
+                        print(f"         Found existing holding: {holding_id}")
+                    else:
+                        print(f"         Creating holding...")
+                        holding_id = create_holding(mms_id, LIBRARY_CODE, LOCATION_CODE)
+                        print(f"         Created holding: {holding_id}")
+
+                    result['holding_id'] = holding_id
+
+                    # Step 4: Create item
+                    print(f"         Creating item (material: {mat_value})...")
+                    item_pid = create_item(mms_id, holding_id, barcode, ITEM_POLICY_CODE, material_value=mat_value)
+                    result['item_pid'] = item_pid
+                    print(f"         Item created: {barcode}")
+
+                    result['status'] = 'success'
+                    print(f"         SUCCESS (new record imported)\n")
+                    print(f"         Source used: {result.get('oclc_source','Unknown')}\n")
+
+                break  # Success or already_exists — no retry needed
+
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                if attempt < max_retries - 1:
+                    wait_time = 30 * (2 ** attempt)
+                    print(f"         Timeout/connection error (attempt {attempt + 1}/{max_retries}): {e}")
+                    print(f"         Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    result['status'] = 'error'
+                    result['error'] = str(e)
+                    print(f"         ERROR after {max_retries} attempts: {e}\n")
+
+            except requests.exceptions.HTTPError as e:
+                error_msg = f"HTTP {e.response.status_code}: {e.response.text}"
+                result['status'] = 'error'
+                result['error'] = error_msg
+                print(f"         ERROR: {error_msg}\n")
+                break
+
+            except Exception as e:
+                result['status'] = 'error'
+                result['error'] = str(e)
+                print(f"         ERROR: {e}\n")
+                break
         
         results.append(result)
         time.sleep(2.0) # To avoid hitting rate limits
