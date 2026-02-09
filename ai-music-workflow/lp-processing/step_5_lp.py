@@ -1203,7 +1203,10 @@ def create_all_records_spreadsheet():
             
         except Exception as metrics_error:
             print(f"Warning: Could not log Step 5 processing metrics: {metrics_error}")
-            
+
+        # Close the source workbook to release file handles before moving
+        wb_src.close()
+
         # Move workflow data files to data subfolder after all processing is complete
         print("Moving workflow data files to data subfolder...")
         move_workflow_data_files(results_folder, data_folder)
