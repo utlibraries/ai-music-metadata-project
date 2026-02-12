@@ -123,7 +123,7 @@ The `sorting-spreadsheet-[date].xlsx` helps you organize physical CDs/LPs into t
 - Physical items can go directly to appropriate collection
 
 ### 2. **Held by UT Libraries (IXA)**
-- Items already in catalog (according to OCLC Search API)
+- Items already in catalog (according to Alma)
 - **Action needed**:
   - Verify these items are indeed duplicates
   - Check that existing items don't have condition issues

@@ -146,14 +146,18 @@ def update_record_step3(json_path: str, barcode: str, selected_oclc: str,
 
 def update_record_step4(json_path: str, barcode: str, track_similarity: float,
                        track_details: str, year_match_status: str, year_details: str,
-                       ixa_selected: str, ixa_alternatives: str, 
+                       ixa_selected: str, ixa_alternatives: str,
                        confidence_adjusted: bool, adjustment_reason: Optional[str],
                        previous_confidence: float, new_confidence: float):
     """Update JSON with Step 4 verification results."""
     data = load_workflow_json(json_path)
-    
+
     if barcode in data["records"]:
-        data["records"][barcode]["step4_verification"] = {
+        # Preserve existing step4_verification data (like alma_holdings_verification)
+        existing_step4 = data["records"][barcode].get("step4_verification", {})
+
+        # Update with new verification results while preserving existing keys
+        existing_step4.update({
             "track_verification": {
                 "similarity_score": track_similarity,
                 "details": track_details
@@ -173,7 +177,9 @@ def update_record_step4(json_path: str, barcode: str, track_similarity: float,
                 "new_score": new_confidence
             },
             "completed_at": datetime.now().isoformat()
-        }
+        })
+
+        data["records"][barcode]["step4_verification"] = existing_step4
         
         # Update final confidence score in step 3 data
         if "step3_ai_analysis" in data["records"][barcode]:
@@ -209,11 +215,12 @@ def update_record_step5(json_path: str, barcode: str, sort_group: str,
         save_workflow_json(json_path, data)
 
 # Update JSON with cataloger decision results   
-def update_record_step7(json_path, barcode, cataloger_decision, original_status, new_status, 
-                       original_oclc, new_oclc, cataloger_name, review_date, notes):
+def update_record_step7(json_path, barcode, cataloger_decision, original_status, new_status,
+                       original_oclc, new_oclc, cataloger_name, review_date, notes,
+                       new_oclc_bib_data=None):
     """
     Update workflow JSON with Step 7 cataloger decision data.
-    
+
     Parameters:
     - json_path: Path to the workflow JSON file
     - barcode: Record barcode
@@ -225,6 +232,7 @@ def update_record_step7(json_path, barcode, cataloger_decision, original_status,
     - cataloger_name: Name of cataloger who reviewed
     - review_date: Date of review
     - notes: Cataloger notes
+    - new_oclc_bib_data: Full bibliographic data for new OCLC (for HTML display)
     """
     workflow_data = load_workflow_json(json_path)
     
@@ -253,6 +261,10 @@ def update_record_step7(json_path, barcode, cataloger_decision, original_status,
         },
         "processing_timestamp": datetime.now().isoformat()
     }
+
+    # Store full bib data for new OCLC if provided
+    if new_oclc_bib_data:
+        step7_data["new_oclc_bib_data"] = new_oclc_bib_data
     
     # Add Step 7 data to the record
     workflow_data["records"][barcode_str]["step7_cataloger_review"] = step7_data
@@ -410,6 +422,34 @@ def log_error(results_folder_path: str, step: str, barcode: str, error_type: str
     # Save
     with open(error_path, 'w', encoding='utf-8') as f:
         json.dump(error_data, f, indent=2, ensure_ascii=False)
+
+def update_record_alma_verification(json_path: str, barcode: str,
+                                    oclc_number_checked: str, alma_verified: bool,
+                                    mms_id: Optional[str], verified_at: str):
+    """
+    Update JSON with Alma holdings verification results.
+
+    This stores the result of checking whether an OCLC number exists in Alma,
+    which is more reliable than OCLC holdings data.
+    """
+    data = load_workflow_json(json_path)
+
+    if barcode in data["records"]:
+        # Ensure step4_verification exists
+        if "step4_verification" not in data["records"][barcode]:
+            data["records"][barcode]["step4_verification"] = {}
+
+        data["records"][barcode]["step4_verification"]["alma_holdings_verification"] = {
+            "oclc_number_checked": oclc_number_checked,
+            "alma_verified": alma_verified,
+            "mms_id": mms_id,
+            "verified_at": verified_at,
+            "verification_source": "alma"
+        }
+
+        data["records"][barcode]["updated_at"] = datetime.now().isoformat()
+        save_workflow_json(json_path, data)
+
 
 def log_processing_metrics(results_folder_path: str, step: str, batch_metrics: Dict[str, Any]):
     """Log processing metrics to logs folder."""

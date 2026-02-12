@@ -16,40 +16,67 @@ current_timestamp = get_current_timestamp()
 
 def get_holdings_info_from_workflow(oclc_number, workflow_json_path):
     """
-    Extract holdings information from formatted OCLC results in workflow JSON.
+    Extract holdings information, preferring Alma verification over OCLC data.
+
+    Priority:
+    1. Check Alma verification results (step4_verification.alma_holdings_verification)
+    2. Fall back to OCLC data (step2_detailed_data.formatted_oclc_results)
     """
     try:
         with open(workflow_json_path, 'r', encoding='utf-8') as f:
             workflow_data = json.load(f)
-        
+
         # Search through all records for the target OCLC number
         for barcode, record_data in workflow_data.get("records", {}).items():
+            # First, check for Alma verification (more reliable than OCLC)
+            step4_data = record_data.get("step4_verification", {})
+            alma_verification = step4_data.get("alma_holdings_verification", {})
+
+            if alma_verification:
+                # Check if this is the OCLC number we're looking for
+                verified_oclc = alma_verification.get("oclc_number_checked", "")
+                # Clean both for comparison
+                clean_verified = verified_oclc.replace("(OCoLC)", "").strip()
+                clean_search = str(oclc_number).replace("(OCoLC)", "").strip()
+
+                if clean_verified == clean_search:
+                    return {
+                        "held_by_ixa": alma_verification.get("alma_verified", False),
+                        "total_holdings": 1 if alma_verification.get("alma_verified") else 0,
+                        "mms_id": alma_verification.get("mms_id"),
+                        "verification_source": "alma"
+                    }
+
+            # Fallback: Check OCLC data from Step 2
             step2_data = record_data.get("step2_detailed_data", {})
             formatted_results = step2_data.get("formatted_oclc_results", "")
-            
+
             # Look for this OCLC number and extract holdings info
             oclc_pattern = rf"OCLC Number: {oclc_number}\n\nHeld by IXA: (Yes|No)\nTotal Institutions Holding: (\d+)"
             match = re.search(oclc_pattern, formatted_results)
-            
+
             if match:
                 is_held_by_ixa = match.group(1) == "Yes"
                 total_holdings = int(match.group(2))
-                
+
                 return {
                     "held_by_ixa": is_held_by_ixa,
-                    "total_holdings": total_holdings
+                    "total_holdings": total_holdings,
+                    "verification_source": "oclc"
                 }
-        
+
         return {
             "held_by_ixa": False,
             "total_holdings": 0,
+            "verification_source": "none",
             "error": "Holdings data not found in workflow"
         }
-        
+
     except Exception as e:
         return {
             "held_by_ixa": False,
             "total_holdings": 0,
+            "verification_source": "error",
             "error": str(e)
         }
 

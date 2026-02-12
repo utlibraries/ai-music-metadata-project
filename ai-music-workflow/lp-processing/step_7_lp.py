@@ -16,6 +16,9 @@ from datetime import datetime
 # Import OCLC functions from Step 2
 from step_2_lp import get_access_token, get_holdings_info
 
+# Import Alma verification for accurate holdings check
+from alma_api_utils import verify_holdings_in_alma
+
 # Import Step 5 functions for generating low confidence content
 from step_5_lp import (
     get_bib_info_from_workflow,
@@ -26,6 +29,9 @@ from step_5_lp import (
 from json_workflow import update_record_step7, log_processing_metrics, load_workflow_json
 from shared_utilities import get_workflow_json_path
 from lp_workflow_config import get_current_timestamp
+
+# Import Step 6 functions for HTML regeneration
+from step_6_lp import create_paginated_review_html, load_records_from_step5
 
 def clean_date_format(date_string):
     """
@@ -134,48 +140,336 @@ def fetch_oclc_data(oclc_number):
     try:
         client_id = os.environ.get("OCLC_CLIENT_ID")
         client_secret = os.environ.get("OCLC_SECRET")
-        
+
         if not client_id or not client_secret:
             print("   Error: OCLC credentials not found in environment")
             return None, None, False
-        
+
         access_token = get_access_token(client_id, client_secret)
-        
+
         # Use the holdings API which returns title, creator, and holdings
         is_held_by_ixa, total_holdings, holding_institutions = get_holdings_info(oclc_number, access_token)
-        
+
         # Get title and author from holdings API
         import requests
         base_url = "https://americas.discovery.api.oclc.org/worldcat/search/v2"
         endpoint = f"{base_url}/bibs-holdings"
-        
+
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json"
         }
-        
+
         params = {
             "oclcNumber": oclc_number,
             "limit": 1
         }
-        
+
         response = requests.get(endpoint, params=params, headers=headers)
         response.raise_for_status()
         data = response.json()
-        
+
         title = "No title available"
         author = "No author available"
-        
+
         if "briefRecords" in data and len(data["briefRecords"]) > 0:
             record = data["briefRecords"][0]
             title = record.get("title", "No title available")
             author = record.get("creator", "No author available")
-        
+
         return title, author, is_held_by_ixa
-        
+
     except Exception as e:
         print(f"   Error fetching OCLC data for {oclc_number}: {e}")
         return None, None, False
+
+
+def fetch_full_oclc_bib_data(oclc_number):
+    """
+    Fetch full bibliographic data from OCLC for display in HTML.
+    Returns a formatted text representation matching step 2's detailed format.
+
+    Uses the bibs endpoint to get full bibRecords (not briefRecords) which include:
+    - Full title information (main, subtitle, series)
+    - All contributors with roles
+    - Publisher details with place
+    - Physical description
+    - Contents/track listings
+    - Music information
+    - Notes
+    """
+    try:
+        client_id = os.environ.get("OCLC_CLIENT_ID")
+        client_secret = os.environ.get("OCLC_SECRET")
+
+        if not client_id or not client_secret:
+            return None
+
+        access_token = get_access_token(client_id, client_secret)
+
+        import requests
+        base_url = "https://americas.discovery.api.oclc.org/worldcat/search/v2"
+
+        # Use bibs endpoint with OCLC number query to get full record
+        endpoint = f"{base_url}/bibs"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json"
+        }
+
+        params = {
+            "q": f"no:{oclc_number}",
+            "limit": 1
+        }
+
+        response = requests.get(endpoint, params=params, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        # Check for full bibRecords
+        if "bibRecords" not in data or len(data["bibRecords"]) == 0:
+            # Fallback to abbreviated format if full record not found
+            return _fetch_abbreviated_oclc_data(oclc_number, access_token)
+
+        record = data["bibRecords"][0]
+
+        # Get holdings info
+        is_held_by_ixa, total_holdings, _ = get_holdings_info(oclc_number, access_token)
+
+        # Get Alma verification
+        alma_result = verify_holdings_in_alma(str(oclc_number))
+        alma_verified = "Yes" if alma_result.get("alma_verified", False) else "No"
+
+        # Format the record text matching step 2's detailed format
+        formatted_results = []
+        formatted_results.append(f"OCLC Number: {oclc_number}")
+        formatted_results.append(f"\nHeld by IXA: {'Yes' if is_held_by_ixa else 'No'}  <<<  ALMA VERIFIED: {alma_verified}")
+        formatted_results.append(f"Total Institutions Holding: {total_holdings}")
+
+        # Identifier section
+        if 'identifier' in record:
+            formatted_results.append("\nIdentifier:")
+            if 'oclcNumber' in record['identifier']:
+                formatted_results.append(f"  - oclcNumber: {record['identifier']['oclcNumber']}")
+            # Add UPC if it exists
+            if 'otherStandardIdentifiers' in record['identifier']:
+                for id_item in record['identifier']['otherStandardIdentifiers']:
+                    if isinstance(id_item, dict) and id_item.get('type') == 'Universal Product Code (UPC)':
+                        formatted_results.append(f"  - UPC: {id_item.get('id', 'N/A')}")
+
+        # Title Information
+        title_text = "No title available"
+        if 'title' in record:
+            formatted_results.append("Title Information:")
+            if 'mainTitles' in record['title']:
+                for title in record['title']['mainTitles']:
+                    title_text = title.get('text', 'N/A')
+                    formatted_results.append(f"  - Main Title: {title_text}")
+            if 'subtitles' in record['title']:
+                for subtitle in record['title']['subtitles']:
+                    formatted_results.append(f"  - Subtitle: {subtitle.get('text', 'N/A')}")
+            if 'seriesTitles' in record['title']:
+                for series in record['title']['seriesTitles']:
+                    formatted_results.append(f"  - Series Title: {series.get('seriesTitle', 'N/A')}")
+
+        # Contributors
+        contributors = []
+        if 'contributor' in record:
+            formatted_results.append("Contributors:")
+            for creator_type in ['creators', 'contributors']:
+                if creator_type in record['contributor']:
+                    for person in record['contributor'][creator_type]:
+                        if 'firstName' in person and 'secondName' in person:
+                            name = f"{person.get('firstName', {}).get('text', '')} {person.get('secondName', {}).get('text', '')}"
+                        elif 'nonPersonName' in person:
+                            name = person['nonPersonName'].get('text', '')
+                        else:
+                            name = 'N/A'
+                        role = person.get('type', 'N/A')
+                        formatted_results.append(f"  - {name.strip()} ({role})")
+                        contributors.append(name.strip())
+
+        # Publishers
+        if 'publishers' in record:
+            formatted_results.append("Publishers:")
+            for pub in record['publishers']:
+                pub_name = pub.get('publisherName', {}).get('text', 'N/A')
+                pub_place = pub.get('publicationPlace', 'N/A')
+                formatted_results.append(f"  - Name: {pub_name}")
+                formatted_results.append(f"    Place: {pub_place}")
+
+        # Dates
+        pub_date = ""
+        if 'date' in record:
+            formatted_results.append("Dates:")
+            if 'publicationDate' in record['date']:
+                pub_date = record['date']['publicationDate']
+                formatted_results.append(f"  - publicationDate: {pub_date}")
+
+        # Language
+        if 'language' in record:
+            formatted_results.append("Language:")
+            for key, value in record['language'].items():
+                formatted_results.append(f"  - {key}: {value}")
+
+        # Music Information
+        if 'musicInfo' in record:
+            formatted_results.append("Music Information:")
+            for key, value in record['musicInfo'].items():
+                formatted_results.append(f"  - {key}: {value}")
+
+        # Description (Physical and Contents)
+        if 'description' in record:
+            formatted_results.append("Description:")
+            if 'physicalDescription' in record['description']:
+                formatted_results.append(f"  - Physical: {record['description']['physicalDescription']}")
+
+            if 'contents' in record['description']:
+                for content in record['description']['contents']:
+                    # Handle the titles array format from OCLC
+                    if 'titles' in content and isinstance(content['titles'], list):
+                        formatted_results.append("  - Content:")
+                        for i, title in enumerate(content['titles'], 1):
+                            formatted_results.append(f"    {i}. {title}")
+                    # Also handle contentNote format as fallback
+                    elif 'contentNote' in content and 'text' in content['contentNote']:
+                        content_text = content['contentNote']['text']
+                        # Smart content handling for large multi-disc sets
+                        if len(content_text) > 1500:
+                            disc_count = content_text.count('Disc ')
+                            chapter_count = content_text.count('Chapter ')
+                            track_patterns = len(re.findall(r'(?:--|\d+\.|\(\d+:\d+\))', content_text))
+
+                            is_large_compilation = (
+                                disc_count > 4 or
+                                chapter_count > 20 or
+                                track_patterns > 100 or
+                                len(content_text) > 5000
+                            )
+
+                            if is_large_compilation:
+                                track_pattern = r'([^-\n]+?)\s*(?:\(\d+:\d+\)|--)'
+                                sample_tracks = re.findall(track_pattern, content_text[:2000])
+                                sample_tracks = [t.strip() for t in sample_tracks[:10] if len(t.strip()) > 3]
+
+                                summary = f"LARGE MULTI-DISC COMPILATION: {disc_count} discs"
+                                if chapter_count > 0:
+                                    summary += f", {chapter_count} chapters"
+                                summary += ". "
+
+                                if sample_tracks:
+                                    summary += f"Sample tracks: {', '.join(sample_tracks)}. "
+
+                                summary += f"[Original: {len(content_text):,} characters - This is a large compilation/box set, not a single album]"
+                                content_text = summary
+                            else:
+                                content_text = content_text[:1500]
+                                last_break = content_text.rfind(' -- ')
+                                if last_break > 1000:
+                                    content_text = content_text[:last_break]
+                                content_text += "... [Content truncated for analysis]"
+
+                        formatted_results.append(f"  - Content: {content_text}")
+
+        # Notes
+        if 'note' in record:
+            formatted_results.append("Notes:")
+            if isinstance(record['note'], dict):
+                for key, value in record['note'].items():
+                    formatted_results.append(f"  - {key}: {value}")
+            elif isinstance(record['note'], list):
+                for note in record['note']:
+                    formatted_results.append(f"  - {note}")
+
+        formatted_results.append("\n[Record provided by cataloger - Different OCLC # selected]")
+
+        formatted_text = "\n".join(formatted_results)
+
+        return {
+            "oclc_number": oclc_number,
+            "title": title_text,
+            "contributors": contributors if contributors else [''],
+            "publication_date": pub_date,
+            "full_record_text": formatted_text
+        }
+
+    except Exception as e:
+        print(f"   Warning: Could not fetch full bib data for OCLC {oclc_number}: {e}")
+        return None
+
+
+def _fetch_abbreviated_oclc_data(oclc_number, access_token):
+    """
+    Fallback function to fetch abbreviated OCLC data when full record is not available.
+    Uses bibs-holdings endpoint which returns briefRecords.
+    """
+    try:
+        import requests
+        base_url = "https://americas.discovery.api.oclc.org/worldcat/search/v2"
+        endpoint = f"{base_url}/bibs-holdings"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json"
+        }
+
+        params = {
+            "oclcNumber": oclc_number,
+            "limit": 1
+        }
+
+        response = requests.get(endpoint, params=params, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        if "briefRecords" not in data or len(data["briefRecords"]) == 0:
+            return None
+
+        record = data["briefRecords"][0]
+
+        # Get holdings info
+        is_held_by_ixa, total_holdings, _ = get_holdings_info(oclc_number, access_token)
+
+        # Get Alma verification
+        alma_result = verify_holdings_in_alma(str(oclc_number))
+        alma_verified = "Yes" if alma_result.get("alma_verified", False) else "No"
+
+        formatted_text = f"""OCLC Number: {oclc_number}
+
+Title Information:
+  - Main Title: {record.get('title', 'No title available')}
+
+Contributors:
+  - {record.get('creator', 'No contributor information')}
+
+Publication Information:
+  - Date: {record.get('date', 'No date available')}
+  - Publisher: {record.get('publisher', 'No publisher information')}
+
+Material Type: {record.get('generalFormat', 'Unknown')} / {record.get('specificFormat', 'Unknown')}
+
+Language: {record.get('language', 'Unknown')}
+
+Holdings Information:
+  - Total Libraries: {total_holdings}
+  - Held by IXA: {"Yes" if is_held_by_ixa else "No"}  <<<  ALMA VERIFIED: {alma_verified}
+
+[Record provided by cataloger - Different OCLC # selected]
+[Note: Full bibliographic details not available - showing abbreviated record]
+"""
+
+        return {
+            "oclc_number": oclc_number,
+            "title": record.get('title', 'No title available'),
+            "contributors": [record.get('creator', '')],
+            "publication_date": record.get('date', ''),
+            "full_record_text": formatted_text
+        }
+
+    except Exception as e:
+        print(f"   Warning: Could not fetch abbreviated bib data for OCLC {oclc_number}: {e}")
+        return None
 
 
 def determine_changes(barcode, decision_data, current_state, decisions_history_current):
@@ -211,6 +505,7 @@ def determine_changes(barcode, decision_data, current_state, decisions_history_c
         'new_status': None,
         'new_oclc': None,
         'new_title': None,
+        'new_oclc_bib_data': None,  # Full bib data for new OCLC
         'original_oclc': current_state.get('oclc_number', ''),
         'original_title': current_state.get('title', ''),
         'original_status': initial_status,
@@ -226,7 +521,7 @@ def determine_changes(barcode, decision_data, current_state, decisions_history_c
         'final_confidence': final_confidence
     }
     
-    if final_confidence == 100:
+    if final_confidence >= 80:
         if held_by_ixa == "Yes":
             changes['new_status'] = 'Held by UT Libraries (IXA)'
             changes['remove_from_batch_upload'] = True
@@ -238,9 +533,29 @@ def determine_changes(barcode, decision_data, current_state, decisions_history_c
         
         if new_oclc and new_oclc != changes['original_oclc']:
             changes['new_oclc'] = new_oclc
-            title, author, is_held = fetch_oclc_data(new_oclc)
+            title, author, _ = fetch_oclc_data(new_oclc)  # Ignore OCLC holdings (unreliable)
             if title:
                 changes['new_title'] = title
+
+            # Fetch full bib data for HTML display
+            full_bib_data = fetch_full_oclc_bib_data(new_oclc)
+            if full_bib_data:
+                changes['new_oclc_bib_data'] = full_bib_data
+
+            # Re-verify holdings against Alma for accurate status
+            alma_result = verify_holdings_in_alma(str(new_oclc))
+            new_held_by_ixa = "Yes" if alma_result.get("alma_verified", False) else "No"
+
+            # Update sort group if holdings status changed
+            if new_held_by_ixa != held_by_ixa:
+                if new_held_by_ixa == "Yes":
+                    changes['new_status'] = 'Held by UT Libraries (IXA)'
+                    changes['remove_from_batch_upload'] = True
+                    changes['add_to_batch_upload'] = False
+                else:
+                    changes['new_status'] = 'Alma Batch Upload (High Confidence)'
+                    changes['add_to_batch_upload'] = True
+                    changes['remove_from_batch_upload'] = False
     
     elif final_confidence == 0:
         changes['new_status'] = 'Cataloger Review (Low Confidence)'
@@ -993,14 +1308,17 @@ def update_decisions_history(decisions_history_data, new_decisions):
         )
         
         held_by_ixa = current_decisions.get(barcode, {}).get('held_by_ixa', 'No')
-        
-        # Only query OCLC API if there's a NEW, DIFFERENT OCLC number
+
+        # Only query APIs if there's a NEW, DIFFERENT OCLC number
         if chosen_oclc and chosen_oclc != decision_data['ai_suggested_oclc']:
             print(f"   Querying OCLC for new number: {chosen_oclc}")
-            title, author, is_held = fetch_oclc_data(chosen_oclc)
+            title, author, _ = fetch_oclc_data(chosen_oclc)  # Ignore OCLC holdings (unreliable)
             if title and author:
-                held_by_ixa = "Yes" if is_held else "No"
                 api_calls_made += 1
+            # Re-verify holdings against Alma for accurate status
+            alma_result = verify_holdings_in_alma(str(chosen_oclc))
+            held_by_ixa = "Yes" if alma_result.get("alma_verified", False) else "No"
+            print(f"   Alma verification: held_by_ixa = {held_by_ixa}")
         
         current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
@@ -1279,7 +1597,8 @@ def apply_cataloger_decisions(csv_path, results_folder):
                         new_oclc=new_oclc_str,
                         cataloger_name=cataloger_name_str,
                         review_date=review_date_str,
-                        notes=notes_str
+                        notes=notes_str,
+                        new_oclc_bib_data=changes.get('new_oclc_bib_data')
                     )
                 except Exception as record_error:
                     print(f"   Warning: Could not update record {barcode} in workflow JSON: {record_error}")
@@ -1287,8 +1606,46 @@ def apply_cataloger_decisions(csv_path, results_folder):
         print("   ✓ Workflow JSON updated")
     except Exception as json_error:
         print(f"   Warning: Could not update workflow JSON: {json_error}")
-    
-    # Step 10: Log metrics
+
+    # Step 10: Regenerate HTML review interface with updated data
+    print("\n10. Regenerating HTML review interface...")
+    try:
+        # First, delete old HTML files to avoid duplicates
+        import glob
+        old_html_files = glob.glob(os.path.join(results_folder, "review-index-*.html"))
+        old_html_files.extend(glob.glob(os.path.join(results_folder, "review-page-*.html")))
+        for old_file in old_html_files:
+            try:
+                os.remove(old_file)
+            except Exception:
+                pass  # Ignore errors deleting old files
+        if old_html_files:
+            print(f"   Removed {len(old_html_files)} old HTML files")
+
+        # Load the updated records from the sorting spreadsheet
+        updated_records = load_records_from_step5(sorting_file)
+
+        # Generate new timestamp for the regenerated HTML
+        html_timestamp = get_current_timestamp()
+
+        # Regenerate the HTML pages
+        html_result = create_paginated_review_html(
+            results_folder,
+            updated_records,
+            html_timestamp,
+            workflow_json_path,
+            records_per_page=100
+        )
+
+        print(f"   ✓ HTML regenerated: {html_result['total_pages']} pages created")
+        print(f"   Index: {html_result['index_path']}")
+        summary['html_regenerated'] = True
+        summary['html_pages'] = html_result['total_pages']
+    except Exception as html_error:
+        print(f"   Warning: Could not regenerate HTML: {html_error}")
+        summary['html_regenerated'] = False
+
+    # Step 11: Log metrics
     try:
         step7_metrics = {
             "total_decisions_processed": summary['total'],
@@ -1367,7 +1724,11 @@ def main():
         print(f"Processed {summary['total']} cataloger decisions")
         print(f"\nUpdated deliverables: {os.path.join(results_folder, 'deliverables')}/")
         print(f"Copied original to: {os.path.join(results_folder, 'original-outputs')}/")
-        
+
+        if summary.get('html_regenerated'):
+            print(f"\nHTML review interface regenerated with {summary.get('html_pages', 0)} pages")
+            print("Catalogers can now review updated records using the new HTML files.")
+
     except Exception as e:
         print(f"\nError during processing: {e}")
         import traceback

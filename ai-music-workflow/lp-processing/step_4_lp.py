@@ -7,9 +7,10 @@ import datetime
 from difflib import SequenceMatcher
 
 # Custom modules
-from json_workflow import update_record_step4, log_error, log_processing_metrics
+from json_workflow import update_record_step4, update_record_alma_verification, log_error, log_processing_metrics
 from shared_utilities import find_latest_results_folder, get_workflow_json_path, create_batch_summary
 from lp_workflow_config import get_file_path_config, get_threshold_config
+from alma_api_utils import verify_holdings_in_alma
 
 def extract_tracks_from_metadata(metadata_str):
     """Extract track listings from metadata string."""
@@ -792,13 +793,43 @@ def main():
             if other_potential_matches:
                 other_ixa_status = check_other_matches_held_by_ixa(str(other_potential_matches))
                 sheet[f'{OTHER_IXA_HOLDING_COLUMN}{row}'].value = other_ixa_status
-                
+
                 # Update counter for other matches at IXA
                 if other_ixa_status == 'Y':
                     records_other_matches_at_ixa += 1
             else:
                 sheet[f'{OTHER_IXA_HOLDING_COLUMN}{row}'].value = 'N/A'
-            
+
+            # Verify holdings against Alma API (more reliable than OCLC)
+            alma_verification_result = None
+            if oclc_number and str(oclc_number).strip() != "" and oclc_number != "Not found":
+                try:
+                    alma_verification_result = verify_holdings_in_alma(str(oclc_number).strip())
+
+                    # Log to workflow JSON
+                    if barcode:
+                        update_record_alma_verification(
+                            json_path=workflow_json_path,
+                            barcode=str(barcode),
+                            oclc_number_checked=alma_verification_result.get("oclc_number_checked", ""),
+                            alma_verified=alma_verification_result.get("alma_verified", False),
+                            mms_id=alma_verification_result.get("mms_id"),
+                            verified_at=alma_verification_result.get("verified_at", "")
+                        )
+
+                    if alma_verification_result.get("alma_verified"):
+                        print(f"  Alma verification: FOUND in Alma (MMS ID: {alma_verification_result.get('mms_id')})")
+                        # Override OCLC-based column with authoritative Alma result
+                        sheet[f'{IXA_HOLDING_COLUMN}{row}'].value = 'Y'
+                    else:
+                        print(f"  Alma verification: NOT FOUND in Alma")
+                        # Override OCLC-based column with authoritative Alma result
+                        sheet[f'{IXA_HOLDING_COLUMN}{row}'].value = 'N'
+
+                except Exception as alma_error:
+                    print(f"  Alma verification error: {alma_error}")
+                    alma_verification_result = None
+
             if not oclc_number or str(oclc_number).strip() == "":
                 # Clear the verification columns when no OCLC number is present
                 sheet[f'{VERIFICATION_COLUMN}{row}'].value = None

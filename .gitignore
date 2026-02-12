@@ -51,3 +51,7 @@ CLAUDE.local.md
 CLAUDE.md
 .claude
 .vscode/
+
+# Model evaluation scripts (in development)
+ai-music-workflow/cd-processing/evaluate_model_accuracy_cd.py
+ai-music-workflow/lp-processing/evaluate_model_accuracy_lp.py

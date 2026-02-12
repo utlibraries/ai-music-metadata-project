@@ -10,7 +10,6 @@ import sys
 import time
 import os
 from datetime import datetime
-
 from batch_processor import BatchProcessor
 from cd_workflow_config import get_model_config
 

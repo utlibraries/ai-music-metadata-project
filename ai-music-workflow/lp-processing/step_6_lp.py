@@ -6,6 +6,7 @@ This step is optional and can be skipped for large batches where HTML generation
 
 import os
 import math
+import re
 import shutil
 from openpyxl import load_workbook
 from openpyxl import Workbook
@@ -17,6 +18,18 @@ from shared_utilities import find_latest_results_folder, get_workflow_json_path,
 from lp_workflow_config import get_file_path_config, get_current_timestamp
 
 current_timestamp = get_current_timestamp()
+
+def get_alma_verification_from_workflow(barcode, workflow_json_path):
+    """Get Alma verification result for a specific barcode from workflow JSON."""
+    try:
+        with open(workflow_json_path, 'r', encoding='utf-8') as f:
+            workflow_data = json.load(f)
+
+        record_data = workflow_data.get("records", {}).get(str(barcode), {})
+        step4_data = record_data.get("step4_verification", {})
+        return step4_data.get("alma_holdings_verification", None)
+    except Exception:
+        return None
 
 def create_paginated_review_html(results_folder, all_records, current_timestamp, workflow_json_path, records_per_page=100):
     """
@@ -323,6 +336,9 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
         .group-held-by-ut-libraries-ixa {{ background-color: #3498db; color: white; }}
         .group-duplicate {{ background-color: #95a5a6; color: white; }}
         .group-unknown {{ background-color: #95a5a6; color: white; }}
+        .alma-verified {{ padding: 12px 15px; margin-bottom: 15px; font-weight: bold; border-radius: 5px; font-size: 14px; }}
+        .alma-verified.held {{ background-color: #e74c3c; color: white; }}
+        .alma-verified.not-held {{ background-color: #27ae60; color: white; }}
         .confidence-low {{ background-color: #e74c3c; }}
         .confidence-medium {{ background-color: #f39c12; }}
         .confidence-high {{ background-color: #27ae60; }}
@@ -502,13 +518,31 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
         
         html_content += """
             </div>
-            
+
             <div class="oclc-section">
                 <h3>OCLC Record Information</h3>"""
-        
+
+        # Add Alma verification banner
+        alma_status = get_alma_verification_from_workflow(barcode, workflow_json_path)
+        if alma_status:
+            if alma_status.get("alma_verified"):
+                html_content += '<div class="alma-verified held">ALMA VERIFIED: Held by UT Libraries (IXA)</div>'
+            else:
+                html_content += '<div class="alma-verified not-held">ALMA VERIFIED: NOT Held by UT Libraries</div>'
+
         if oclc_number and record.get("has_valid_oclc", False):
             oclc_data = get_bib_info_from_workflow(oclc_number, workflow_json_path)
             formatted_record = oclc_data.get("full_record_text", "No detailed record available")
+
+            # Annotate OCLC holdings line with Alma verification status
+            if alma_status:
+                alma_held = "Yes" if alma_status.get("alma_verified", False) else "No"
+                formatted_record = re.sub(
+                    r'Held by IXA: (Yes|No)',
+                    f'Held by IXA (per OCLC): \\1  <<<  ALMA VERIFIED: {alma_held}',
+                    formatted_record
+                )
+
             html_content += f"""
                 <pre style="background: #f8f9fa; padding: 15px; border: 1px solid #ddd; border-radius: 5px; overflow: auto; max-height: 70vh; font-size: 13px; white-space: pre-wrap; word-wrap: break-word;">{formatted_record}</pre>"""
         else:
@@ -1026,7 +1060,16 @@ def create_decisions_history_spreadsheet(results_folder, workflow_json_path, cur
 
         # Get sort group - default to "Processing Failed" if step5 missing
         sort_group = step5.get("sort_group", "Processing Failed") if step5 else "Processing Failed"
-        held_by_ixa = "Yes" if sort_group == "Held by UT Libraries (IXA)" else "No"
+
+        # Check Alma verification directly for held_by_ixa status (more reliable than sort_group)
+        step4 = record_data.get("step4_verification", {})
+        alma_verification = step4.get("alma_holdings_verification", {})
+        if alma_verification:
+            # Use Alma verification result directly
+            held_by_ixa = "Yes" if alma_verification.get("alma_verified", False) else "No"
+        else:
+            # Fall back to sort_group-based check if no Alma verification
+            held_by_ixa = "Yes" if sort_group == "Held by UT Libraries (IXA)" else "No"
 
         # UPDATED ROW DATA - Removed Record ID, using clean timestamp
         row_data = [

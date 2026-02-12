@@ -188,11 +188,11 @@ Review `step1_llm_responses_log.txt` for patterns:
 ### Issue: Items marked as "Held by IXA" but aren't actually in catalog
 
 **Investigation steps**:
-1. Check OCLC search log for holdings information
-2. Verify the OCLC number in WorldCat
-3. Check institutional holdings code in OCLC
+1. Check Alma API verification results in the workflow JSON
+2. Verify the OCLC number exists in your Alma instance
+3. Check that the Alma API key has correct permissions
 
-**Note**: This relies on OCLC API holdings data being current
+**Note**: This relies on Alma API holdings data being current
 
 ---
 
