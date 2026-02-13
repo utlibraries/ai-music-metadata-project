@@ -127,12 +127,79 @@ def _alma_request_with_retry(
     return None
 
 
+def _extract_oclc_from_network_number(network_number: str) -> Optional[str]:
+    """
+    Extract the numeric OCLC number from a network_number field.
+
+    Args:
+        network_number: A network number string like "(OCoLC)12345678", "ocm12345678",
+                       or "(OCoLC)ocm12345678" (hybrid format)
+
+    Returns:
+        The numeric OCLC number if this is an OCLC identifier, None otherwise
+    """
+    if not network_number:
+        return None
+
+    nn = network_number.strip()
+
+    # Check for (OCoLC) prefix
+    if nn.startswith("(OCoLC)"):
+        nn = nn[7:]  # Remove (OCoLC) prefix
+        # May still have ocm/ocn/on prefix after (OCoLC) - e.g., "(OCoLC)ocm31965097"
+        for prefix in ['ocm', 'ocn', 'on']:
+            if nn.lower().startswith(prefix):
+                return nn[len(prefix):].lstrip('0')
+        # No secondary prefix, just return the number
+        return nn.lstrip('0')
+
+    # Check for ocm, ocn, on prefixes (without OCoLC wrapper)
+    for prefix in ['ocm', 'ocn', 'on']:
+        if nn.lower().startswith(prefix):
+            return nn[len(prefix):].lstrip('0')
+
+    return None
+
+
+def _verify_oclc_in_bib(bib_element, target_oclc: str) -> bool:
+    """
+    Verify that a bib record actually contains the target OCLC number.
+
+    The Alma other_system_id search can return false positives when
+    the search term matches non-OCLC identifiers (like IXA local IDs).
+    This function checks the network_numbers to confirm the match.
+
+    Args:
+        bib_element: The <bib> XML element from Alma response
+        target_oclc: The OCLC number we're looking for (numeric only)
+
+    Returns:
+        True if the bib contains this OCLC number, False otherwise
+    """
+    # Normalize target - remove leading zeros for comparison
+    target_normalized = target_oclc.lstrip('0')
+
+    network_numbers = bib_element.find('network_numbers')
+    if network_numbers is None:
+        return False
+
+    for nn_elem in network_numbers.findall('network_number'):
+        if nn_elem.text:
+            extracted_oclc = _extract_oclc_from_network_number(nn_elem.text)
+            if extracted_oclc and extracted_oclc.lstrip('0') == target_normalized:
+                return True
+
+    return False
+
+
 def check_oclc_in_alma(oclc_number: str) -> Tuple[bool, Optional[str]]:
     """
     Check if an OCLC number exists in Alma.
 
     Searches Alma using the other_system_id field to find bibliographic
-    records with the given OCLC number.
+    records with the given OCLC number, then verifies the returned record
+    actually contains that OCLC number (to avoid false positives from
+    partial matches on non-OCLC identifiers).
 
     Args:
         oclc_number: OCLC number to search for (with or without prefix)
@@ -198,9 +265,12 @@ def check_oclc_in_alma(oclc_number: str) -> Tuple[bool, Optional[str]]:
             if total_records is not None and int(total_records) > 0:
                 bib = root.find('.//bib')
                 if bib is not None:
-                    mms_id = bib.find('mms_id')
-                    if mms_id is not None:
-                        return True, mms_id.text
+                    # Verify this record actually contains our OCLC number
+                    # (not just a partial match on a non-OCLC identifier)
+                    if _verify_oclc_in_bib(bib, oclc_num):
+                        mms_id = bib.find('mms_id')
+                        if mms_id is not None:
+                            return True, mms_id.text
 
         except requests.exceptions.HTTPError as e:
             print(f"Alma API error checking OCLC {oclc_number}: {e}")

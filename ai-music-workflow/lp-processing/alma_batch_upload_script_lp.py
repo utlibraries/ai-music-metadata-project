@@ -455,13 +455,66 @@ def build_marcxml_from_discovery_record(rec: dict) -> str:
 
     return ET.tostring(R, encoding="unicode")
 
+def _extract_oclc_from_network_number(network_number):
+    """
+    Extract the numeric OCLC number from a network_number field.
+    Returns the numeric OCLC number if this is an OCLC identifier, None otherwise.
+    """
+    if not network_number:
+        return None
+
+    nn = network_number.strip()
+
+    # Check for (OCoLC) prefix
+    if nn.startswith("(OCoLC)"):
+        nn = nn[7:]  # Remove (OCoLC) prefix
+        # May still have ocm/ocn/on prefix after (OCoLC) - e.g., "(OCoLC)ocm31965097"
+        for prefix in ['ocm', 'ocn', 'on']:
+            if nn.lower().startswith(prefix):
+                return nn[len(prefix):].lstrip('0')
+        # No secondary prefix, just return the number
+        return nn.lstrip('0')
+
+    # Check for ocm, ocn, on prefixes (without OCoLC wrapper)
+    for prefix in ['ocm', 'ocn', 'on']:
+        if nn.lower().startswith(prefix):
+            return nn[len(prefix):].lstrip('0')
+
+    return None
+
+
+def _verify_oclc_in_bib(bib_element, target_oclc):
+    """
+    Verify that a bib record actually contains the target OCLC number.
+    The Alma other_system_id search can return false positives when
+    the search term matches non-OCLC identifiers (like IXA local IDs).
+    """
+    # Normalize target - remove leading zeros for comparison
+    target_normalized = target_oclc.lstrip('0')
+
+    network_numbers = bib_element.find('network_numbers')
+    if network_numbers is None:
+        return False
+
+    for nn_elem in network_numbers.findall('network_number'):
+        if nn_elem.text:
+            extracted_oclc = _extract_oclc_from_network_number(nn_elem.text)
+            if extracted_oclc and extracted_oclc.lstrip('0') == target_normalized:
+                return True
+
+    return False
+
+
 def check_if_oclc_exists_in_alma(oclc_number):
     """
     Search Alma to see if an OCLC number already exists.
     Returns MMS ID if found, None if not found.
+
+    Verifies that the returned record actually contains the OCLC number
+    to avoid false positives from partial matches on non-OCLC identifiers.
     """
     url = f"{ALMA_BASE}/bibs"
-    
+
     oclc_num = oclc_number.replace("(OCoLC)", "").strip()
     for prefix in ['ocm', 'ocn', 'on']:
         if oclc_num.startswith(prefix):
@@ -476,17 +529,17 @@ def check_if_oclc_exists_in_alma(oclc_number):
         f"on{oclc_num}",
         oclc_num
     ]
-    
+
     for search_term in search_formats:
         params = {
             "other_system_id": search_term,
             "limit": "1"
         }
-        
+
         try:
             r = requests.get(url, headers=HEADERS_XML, params=params, timeout=60)
             r.raise_for_status()
-            
+
             root = ET.fromstring(r.text)
             # total_record_count is an attribute on <bibs>, not a child element
             total_records = root.get('total_record_count')
@@ -494,15 +547,18 @@ def check_if_oclc_exists_in_alma(oclc_number):
             if total_records is not None and int(total_records) > 0:
                 bib = root.find('.//bib')
                 if bib is not None:
-                    mms_id = bib.find('mms_id')
-                    if mms_id is not None:
-                        return mms_id.text
-            
+                    # Verify this record actually contains our OCLC number
+                    # (not just a partial match on a non-OCLC identifier)
+                    if _verify_oclc_in_bib(bib, oclc_num):
+                        mms_id = bib.find('mms_id')
+                        if mms_id is not None:
+                            return mms_id.text
+
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 400:
                 continue
             raise
-    
+
     return None
 
 def import_to_alma(marcxml, normalization_rule=None):
