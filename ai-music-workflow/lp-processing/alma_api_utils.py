@@ -151,12 +151,24 @@ def check_oclc_in_alma(oclc_number: str) -> Tuple[bool, Optional[str]]:
     url = f"{config['base_url']}/bibs"
     headers = get_alma_headers(config['api_key'])
 
-    # Clean OCLC number - remove prefix if present
+    # Clean OCLC number - remove any existing prefix
     oclc_num = oclc_number.replace("(OCoLC)", "").strip()
+    for prefix in ['ocm', 'ocn', 'on']:
+        if oclc_num.startswith(prefix):
+            oclc_num = oclc_num[len(prefix):]
+            break
 
-    # Try multiple search formats (some records use prefix, some don't)
+    # Try multiple search formats - OCLC numbers in Alma's 035 field
+    # can use different prefix formats depending on when they were created:
+    # - ocm: older 8-digit OCLC numbers
+    # - ocn: newer OCLC numbers (post-2001)
+    # - on: most recent format
+    # - (OCoLC): OCLC organizational code format
     search_formats = [
         f"(OCoLC){oclc_num}",
+        f"ocm{oclc_num}",
+        f"ocn{oclc_num}",
+        f"on{oclc_num}",
         oclc_num
     ]
 
@@ -180,9 +192,10 @@ def check_oclc_in_alma(oclc_number: str) -> Tuple[bool, Optional[str]]:
             response.raise_for_status()
 
             root = ET.fromstring(response.text)
-            total_records = root.find('total_record_count')
+            # total_record_count is an attribute on <bibs>, not a child element
+            total_records = root.get('total_record_count')
 
-            if total_records is not None and int(total_records.text) > 0:
+            if total_records is not None and int(total_records) > 0:
                 bib = root.find('.//bib')
                 if bib is not None:
                     mms_id = bib.find('mms_id')

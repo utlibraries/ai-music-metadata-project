@@ -463,9 +463,17 @@ def check_if_oclc_exists_in_alma(oclc_number):
     url = f"{ALMA_BASE}/bibs"
     
     oclc_num = oclc_number.replace("(OCoLC)", "").strip()
-    
+    for prefix in ['ocm', 'ocn', 'on']:
+        if oclc_num.startswith(prefix):
+            oclc_num = oclc_num[len(prefix):]
+            break
+
+    # Try multiple OCLC prefix formats (ocm=older, ocn=post-2001, on=newest)
     search_formats = [
         f"(OCoLC){oclc_num}",
+        f"ocm{oclc_num}",
+        f"ocn{oclc_num}",
+        f"on{oclc_num}",
         oclc_num
     ]
     
@@ -480,9 +488,10 @@ def check_if_oclc_exists_in_alma(oclc_number):
             r.raise_for_status()
             
             root = ET.fromstring(r.text)
-            total_records = root.find('total_record_count')
-            
-            if total_records is not None and int(total_records.text) > 0:
+            # total_record_count is an attribute on <bibs>, not a child element
+            total_records = root.get('total_record_count')
+
+            if total_records is not None and int(total_records) > 0:
                 bib = root.find('.//bib')
                 if bib is not None:
                     mms_id = bib.find('mms_id')
