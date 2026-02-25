@@ -42,7 +42,8 @@ def create_token_usage_log(logs_folder_path, script_name, model_name, total_item
         model_name=model_name,
         prompt_tokens=total_prompt_tokens,
         completion_tokens=total_completion_tokens,
-        is_batch=is_batch
+        is_batch=is_batch,
+        cached_tokens=total_cached_tokens
     )
     
     # Get model info for display
@@ -56,10 +57,14 @@ def create_token_usage_log(logs_folder_path, script_name, model_name, total_item
         }
     
     # Calculate individual cost components for display
-    input_cost = (total_prompt_tokens / 1000) * model_info["input_per_1k"]
+    non_cached_prompt_tokens = total_prompt_tokens - total_cached_tokens
+    cached_input_discount = model_info.get("cached_input_discount", 0.5)
+    input_cost = (non_cached_prompt_tokens / 1000) * model_info["input_per_1k"]
+    cached_cost = (total_cached_tokens / 1000) * model_info["input_per_1k"] * cached_input_discount
     output_cost = (total_completion_tokens / 1000) * model_info["output_per_1k"]
     if is_batch:
         input_cost *= model_info["batch_discount"]
+        cached_cost *= model_info["batch_discount"]
         output_cost *= model_info["batch_discount"]
     
     # Calculate averages
@@ -99,12 +104,12 @@ def create_token_usage_log(logs_folder_path, script_name, model_name, total_item
         log_file.write("TOKEN USAGE:\n")
         log_file.write("-" * 30 + "\n")
         log_file.write(f"Total prompt tokens: {total_prompt_tokens:,}\n")
-        log_file.write(f"Total completion tokens: {total_completion_tokens:,}\n")
         if total_cached_tokens > 0:
-            log_file.write(f"Total cached tokens: {total_cached_tokens:,}\n")
+            log_file.write(f"  Of which cached: {total_cached_tokens:,} (charged at reduced rate)\n")
+        log_file.write(f"Total completion tokens: {total_completion_tokens:,}\n")
         log_file.write(f"Total tokens: {total_tokens:,}\n")
         log_file.write(f"Average tokens per successful item: {avg_tokens:.1f}\n\n")
-        
+
         # Cost Breakdown
         log_file.write("COST BREAKDOWN:\n")
         log_file.write("-" * 30 + "\n")
@@ -113,6 +118,8 @@ def create_token_usage_log(logs_folder_path, script_name, model_name, total_item
             log_file.write(f" (batch discounted)\n")
         else:
             log_file.write(f"\n")
+        if total_cached_tokens > 0:
+            log_file.write(f"Cached input cost: ${cached_cost:.4f} (cache discount applied)\n")
         log_file.write(f"Output token cost: ${output_cost:.4f}")
         if is_batch:
             log_file.write(f" (batch discounted)\n")
@@ -120,10 +127,10 @@ def create_token_usage_log(logs_folder_path, script_name, model_name, total_item
             log_file.write(f"\n")
         log_file.write(f"Total actual cost: ${total_cost:.4f}\n")
         log_file.write(f"Average cost per successful item: ${avg_cost:.4f}\n")
-        
+
         # Show savings if batch processing was used
         if is_batch:
-            regular_cost = calculate_cost(model_name, total_prompt_tokens, total_completion_tokens, is_batch=False)
+            regular_cost = calculate_cost(model_name, total_prompt_tokens, total_completion_tokens, is_batch=False, cached_tokens=total_cached_tokens)
             savings = regular_cost - total_cost
             log_file.write(f"Regular API cost would have been: ${regular_cost:.4f}\n")
             log_file.write(f"Batch processing savings: ${savings:.4f}\n")
@@ -175,7 +182,8 @@ def log_individual_response(logs_folder_path, script_name, row_number, barcode, 
         model_name=model_name,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
-        is_batch=False  # Individual calls are not batch
+        is_batch=False,
+        cached_tokens=cached_tokens
     )
     
     log_file_path = os.path.join(logs_folder_path, f"{script_name}_llm_response_log.txt")

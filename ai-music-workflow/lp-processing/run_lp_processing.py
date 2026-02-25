@@ -10,6 +10,14 @@ import time
 import os
 from datetime import datetime
 
+def _read_tty_input():
+    """Read user input directly from the terminal, bypassing any stdin redirection."""
+    try:
+        with open('/dev/tty') as tty:
+            return tty.readline().strip()
+    except OSError:
+        return input().strip()
+
 def _derive_step_key(step_number, script_name: str) -> str | None:
     try:
         n = float(step_number)
@@ -154,7 +162,7 @@ def validate_image_files():
                     print(f"\nPlease fix the issues listed above, then press Enter to re-validate...")
                     print(f"Or type 'skip' to continue anyway (not recommended):")
                     
-                    user_input = input().strip().lower()
+                    user_input = _read_tty_input().lower()
                     if user_input == 'skip':
                         print(f"Skipping validation - proceeding with potentially invalid files...")
                         return True
@@ -204,7 +212,7 @@ def main():
     print(f"          For the same reason, we recommend using JPEG format for images when intending to generate HTML.")
     print(f"\nGenerate HTML review interface? (y/n): ", end='')
     
-    run_html_step = input().strip().lower() == 'y'
+    run_html_step = _read_tty_input().lower() == 'y'
     
     if run_html_step:
         print(f"HTML review will be generated after Step 5.")

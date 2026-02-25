@@ -129,8 +129,6 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
     
     <div class="summary">
         <h2>Review Pages</h2>
-        <p>Each page contains up to {records_per_page} records for manageable review.</p>
-        <p><strong>All files are in the same folder for reliable navigation.</strong></p>
         <div class="page-links">"""
     
     for page_num in range(1, total_pages + 1):

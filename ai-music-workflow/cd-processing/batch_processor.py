@@ -736,32 +736,37 @@ class BatchProcessor:
         processed_results = {}
         total_prompt_tokens = 0
         total_completion_tokens = 0
+        total_cached_tokens = 0
         successful_results = 0
         failed_results = 0
-        
+
         for result in results:
             custom_id = result.get("custom_id")
-            
+
             if "response" in result and result["response"]:
                 # Successful result
                 response = result["response"]
                 body = response.get("body", {})
-                
+
                 if "choices" in body and body["choices"]:
                     # Extract the content
                     content = body["choices"][0]["message"]["content"]
                     usage = body.get("usage", {})
-                    
+                    prompt_details = usage.get("prompt_tokens_details")
+                    cached_tokens = prompt_details.get("cached_tokens", 0) if isinstance(prompt_details, dict) else 0
+
                     processed_results[custom_id] = {
                         "success": True,
                         "content": content,
                         "usage": usage,
+                        "cached_tokens": cached_tokens,
                         "custom_id": custom_id
                     }
-                    
+
                     # Track token usage
                     total_prompt_tokens += usage.get("prompt_tokens", 0)
                     total_completion_tokens += usage.get("completion_tokens", 0)
+                    total_cached_tokens += cached_tokens
                     successful_results += 1
                     
                 else:
@@ -798,13 +803,16 @@ class BatchProcessor:
         print(f"   Failed: {failed_results}")
         print(f"   Total prompt tokens: {total_prompt_tokens:,}")
         print(f"   Total completion tokens: {total_completion_tokens:,}")
-        
+        if total_cached_tokens > 0:
+            print(f"   Total cached tokens: {total_cached_tokens:,}")
+
         return {
             "results": processed_results,
             "summary": {
                 "successful": successful_results,
                 "failed": failed_results,
                 "total_prompt_tokens": total_prompt_tokens,
-                "total_completion_tokens": total_completion_tokens
+                "total_completion_tokens": total_completion_tokens,
+                "total_cached_tokens": total_cached_tokens
             }
         }

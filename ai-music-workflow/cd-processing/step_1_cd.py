@@ -257,7 +257,8 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
                         if result_data["success"]:
                             metadata_output = result_data["content"]
                             usage = result_data["usage"]
-                            
+                            item_cached_tokens = result_data.get("cached_tokens", 0)
+
                             # Log individual response
                             log_individual_response(
                                 logs_folder_path=logs_folder_path,
@@ -268,7 +269,8 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
                                 model_name=model_name,
                                 prompt_tokens=usage.get("prompt_tokens", 0),
                                 completion_tokens=usage.get("completion_tokens", 0),
-                                processing_time=0  # Batch processing doesn't track individual timing
+                                processing_time=0,  # Batch processing doesn't track individual timing
+                                cached_tokens=item_cached_tokens
                             )
                             
                             try:
@@ -330,8 +332,9 @@ def process_folder_with_batch(folder_path, wb, results_folder_path, workflow_jso
             # Return batch processing metrics
             summary = processed_results["summary"]
             return (total_items, items_with_issues, 0,  # 0 for total_time since batch doesn't track individual timing
-                   summary["total_prompt_tokens"], summary["total_completion_tokens"], 
-                   summary["total_prompt_tokens"] + summary["total_completion_tokens"])
+                   summary["total_prompt_tokens"], summary["total_completion_tokens"],
+                   summary["total_prompt_tokens"] + summary["total_completion_tokens"],
+                   summary.get("total_cached_tokens", 0), True)
         
         else:
             print("Batch processing failed, falling back to individual processing...")
@@ -347,6 +350,7 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
     processed_items = 0
     total_prompt_tokens = 0
     total_completion_tokens = 0
+    total_cached_tokens = 0
     total_tokens = 0
     total_time = 0
 
@@ -460,10 +464,13 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
 
                 prompt_tokens = response.usage.prompt_tokens
                 completion_tokens = response.usage.completion_tokens
+                prompt_details = getattr(response.usage, 'prompt_tokens_details', None)
+                cached_tokens = getattr(prompt_details, 'cached_tokens', 0) or 0
                 total_item_tokens = prompt_tokens + completion_tokens
-                
+
                 total_prompt_tokens += prompt_tokens
                 total_completion_tokens += completion_tokens
+                total_cached_tokens += cached_tokens
                 total_tokens += total_item_tokens
 
                 metadata_output = response.choices[0].message.content.strip()
@@ -479,7 +486,8 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
                     model_name=model_name,
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
-                    processing_time=api_duration
+                    processing_time=api_duration,
+                    cached_tokens=cached_tokens
                 )
                 try:
                     # Extract structured metadata fields
@@ -537,7 +545,7 @@ def process_folder_individual(image_groups, ws, logs_folder_path, model_name, to
         item_duration = time.time() - item_start_time
         total_time += item_duration
 
-    return total_items, items_with_issues, total_time, total_prompt_tokens, total_completion_tokens, total_tokens
+    return total_items, items_with_issues, total_time, total_prompt_tokens, total_completion_tokens, total_tokens, total_cached_tokens, False
 
 def main():
     # Get configuration
@@ -581,7 +589,7 @@ def main():
         print("-" * 50)
     
     wb = Workbook()
-    total_items, items_with_issues, total_time, total_prompt_tokens, total_completion_tokens, total_tokens = process_folder_with_batch(images_folder, wb, results_folder_path, workflow_json_path)
+    total_items, items_with_issues, total_time, total_prompt_tokens, total_completion_tokens, total_tokens, total_cached_tokens, was_batch_processed = process_folder_with_batch(images_folder, wb, results_folder_path, workflow_json_path)
 
     # Apply formatting to all cells
     for row in wb.active.iter_rows():
@@ -596,16 +604,14 @@ def main():
     
     # Calculate script metrics
     script_duration = time.time() - script_start_time
-    
-    # Determine if batch processing was used (check if we have many items but zero processing time)
-    was_batch_processed = total_items > 10 and total_time == 0
-    
+
     # Calculate actual cost using the model pricing
     estimated_cost = calculate_cost(
         model_name=model_name,
         prompt_tokens=total_prompt_tokens,
         completion_tokens=total_completion_tokens,
-        is_batch=was_batch_processed
+        is_batch=was_batch_processed,
+        cached_tokens=total_cached_tokens
     )
     
     # Create standardized token usage log with enhanced metrics
@@ -621,6 +627,7 @@ def main():
         total_time=log_time,
         total_prompt_tokens=total_prompt_tokens,
         total_completion_tokens=total_completion_tokens,
+        total_cached_tokens=total_cached_tokens,
         additional_metrics={
             "Total script execution time": f"{script_duration:.2f}s",
             "Processing time percentage": f"{(log_time/script_duration)*100:.1f}%" if script_duration > 0 else "0%",
@@ -637,13 +644,14 @@ def main():
     print(f"Items with issues: {items_with_issues}")
     print(f"Total script time: {script_duration:.1f}s ({script_duration/60:.1f} minutes)")
     print(f"Processing time: {total_time:.1f}s")
-    print(f"Total tokens: {total_tokens:,} (Input: {total_prompt_tokens:,}, Output: {total_completion_tokens:,})")
+    cached_note = f", Cached: {total_cached_tokens:,}" if total_cached_tokens > 0 else ""
+    print(f"Total tokens: {total_tokens:,} (Input: {total_prompt_tokens:,}, Output: {total_completion_tokens:,}{cached_note})")
     print(f"Processing mode: {'BATCH' if was_batch_processed else 'INDIVIDUAL'}")
     print(f"Actual cost: ${estimated_cost:.4f}")
     
     # Show batch savings if applicable
     if was_batch_processed:
-        regular_cost = calculate_cost(model_name, total_prompt_tokens, total_completion_tokens, is_batch=False)
+        regular_cost = calculate_cost(model_name, total_prompt_tokens, total_completion_tokens, is_batch=False, cached_tokens=total_cached_tokens)
         savings = regular_cost - estimated_cost
         savings_percentage = (savings / regular_cost) * 100 if regular_cost > 0 else 0
         print(f"Regular API cost would have been: ${regular_cost:.4f}")

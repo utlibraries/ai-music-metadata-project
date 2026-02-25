@@ -8,89 +8,103 @@ MODEL_PRICING = {
     "gpt-4o": {
         "input_per_1k": 0.0025,
         "output_per_1k": 0.01,
-        "batch_discount": 0.5
+        "batch_discount": 0.5,
+        "cached_input_discount": 0.5
     },
     "gpt-4o-2024-08-06": {
         "input_per_1k": 0.0025,
         "output_per_1k": 0.01,
-        "batch_discount": 0.5
+        "batch_discount": 0.5,
+        "cached_input_discount": 0.5
     },
-    
+
     # GPT-4o-mini models
     "gpt-4o-mini": {
         "input_per_1k": 0.00015,
         "output_per_1k": 0.0006,
-        "batch_discount": 0.5
+        "batch_discount": 0.5,
+        "cached_input_discount": 0.5
     },
     "gpt-4o-mini-2024-07-18": {
         "input_per_1k": 0.00015,
         "output_per_1k": 0.0006,
-        "batch_discount": 0.5
+        "batch_discount": 0.5,
+        "cached_input_discount": 0.5
     },
-    
+
     # GPT-4.1 models
     "gpt-4.1": {
         "input_per_1k": 0.002,
         "output_per_1k": 0.008,
-        "batch_discount": 0.5
+        "batch_discount": 0.5,
+        "cached_input_discount": 0.5
     },
     "gpt-4.1-2025-04-14": {
         "input_per_1k": 0.002,
         "output_per_1k": 0.008,
-        "batch_discount": 0.5
+        "batch_discount": 0.5,
+        "cached_input_discount": 0.5
     },
-    
+
     # GPT-4.1-mini models
     "gpt-4.1-mini": {
         "input_per_1k": 0.0004,
         "output_per_1k": 0.0016,
-        "batch_discount": 0.5
+        "batch_discount": 0.5,
+        "cached_input_discount": 0.5
     },
     "gpt-4.1-mini-2025-04-14": {
         "input_per_1k": 0.0004,
         "output_per_1k": 0.0016,
-        "batch_discount": 0.5
-    }, 
-    
+        "batch_discount": 0.5,
+        "cached_input_discount": 0.5
+    },
+
     # GPT-5 models
     "gpt-5.1": {
         "input_per_1k": 0.00125,
         "output_per_1k": 0.01,
-        "batch_discount": 0.5
+        "batch_discount": 0.5,
+        "cached_input_discount": 0.5
     },
     "gpt-5-mini": {
         "input_per_1k": 0.00025,
         "output_per_1k": 0.002,
-        "batch_discount": 0.5
+        "batch_discount": 0.5,
+        "cached_input_discount": 0.5
     }
 }
 
-def calculate_cost(model_name, prompt_tokens, completion_tokens, is_batch=False):
+def calculate_cost(model_name, prompt_tokens, completion_tokens, is_batch=False, cached_tokens=0):
     """
     Calculate the cost for a given model and token usage.
-    
+
     Args:
         model_name (str): The model name
-        prompt_tokens (int): Number of input tokens
+        prompt_tokens (int): Number of input tokens (includes cached tokens)
         completion_tokens (int): Number of output tokens
         is_batch (bool): Whether this was a batch request (for discount)
-    
+        cached_tokens (int): Cached subset of prompt_tokens, charged at reduced rate
+
     Returns:
         float: Total cost in USD
     """
     if model_name not in MODEL_PRICING:
         print(f"⚠️  Warning: Unknown model '{model_name}', using GPT-4o-mini pricing as fallback")
         model_name = "gpt-4o-mini"
-    
+
     pricing = MODEL_PRICING[model_name]
-    
-    input_cost = (prompt_tokens / 1000) * pricing["input_per_1k"]
+    cached_tokens = min(cached_tokens, prompt_tokens)  # sanity check
+    non_cached_tokens = prompt_tokens - cached_tokens
+
+    input_cost = (non_cached_tokens / 1000) * pricing["input_per_1k"]
+    cached_cost = (cached_tokens / 1000) * pricing["input_per_1k"] * pricing.get("cached_input_discount", 0.5)
     output_cost = (completion_tokens / 1000) * pricing["output_per_1k"]
-    total_cost = input_cost + output_cost
-    
+    total_cost = input_cost + cached_cost + output_cost
+
     if is_batch:
         total_cost *= pricing["batch_discount"]
-    
+
     return total_cost
 
 def get_model_info(model_name):
