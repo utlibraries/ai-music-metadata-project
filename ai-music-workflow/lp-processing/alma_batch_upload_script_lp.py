@@ -321,16 +321,16 @@ def build_marcxml_from_discovery_record(rec: dict) -> str:
         cf("007", "sd fsngnnmmned")  # digital disc (CD-like)
 
     # 008 - Fixed-length data elements (REQUIRED)
-    field008 = ET.SubElement(root, 'controlfield')
-    field008.set('tag', '008')
-    # Get publication date if available
-    pub_date = '    '
-    if 'date' in brief_record and 'publicationDate' in brief_record['date']:
-        raw_date = brief_record['date']['publicationDate']
-        year_match = re.search(r'\d{4}', raw_date)
-        pub_date = year_match.group(0) if year_match else '    '
-    current_date = datetime.now().strftime('%y%m%d')
-    field008.text = f"{current_date}s{pub_date}    xxu           |  eng d"
+  
+    pub_year = (rec.get("date") or {}).get("publicationDate", "")
+    year_match = re.search(r'\d{4}', pub_year) if pub_year else None
+    pub_year4 = year_match.group(0) if year_match else "    "
+    prefix = pub_year[:year_match.start()] if year_match else ""
+    suffix = pub_year[year_match.end():] if year_match else ""
+    pub_year_264 = prefix + year_match.group(0) + suffix if year_match else ""
+    today_6 = datetime.now().strftime("%y%m%d")
+    lang = (rec.get("language") or {}).get("itemLanguage", "eng")
+    cf("008", f"{today_6}s{pub_year4}    xxu                 {lang} d")
 
     # 035 (OCLC)
     if oclc_num:
@@ -758,6 +758,7 @@ def process_file(input_file, delimiter='|'):
     print("\nAuthenticating with OCLC...")
     try:
         oclc_token = get_access_token(client_id, client_secret)
+        token_time = time.time()
         print("OCLC authentication successful")
     except Exception as e:
         raise SystemExit(f"Failed to authenticate with OCLC: {e}")
@@ -771,6 +772,16 @@ def process_file(input_file, delimiter='|'):
     print(f"\nProcessing {total} records...\n")
     
     for idx, line in enumerate(lines, 1):
+        # Refresh OCLC token every 15 minutes to avoid 401 errors
+        if time.time() - token_time > 900:
+            print("         Refreshing OCLC token...")
+            try:
+                oclc_token = get_access_token(client_id, client_secret)
+                token_time = time.time()
+                print("         OCLC token refreshed successfully")
+            except Exception as e:
+                print(f"         WARNING: Token refresh failed: {e}")
+
         if delimiter not in line:
             print(f"[{idx}/{total}] Skipping invalid line: {line}")
             continue

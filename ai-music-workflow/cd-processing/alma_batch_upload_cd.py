@@ -759,6 +759,7 @@ def process_file(input_file, delimiter='|'):
     print("\nAuthenticating with OCLC...")
     try:
         oclc_token = get_access_token(client_id, client_secret)
+        token_time = time.time()
         print("OCLC authentication successful")
     except Exception as e:
         raise SystemExit(f"Failed to authenticate with OCLC: {e}")
@@ -772,6 +773,16 @@ def process_file(input_file, delimiter='|'):
     print(f"\nProcessing {total} records...\n")
     
     for idx, line in enumerate(lines, 1):
+        # Refresh OCLC token every 15 minutes to avoid 401 errors
+        if time.time() - token_time > 900:
+            print("         Refreshing OCLC token...")
+            try:
+                oclc_token = get_access_token(client_id, client_secret)
+                token_time = time.time()
+                print("         OCLC token refreshed successfully")
+            except Exception as e:
+                print(f"         WARNING: Token refresh failed: {e}")
+
         if delimiter not in line:
             print(f"[{idx}/{total}] Skipping invalid line: {line}")
             continue
