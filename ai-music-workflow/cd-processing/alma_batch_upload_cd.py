@@ -39,6 +39,7 @@ OPTIONAL ENVIRONMENT VARIABLES:
 """
 
 import os
+import re
 import requests
 import xml.etree.ElementTree as ET
 import csv
@@ -204,7 +205,9 @@ def build_minimal_marcxml_fallback(brief_record):
     # Get publication date if available
     pub_date = '    '
     if 'date' in brief_record and 'publicationDate' in brief_record['date']:
-        pub_date = brief_record['date']['publicationDate'][:4]
+        raw_date = brief_record['date']['publicationDate']
+        year_match = re.search(r'\d{4}', raw_date)
+        pub_date = year_match.group(0) if year_match else '    '
     current_date = datetime.now().strftime('%y%m%d')
     field008.text = f"{current_date}s{pub_date}    xxu           |  eng d"
     
@@ -300,9 +303,12 @@ def build_marcxml_from_discovery_record(rec: dict) -> str:
     else:
         cf("007", "sd fsngnnmmned")  # digital disc (CD-like)
 
-    # 008
+   # 008
     pub_year = (rec.get("date") or {}).get("publicationDate", "")
-    pub_year4 = pub_year[:4] if pub_year else "    "
+    year_match = re.search(r'\d{4}', pub_year) if pub_year else None
+    pub_year4 = year_match.group(0) if year_match else "    "  # 4 digits only for 008
+    prefix = pub_year[:year_match.start()] if year_match else ""
+    pub_year_264 = prefix + year_match.group(0) if year_match else ""  # full value for 264
     today_6 = datetime.now().strftime("%y%m%d")
     lang = (rec.get("language") or {}).get("itemLanguage", "eng")
     cf("008", f"{today_6}s{pub_year4}    xxu                 {lang} d")
@@ -363,8 +369,8 @@ def build_marcxml_from_discovery_record(rec: dict) -> str:
         sf(f264, "a", p.get("publicationPlace"))
         pubname = ((p.get("publisherName") or {}).get("text"))
         sf(f264, "b", pubname)
-        if pub_year4.strip():
-            sf(f264, "c", pub_year4)
+        if pub_year_264.strip():
+            sf(f264, "c", pub_year_264)
 
     # 300 Physical description
     phys = (rec.get("description") or {}).get("physicalDescription")

@@ -41,6 +41,7 @@ OPTIONAL ENVIRONMENT VARIABLES:
 """
 
 import os
+import re
 import requests
 import xml.etree.ElementTree as ET
 import csv
@@ -319,12 +320,17 @@ def build_marcxml_from_discovery_record(rec: dict) -> str:
     else:
         cf("007", "sd fsngnnmmned")  # digital disc (CD-like)
 
-    # 008
-    pub_year = (rec.get("date") or {}).get("publicationDate", "")
-    pub_year4 = pub_year[:4] if pub_year else "    "
-    today_6 = datetime.now().strftime("%y%m%d")
-    lang = (rec.get("language") or {}).get("itemLanguage", "eng")
-    cf("008", f"{today_6}s{pub_year4}    xxu                 {lang} d")
+    # 008 - Fixed-length data elements (REQUIRED)
+    field008 = ET.SubElement(root, 'controlfield')
+    field008.set('tag', '008')
+    # Get publication date if available
+    pub_date = '    '
+    if 'date' in brief_record and 'publicationDate' in brief_record['date']:
+        raw_date = brief_record['date']['publicationDate']
+        year_match = re.search(r'\d{4}', raw_date)
+        pub_date = year_match.group(0) if year_match else '    '
+    current_date = datetime.now().strftime('%y%m%d')
+    field008.text = f"{current_date}s{pub_date}    xxu           |  eng d"
 
     # 035 (OCLC)
     if oclc_num:
@@ -382,8 +388,8 @@ def build_marcxml_from_discovery_record(rec: dict) -> str:
         sf(f264, "a", p.get("publicationPlace"))
         pubname = ((p.get("publisherName") or {}).get("text"))
         sf(f264, "b", pubname)
-        if pub_year4.strip():
-            sf(f264, "c", pub_year4)
+        if pub_year_264.strip():
+            sf(f264, "c", pub_year_264)
 
     # 300 Physical description
     phys = (rec.get("description") or {}).get("physicalDescription")
