@@ -895,6 +895,19 @@ def process_file(input_file, delimiter='|'):
     
     return results
 
+def get_alma_output_path(fmt, results):
+    """Save Alma import CSV to AI_Music_Operations folder if env var is set."""
+    ops_dir = os.environ.get("AI_MUSIC_OPERATIONS_DIR")
+    if ops_dir:
+        subfolder = os.path.join(ops_dir, "alma-imports", fmt)
+        os.makedirs(subfolder, exist_ok=True)
+        date_str = datetime.now().strftime('%Y-%m-%d')
+        success_count = len([r for r in results if r.get('status') == 'success'])
+        filename = f"{date_str}_{fmt.upper()}-{success_count}-records-alma-import.csv"
+        return os.path.join(subfolder, filename)
+    return None
+
+
 def write_id_table(results, input_file_path):
     """Write created record IDs to CSV with consistent naming."""
     # Console table
@@ -906,14 +919,15 @@ def write_id_table(results, input_file_path):
         if r.get('status') == 'success':
             print(f"{r.get('mms_id','')} | {r.get('holding_id','')} | {r.get('item_pid','')}")
 
-    # Determine output directory from input file
-    input_dir = os.path.dirname(input_file_path)
-    
-    # Create output filename with timestamp
-    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-    csv_filename = f"alma-import-ids-{timestamp}.csv"
-    csv_path = os.path.join(input_dir, csv_filename)
-    
+    # Save to AI_Music_Operations if env var set, otherwise next to input file
+    ops_path = get_alma_output_path("cd", results)
+    if ops_path:
+        csv_path = ops_path
+    else:
+        input_dir = os.path.dirname(input_file_path)
+        timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        csv_path = os.path.join(input_dir, f"alma-import-ids-{timestamp}.csv")
+
     with open(csv_path, 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
         w.writerow(["MMS ID", "Holding ID", "Item ID", "OCLC", "Barcode", "Title", "Format", "Material Type", "OCLC Source"])
@@ -932,6 +946,22 @@ def write_id_table(results, input_file_path):
                 ])
     print(f"\nCreated record IDs written to: {csv_path}")
     return csv_path
+
+
+def archive_input_file(input_file_path, fmt, results):
+    """Copy input batch file to AI_Music_Operations folder after successful run."""
+    ops_dir = os.environ.get("AI_MUSIC_OPERATIONS_DIR")
+    if not ops_dir:
+        return
+    success_count = len([r for r in results if r.get('status') == 'success'])
+    subfolder = os.path.join(ops_dir, "alma-batch-inputs", fmt)
+    os.makedirs(subfolder, exist_ok=True)
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    filename = f"{date_str}_{fmt.upper()}-{success_count}-batch-upload.txt"
+    dest = os.path.join(subfolder, filename)
+    import shutil
+    shutil.copy2(input_file_path, dest)
+    print(f"         Input file archived to: {dest}")
 
 
 def print_summary(results, input_file_path):
@@ -971,9 +1001,12 @@ def print_summary(results, input_file_path):
                 print(f"Title: {r['title'][:60]}")
             print(f"Error: {r.get('error', 'Unknown error')}")
 
-    # Write the CSV of created IDs
+    # Write CSV of created IDs
     csv_path = write_id_table(results, input_file_path)
     print(f"\nID table written to CSV: {csv_path}")
+
+    # Archive input batch file to AI_Music_Operations
+    archive_input_file(input_file_path, "cd", results)
     print("="*60)
 
 if __name__ == "__main__":

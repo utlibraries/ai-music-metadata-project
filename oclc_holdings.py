@@ -4,26 +4,30 @@ OCLC Holdings Management Script
 WHAT IT DOES:
   - Reads a list of OCLC numbers (format: no:XXXXXXX or plain numbers)
   - Sets or unsets your institution's holdings in OCLC WorldCat
-  - Writes a CSV report of all actions taken
+  - Writes a CSV report to AI_Music_Operations/oclc-holdings/lp/ or /cd/
   - Auto-refreshes OCLC token every 15 minutes
 
 USAGE:
-  py oclc_holdings.py path/to/oclc-numbers.txt --action set [--yes] [--report]
-  py oclc_holdings.py path/to/oclc-numbers.txt --action unset [--yes] [--report]
+  py oclc_holdings.py path/to/oclc-numbers.txt --action set --format lp [--yes] [--report]
+  py oclc_holdings.py path/to/oclc-numbers.txt --action unset --format cd [--yes] [--report]
 
   --action   'set' to add holdings, 'unset' to remove holdings (required)
+  --format   'lp' or 'cd' — determines output subfolder (required)
   --report   Preview only, no changes made
   --yes      Skip confirmation prompt
 
 REQUIRED ENVIRONMENT VARIABLES:
-  OCLC_CLIENT_ID             Your OCLC API client ID
-  OCLC_SECRET                Your OCLC API client secret
-  OCLC_INSTITUTION_SYMBOL    Your institution's OCLC symbol (e.g. set via $env:OCLC_INSTITUTION_SYMBOL = "XXXXX")
+  OCLC_CLIENT_ID                Your OCLC API client ID
+  OCLC_SECRET                   Your OCLC API client secret
+  OCLC_INSTITUTION_SYMBOL       Your institution's OCLC symbol
+  AI_MUSIC_OPERATIONS_DIR       Path to your local operations output folder
+                                e.g. C:\Users\you\Documents\AI_Music_Operations
 
 HOW TO SET ENVIRONMENT VARIABLES (PowerShell):
   $env:OCLC_CLIENT_ID = "your_client_id"
   $env:OCLC_SECRET = "your_secret"
   $env:OCLC_INSTITUTION_SYMBOL = "your_institution_symbol"
+  $env:AI_MUSIC_OPERATIONS_DIR = "C:\Users\you\Documents\AI_Music_Operations"
 """
 
 import os
@@ -43,12 +47,12 @@ def get_required_env(var):
                          f"Set it in PowerShell: $env:{var} = 'your_value'")
     return val
 
-# All sensitive values loaded from environment — never hardcoded
-client_id    = get_required_env("OCLC_CLIENT_ID")
+client_id     = get_required_env("OCLC_CLIENT_ID")
 client_secret = get_required_env("OCLC_SECRET")
-INSTITUTION  = get_required_env("OCLC_INSTITUTION_SYMBOL")
+INSTITUTION   = get_required_env("OCLC_INSTITUTION_SYMBOL")
+OPERATIONS_DIR = get_required_env("AI_MUSIC_OPERATIONS_DIR")
 
-METADATA_API = "https://metadata.api.oclc.org/worldcat"
+METADATA_API  = "https://metadata.api.oclc.org/worldcat"
 
 
 # ====== AUTH ======
@@ -94,14 +98,21 @@ def load_oclc_numbers(filepath):
     """Load OCLC numbers from file. Supports 'no:XXXXXXX' and plain number formats."""
     with open(filepath, 'r', encoding='utf-8') as f:
         lines = [l.strip() for l in f if l.strip()]
-
     numbers = []
     for line in lines:
-        # Strip 'no:' prefix if present
         num = line.replace('no:', '').strip()
         if num:
             numbers.append(num)
     return numbers
+
+
+def get_output_path(fmt, action, total):
+    """Build output CSV path under AI_MUSIC_OPERATIONS_DIR."""
+    subfolder = os.path.join(OPERATIONS_DIR, "oclc-holdings", fmt)
+    os.makedirs(subfolder, exist_ok=True)
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    filename = f"{date_str}_{fmt.upper()}-{total}-holdings-{action}.csv"
+    return os.path.join(subfolder, filename)
 
 
 # ====== MAIN ======
@@ -110,6 +121,8 @@ def main():
     parser.add_argument('input_file', help='Path to OCLC numbers file (no:XXXXXXX format)')
     parser.add_argument('--action', required=True, choices=['set', 'unset'],
                         help='set = add holdings, unset = remove holdings')
+    parser.add_argument('--format', required=True, choices=['lp', 'cd'],
+                        help='lp or cd — determines output subfolder')
     parser.add_argument('--yes', action='store_true', help='Skip confirmation prompt')
     parser.add_argument('--report', action='store_true', help='Preview only, no changes made')
     args = parser.parse_args()
@@ -124,6 +137,7 @@ def main():
     print(f"OCLC Holdings Management")
     print(f"{'='*50}")
     print(f"Institution  : {INSTITUTION}")
+    print(f"Format       : {args.format.upper()}")
     print(f"Action       : {args.action.upper()} holdings")
     print(f"Total records: {total}")
     print(f"Input file   : {args.input_file}")
@@ -134,6 +148,8 @@ def main():
     if args.report:
         print(f"\n--report flag set. No changes will be made.")
         print(f"This would {args.action} holdings for {total} OCLC records.")
+        csv_path = get_output_path(args.format, args.action, total)
+        print(f"Output would be saved to: {csv_path}")
         return
 
     if not args.yes:
@@ -201,10 +217,8 @@ def main():
 
         time.sleep(0.3)
 
-    # Write CSV report
-    out_dir = os.path.dirname(os.path.abspath(args.input_file))
-    ts = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-    csv_path = os.path.join(out_dir, f'oclc-holdings-{args.action}-report-{ts}.csv')
+    # Write CSV report to AI_Music_Operations folder
+    csv_path = get_output_path(args.format, args.action, total)
     with open(csv_path, 'w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=['oclc', 'action', 'status', 'response'])
         w.writeheader()
