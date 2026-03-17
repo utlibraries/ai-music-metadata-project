@@ -1,5 +1,7 @@
 # AI Music Metadata Project
 
+Developed by Hannah Moutran and Kayode Ishola, UT Austin Libraries.
+
 ## Overview
 Automates metadata extraction and OCLC matching for CD and LP collections. This project uses AI for basic metadata extraction from images and for analyzing OCLC match results. It then searches OCLC WorldCat using the generated metadata and creates ready-to-use cataloging files.
 
