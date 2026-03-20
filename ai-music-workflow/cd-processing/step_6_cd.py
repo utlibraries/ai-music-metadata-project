@@ -338,7 +338,6 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
         .alma-verified.held {{ background-color: #e74c3c; color: white; }}
         .alma-verified.not-held {{ background-color: #27ae60; color: white; }}
         .confidence-low {{ background-color: #e74c3c; }}
-        .confidence-medium {{ background-color: #f39c12; }}
         .confidence-high {{ background-color: #27ae60; }}
         .content-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
         .images-section {{ display: flex; flex-direction: column; gap: 15px; }}
@@ -441,10 +440,8 @@ def create_single_review_page(page_path, page_records, current_timestamp, workfl
         
         try:
             conf_value = float(confidence_score)
-            if conf_value < 30:
+            if conf_value < 80:
                 conf_class = "confidence-low"
-            elif conf_value < 60:
-                conf_class = "confidence-medium"
             else:
                 conf_class = "confidence-high"
         except (ValueError, TypeError):
