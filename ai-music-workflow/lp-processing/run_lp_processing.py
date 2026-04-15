@@ -9,6 +9,7 @@ import sys
 import time
 import os
 from datetime import datetime
+from lp_workflow_config import PORTKEY_CONFIG
 
 def _read_tty_input():
     """Read user input directly from the terminal, bypassing any stdin redirection."""
@@ -95,21 +96,32 @@ def run_script(script_name, step_number, step_description):
 
 def check_environment():
     """Check if required environment variables are set."""
-    required_vars = ['OPENAI_API_KEY', 'OCLC_CLIENT_ID', 'OCLC_SECRET']
-    missing_vars = []
-    
-    for var in required_vars:
-        if not os.getenv(var):
-            missing_vars.append(var)
-    
+    using_portkey = PORTKEY_CONFIG.get("enabled", False)
+
+    if using_portkey:
+        required_vars = [
+            PORTKEY_CONFIG["api_key_env"],
+            PORTKEY_CONFIG["virtual_key_env"],
+            'OCLC_CLIENT_ID',
+            'OCLC_SECRET'
+        ]
+    else:
+        required_vars = ['OPENAI_API_KEY', 'OCLC_CLIENT_ID', 'OCLC_SECRET']
+
+    missing_vars = [v for v in required_vars if not os.getenv(v)]
+
     if missing_vars:
         print(f"ENVIRONMENT CHECK FAILED")
         print(f"Missing required environment variables: {', '.join(missing_vars)}")
         print(f"Please set these environment variables before running the workflow.")
         return False
-    
+
     print(f"ENVIRONMENT CHECK PASSED")
     print(f"All required environment variables are set.")
+    if using_portkey:
+        print(f"API routing: Portkey gateway (individual calls) + OpenAI direct (batch calls)")
+    else:
+        print(f"API routing: OpenAI direct")
     return True
 
 def validate_image_files():

@@ -1,7 +1,6 @@
 # Use GPT-4.1-mini to analyze OCLC results and assign confidence scores
 import os
 import time
-from openai import OpenAI
 import json
 import openpyxl
 from openpyxl.styles import Alignment
@@ -14,7 +13,7 @@ from batch_processor import BatchProcessor
 from model_pricing import calculate_cost, get_model_info
 from json_workflow import update_record_step3, log_error, log_processing_metrics
 from shared_utilities import find_latest_results_folder, get_workflow_json_path, create_batch_summary
-from lp_workflow_config import get_model_config, get_file_path_config, get_threshold_config, get_step_config, get_token_limit_param, get_temperature_param
+from lp_workflow_config import get_model_config, get_file_path_config, get_threshold_config, get_step_config, get_token_limit_param, get_temperature_param, get_openai_client
 from retry_utils import retry_api_call, log_failure
 
 STEP_NAME = "step3"
@@ -52,8 +51,7 @@ def load_workflow_data_from_json(workflow_json_path, barcode):
         print(f"Error loading workflow data for {barcode}: {e}")
         return {}, ""
 
-# Load the API key from environment variable
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+client = get_openai_client()
 
 def prepare_batch_requests(sheet, model_name, workflow_json_path):
     """Prepare all requests for batch processing."""

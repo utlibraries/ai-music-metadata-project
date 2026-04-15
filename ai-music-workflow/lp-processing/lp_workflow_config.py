@@ -3,7 +3,18 @@ Configuration settings for LP metadata workflow processing.
 """
 
 import datetime
+import os
 from typing import Dict, Any
+
+# Portkey gateway configuration
+# Set enabled to True to route individual (non-batch) OpenAI calls through Portkey.
+# Requires PORTKEY_API_KEY and PORTKEY_VIRTUAL_KEY environment variables.
+# Batch processing always uses OpenAI directly (Portkey does not support the Batch API).
+PORTKEY_CONFIG = {
+    "enabled": False,
+    "api_key_env": "PORTKEY_API_KEY",
+    "virtual_key_env": "PORTKEY_VIRTUAL_KEY"
+}
 
 # Model configurations for each step
 MODEL_CONFIGS = {
@@ -283,3 +294,28 @@ def get_temperature_param(model_name: str, temperature: float) -> Dict[str, floa
         return {"temperature": temperature}
     else:
         return {}
+
+def get_openai_client():
+    """
+    Return an API client for OpenAI calls.
+
+    If PORTKEY_CONFIG['enabled'] is True and the required Portkey environment
+    variables are set, returns a Portkey client (routes calls through the
+    Portkey AI gateway). Otherwise returns a standard OpenAI client.
+
+    Note: batch processing in batch_processor.py always uses OpenAI directly.
+    """
+    if PORTKEY_CONFIG.get("enabled"):
+        portkey_api_key = os.getenv(PORTKEY_CONFIG["api_key_env"])
+        portkey_virtual_key = os.getenv(PORTKEY_CONFIG["virtual_key_env"])
+        if portkey_api_key and portkey_virtual_key:
+            try:
+                from portkey_ai import Portkey
+                return Portkey(api_key=portkey_api_key, virtual_key=portkey_virtual_key)
+            except ImportError:
+                print("Warning: portkey_ai package not installed. Falling back to OpenAI.")
+        else:
+            print("Warning: Portkey enabled but PORTKEY_API_KEY/PORTKEY_VIRTUAL_KEY not set. Falling back to OpenAI.")
+
+    from openai import OpenAI
+    return OpenAI(api_key=os.getenv('OPENAI_API_KEY'))

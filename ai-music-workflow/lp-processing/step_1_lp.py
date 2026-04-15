@@ -9,15 +9,13 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from openpyxl.drawing.image import Image
-from openai import OpenAI
-
 # Import custom modules
 from token_logging import create_token_usage_log, log_individual_response
 from batch_processor import BatchProcessor
 from model_pricing import calculate_cost, get_model_info
 from json_workflow import initialize_workflow_json, update_record_step1, log_error, log_processing_metrics
 from shared_utilities import get_workflow_json_path, extract_metadata_fields, group_images_by_barcode, create_batch_summary
-from lp_workflow_config import get_current_timestamp, get_file_path_config, get_model_config, get_token_limit_param
+from lp_workflow_config import get_current_timestamp, get_file_path_config, get_model_config, get_token_limit_param, get_openai_client
 from retry_utils import retry_api_call, log_failure
 
 STEP_NAME = "step1"
@@ -32,7 +30,7 @@ DEFAULT_MAX_TOKENS = MODEL_CONFIG["max_tokens"]
 DEFAULT_TEMPERATURE = MODEL_CONFIG["temperature"]
 
 
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+client = get_openai_client()
 
 def get_llm_prompt():
     return """Analyze these images of a vinyl record and extract the following metadata fields in the specified format. 
