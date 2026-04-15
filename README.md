@@ -283,3 +283,64 @@ Hannah Moutran - hlm2454@my.utexas.edu
 MIT License
 
 ---
+---
+## Original Cataloging Workflow (Steps 3b, 3c, 3d)
+
+For records where no OCLC WorldCat match is found, the pipeline includes an integrated original cataloging workflow. This handles items that would otherwise remain in the backlog, consistent with a minimum viable record policy.
+
+### When it runs
+
+After Step 5 identifies records in the Cataloger Review (Low Confidence) group with no OCLC number, run each script in sequence:
+
+    python ai-music-workflow/cd-processing/step_3b_original_cataloging.py
+    python ai-music-workflow/cd-processing/step_3c_oclc_original_record.py path/to/decisions.csv
+    python ai-music-workflow/cd-processing/step_3d_original_catalog_alma_import.py
+
+### Step 3b — AI MARC Generation and Review Interface
+
+- Reads Step 1 extracted metadata for all no-match records
+- Uses GPT-4.1 to generate complete MARC records (100/110, 245, 264, 300, 336-338, 500, 505, 518, 588, 650, 700)
+- All generated records include a 500 note marking them as AI-generated note, and a 588 source of description note with the generation date
+- Creates an HTML review interface showing each CD image alongside the generated MARC record
+- Cataloger approves, rejects, or holds each record and exports decisions to CSV
+- Uses batch processing automatically for cost savings
+- Saves a processing report to deliverables/ and AI_Music_Operations/original-cataloging/
+
+### Step 3c — OCLC Record Creation
+
+- Reads the approved decisions CSV from Step 3b review
+- Deduplication: Searches OCLC by title, contributor, and UPC before creating any record — uses existing record if found rather than creating a duplicate
+- Creates new bibliographic records in OCLC WorldCat via the Metadata API (WorldCatMetadataAPI:manage_bibs scope required)
+- OCLC assigns a new OCLC number to each created record
+- Sets your  holdings on all newly created records immediately
+- Saves the assigned OCLC numbers to the workflow JSON for Step 3d
+- Saves a report to deliverables/ and AI_Music_Operations/original-cataloging/
+
+Required additional environment variable: OCLC_INSTITUTION_SYMBOL — your institution OCLC symbol
+
+Your OCLC APIKey must have the WorldCatMetadataAPI scope enabled.
+
+### Step 3d — Alma Import
+
+- Reads workflow JSON for records with an assigned OCLC number from Step 3c
+- Deduplication: Checks Alma for each OCLC number before creating any record — skips if already held
+- Builds MARCXML with full AI-generated MARC fields and the assigned OCLC number in the 035 field
+- Creates bib, holdings, and item records in Alma using the same library/location codes as the main workflow
+- Internal note on all original records: AI Assisted Cataloging — Original Record
+- Unsuppresses bib immediately — records are discoverable in Primo VE within 24-48 hours
+- Writes a receipt CSV to deliverables/ and AI_Music_Operations/original-cataloging/[date]/
+
+### OCLC Holdings for Original Records
+
+Original records receive an OCLC number at creation time in Step 3c and holdings are set immediately. No separate oclc_holdings.py run is needed for these records.
+
+### Output Files — Original Cataloging
+
+| File | Location | Contents |
+|------|----------|----------|
+| original-catalog-index-[ts].html | results folder | HTML review interface entry point |
+| original-cataloging-report-[ts].txt | deliverables/ | List of all processed records with titles and status |
+| oclc-record-creation-report-[ts].txt | deliverables/ | OCLC numbers assigned per record |
+| original-cataloging-alma-ids-[ts].csv | deliverables/ | MMS ID, Holding ID, Item ID per imported record |
+
+All reports are also archived to AI_Music_Operations/original-cataloging/[date]/.
