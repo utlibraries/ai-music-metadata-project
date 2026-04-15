@@ -82,6 +82,32 @@ Another optional component is the batch upload to Alma Sandbox, which is designe
    ```
    These default to "api-na" (North America) and "AI-assisted cataloging" if not set.
 
+4. **If using Portkey** (optional)
+
+   If your organization routes OpenAI calls through [Portkey](https://portkey.ai/), set `"enabled": True` in the `PORTKEY_CONFIG` dictionary near the top of your format's config file:
+
+   **CD workflow**: `ai-music-workflow/cd-processing/cd_workflow_config.py`
+
+   **LP workflow**: `ai-music-workflow/lp-processing/lp_workflow_config.py`
+
+   ```python
+   PORTKEY_CONFIG = {
+       "enabled": True,   # Default is False (direct OpenAI API)
+       "api_key_env": "PORTKEY_API_KEY",
+       "virtual_key_env": "PORTKEY_VIRTUAL_KEY"
+   }
+   ```
+
+   Then set your Portkey credentials as environment variables:
+   ```bash
+   export PORTKEY_API_KEY="your-portkey-api-key"
+   export PORTKEY_VIRTUAL_KEY="your-portkey-virtual-key"
+   ```
+
+   Both values can be found in the Portkey dashboard. The **virtual key** is the slug for your OpenAI provider connection (e.g. `your-org-name-openai`).
+
+   When enabled, all OpenAI calls — including batch processing — are routed through the Portkey gateway. If you are calling OpenAI directly, leave `"enabled": False` and set `OPENAI_API_KEY` as usual.
+
 ---
 
 ## Quick Start

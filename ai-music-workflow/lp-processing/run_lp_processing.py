@@ -119,7 +119,7 @@ def check_environment():
     print(f"ENVIRONMENT CHECK PASSED")
     print(f"All required environment variables are set.")
     if using_portkey:
-        print(f"API routing: Portkey gateway (individual calls) + OpenAI direct (batch calls)")
+        print(f"API routing: Portkey gateway (all calls, including batch)")
     else:
         print(f"API routing: OpenAI direct")
     return True

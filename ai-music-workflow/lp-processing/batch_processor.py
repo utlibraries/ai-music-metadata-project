@@ -18,7 +18,7 @@ import tempfile
 
 # Custom module
 from model_pricing import estimate_cost
-from lp_workflow_config import get_model_config, get_token_limit_param, get_temperature_param
+from lp_workflow_config import get_model_config, get_token_limit_param, get_temperature_param, PORTKEY_CONFIG
 
 def _get_batch_threshold(step_name: str) -> int:
     cfg = get_model_config(step_name)
@@ -52,12 +52,34 @@ class BatchProcessor:
             default_step: Default workflow step name
             persistence_dir: Directory to store batch state (defaults to ~/.ai-music-batch-state)
         """
-        # Initialize with extended timeouts for large file uploads
-        self.client = OpenAI(
-            api_key=api_key or os.getenv('OPENAI_API_KEY'),
-            timeout=3600.0,  # 1 hour timeout for large file uploads
-            max_retries=0  # Handle retries manually with custom logic
-        )
+        if PORTKEY_CONFIG.get("enabled"):
+            portkey_api_key = os.getenv(PORTKEY_CONFIG["api_key_env"])
+            portkey_virtual_key = os.getenv(PORTKEY_CONFIG["virtual_key_env"])
+            if portkey_api_key and portkey_virtual_key:
+                try:
+                    from portkey_ai import Portkey
+                    self.client = Portkey(api_key=portkey_api_key, virtual_key=portkey_virtual_key)
+                except ImportError:
+                    print("Warning: portkey_ai not installed. Falling back to OpenAI for batch.")
+                    self.client = OpenAI(
+                        api_key=api_key or os.getenv('OPENAI_API_KEY'),
+                        timeout=3600.0,
+                        max_retries=0
+                    )
+            else:
+                print("Warning: Portkey enabled but env vars not set. Falling back to OpenAI for batch.")
+                self.client = OpenAI(
+                    api_key=api_key or os.getenv('OPENAI_API_KEY'),
+                    timeout=3600.0,
+                    max_retries=0
+                )
+        else:
+            # Initialize with extended timeouts for large file uploads
+            self.client = OpenAI(
+                api_key=api_key or os.getenv('OPENAI_API_KEY'),
+                timeout=3600.0,  # 1 hour timeout for large file uploads
+                max_retries=0  # Handle retries manually with custom logic
+            )
         self.batch_jobs = {}
         self.default_step = default_step
 
