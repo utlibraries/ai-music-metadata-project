@@ -195,13 +195,12 @@ def build_marcxml_from_generated_fields(marc_fields, cataloging_institution):
     cf("008", f"{today6}s{pub_year}    xxu                 eng d")
 
     # 040 - Cataloging source
+    oclc_symbol = os.environ.get("OCLC_INSTITUTION_SYMBOL", "IXA")
     f040 = df("040")
-    sf(f040, "a", cataloging_institution)
+    sf(f040, "a", oclc_symbol)
     sf(f040, "b", "eng")
     sf(f040, "e", "rda")
-    sf(f040, "c", cataloging_institution)
-
-    # 028 - Publisher number
+    sf(f040, "c", oclc_symbol)
     field_028 = marc_fields.get("field_028")
     if field_028:
         f028 = df("028", "0", "2")
@@ -343,25 +342,51 @@ def set_oclc_holding(oclc_number, token):
 
 def load_approved_decisions(csv_path):
     """
-    Load cataloger decisions CSV from Step 3b review.
-    Returns list of barcodes approved for OCLC submission.
+    Load approved barcodes from either:
+    1. Cataloger decisions CSV from Step 3b HTML review (has Barcode/Cataloger Decision columns)
+    2. Batch-ready file from Step 3b auto-approval (format: PENDING|barcode|title)
+    Returns list of approved barcodes and decisions dict.
     """
     approved = []
     all_decisions = {}
 
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            barcode = str(row.get("Barcode", "")).strip()
-            decision = str(row.get("Cataloger Decision", "")).strip()
-            notes = str(row.get("Notes", "")).strip()
-            all_decisions[barcode] = {"decision": decision, "notes": notes,
-                                       "cataloger": row.get("Cataloger", ""),
-                                       "review_date": row.get("Review Date", "")}
-            if decision == "Approved":
-                approved.append(barcode)
+    # Detect file type by extension and content
+    is_batch_ready = csv_path.endswith('.txt')
 
-    print(f"Decisions loaded: {len(all_decisions)} total, {len(approved)} approved")
+    if is_batch_ready:
+        # Batch-ready file: PENDING|barcode|title
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or '|' not in line:
+                    continue
+                parts = line.split('|', 2)
+                if len(parts) >= 2:
+                    barcode = parts[1].strip()
+                    title = parts[2].strip() if len(parts) > 2 else ''
+                    approved.append(barcode)
+                    all_decisions[barcode] = {
+                        "decision": "Approved",
+                        "notes": "Auto-approved via batch-ready file",
+                        "cataloger": "AI-pipeline",
+                        "review_date": __import__('datetime').datetime.now().strftime('%Y-%m-%d')
+                    }
+        print(f"Batch-ready file loaded: {len(approved)} auto-approved records")
+    else:
+        # Cataloger decisions CSV from HTML review
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                barcode = str(row.get("Barcode", "")).strip()
+                decision = str(row.get("Cataloger Decision", "")).strip()
+                notes = str(row.get("Notes", "")).strip()
+                all_decisions[barcode] = {"decision": decision, "notes": notes,
+                                           "cataloger": row.get("Cataloger", ""),
+                                           "review_date": row.get("Review Date", "")}
+                if decision == "Approved":
+                    approved.append(barcode)
+        print(f"Decisions CSV loaded: {len(all_decisions)} total, {len(approved)} approved")
+
     return approved, all_decisions
 
 

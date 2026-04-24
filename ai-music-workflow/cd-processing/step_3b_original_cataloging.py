@@ -70,59 +70,112 @@ def get_no_match_barcodes(results_folder):
     return no_match
 
 
+def title_case_catalog(text):
+    """
+    Apply cataloging standard title case:
+    Capitalize first word only, preserve proper nouns as detected.
+    Input may be ALL CAPS or all lowercase from disc scan.
+    """
+    if not text:
+        return text
+    # Convert to lowercase first to normalize ALL CAPS input
+    words = text.strip().lower().split()
+    if not words:
+        return text
+    # Capitalize first word always
+    words[0] = words[0].capitalize()
+    # Known proper noun indicators (add as needed)
+    # For music cataloging we capitalize first word + after : and after --
+    result = []
+    capitalize_next = False
+    for i, word in enumerate(words):
+        if i == 0 or capitalize_next:
+            result.append(word.capitalize())
+            capitalize_next = False
+        elif word in ('--',):
+            result.append(word)
+            capitalize_next = True
+        else:
+            result.append(word)
+    return ' '.join(result)
+
+
 def build_marc_prompt(barcode, extracted_fields):
-    """Build the MARC generation prompt from Step 1 extracted fields."""
+    """Build the minimal MARC generation prompt per Whit Williams approved template."""
+    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     return f"""You are an expert music cataloger following RDA and MARC 21 standards for sound recordings.
 
-Generate a complete MARC record for this CD based on the extracted metadata below.
-This CD had no match in OCLC WorldCat — this will be an original catalog record.
+Generate a MINIMAL VIABLE catalog record for this CD. Use ONLY the fields listed below.
+This CD had no match in OCLC WorldCat and will be submitted as an original record.
 
 EXTRACTED METADATA:
 {json.dumps(extracted_fields, indent=2, ensure_ascii=False)}
 
-Generate a JSON object with these exact keys. Use null for fields that cannot be determined.
-Follow MARC 21 conventions exactly including punctuation rules.
+Return a JSON object with EXACTLY these keys. Use null for fields that cannot be determined from the metadata.
 
 {{
-  "leader": "00000njm a2200000 i 4500",
-  "field_007": "sd fsngnnmmned",
-  "field_028": null,
-  "field_100": null,
-  "field_110": null,
+  "field_100_or_110": null,
   "field_245": null,
-  "field_246": null,
   "field_264": null,
-  "field_300": "1 audio disc : $b digital ; $c 4 3/4 in.",
-  "field_336": "performed music $b prm $2 rdacontent",
-  "field_337": "audio $b s $2 rdamedia",
-  "field_338": "audio disc $b sd $2 rdacarrier",
-  "field_500_general": null,
-  "field_500_kut": "Property of KUT Radio.",
-  "field_500_ai": "AI-generated catalog record. Cataloger review completed.",
   "field_505": null,
-  "field_518": null,
-  "field_588": null,
-  "field_650": [],
-  "field_700": [],
-  "confidence_notes": null
+  "confidence_score": 0,
+  "completeness_notes": null
 }}
 
-Rules:
-- field_100: Use for personal name main entry (LASTNAME, FIRSTNAME, $e role.) — use if a single person is clearly the primary creator
-- field_110: Use for corporate/group name main entry — use if a band/ensemble is the primary creator. Use ONE of 100 or 110, never both.
-- field_245: Include $a title $b subtitle (if any) $c statement of responsibility. End with period.
-- field_246: Variant titles only if there is a clear variant (translated title, subtitle as main, etc.). null if none.
-- field_264: $a place : $b publisher, $c [year]. Use copyright year format ©YYYY or ℗YYYY if visible.
-- field_028: Publisher number if visible: NUMBER $b PUBLISHER-NAME. null if not visible.
-- field_500_general: Any important general note visible on the disc (recording info, dedication, etc.). null if none.
-- field_505: Formatted contents: TRACK1 -- TRACK2 -- TRACK3. Include all tracks. null if no tracks visible.
-- field_518: Recording date/place if visible (e.g. "Recorded at STUDIO, CITY, DATE."). null if not visible.
-- field_588: ALWAYS include: "Description based on AI-assisted metadata extraction from cover image, {datetime.datetime.now().strftime('%Y-%m-%d')}."
-- field_650: Array of subject headings. Always include at least: ["Popular music $z United States", "Sound recordings"]. Add genre if determinable (Jazz, Blues, Rock, etc.).
-- field_700: Array of added entries for additional contributors with roles. Format: "LASTNAME, FIRSTNAME, $e role."
-- confidence_notes: Any fields where you had low confidence or couldn't determine the value. null if all fields are clear.
+STRICT RULES — follow exactly:
 
-Return ONLY the JSON object. No explanation, no markdown, no preamble."""
+TITLE CASE: All text in field_245 and field_505 must use sentence case:
+- Capitalize the FIRST word only
+- Do NOT capitalize every word
+- Example: "Blues for the modern age" not "Blues For The Modern Age"
+- Tracks in 505 separated by " -- " each with first word capitalized
+
+100/110 FIELD (field_100_or_110):
+- Use "100 1_" format for a personal name: "Lastname, Firstname, $e performer."
+- Use "110 2_" format for a group/band/ensemble: "Bandname. $e performer."
+- Use ONLY ONE. If unclear whether person or group, use 110.
+- Include $e relator term.
+
+245 FIELD:
+- Format: "245 10 Title of album / $c Statement of responsibility."
+- ind1 = 1 (there is a 1xx), ind2 = 0 (no nonfiling characters unless starts with article)
+- Apply sentence case as described above.
+- End with period.
+
+264 FIELD:
+- Format: "264 _1 $a Place : $b Publisher, $c [year]."
+- Use copyright/phonogram year if visible: ℗YYYY or ©YYYY
+- If place not visible, omit $a entirely.
+- If publisher not visible, omit $b entirely.
+- If year not visible, use null for entire field.
+
+505 FIELD (track listing):
+- Format: "505 0_ Track one -- Track two -- Track three."
+- Apply sentence case to ALL track titles.
+- Include ALL tracks visible on the disc or cover.
+- If no tracks visible, use null.
+
+CONFIDENCE SCORE (0-100):
+Score based on how completely you could fill the record from the metadata:
+- 100: title + contributor + year + tracks all clearly visible and readable
+- 85-99: title + contributor clearly visible, year or tracks partially visible
+- 70-84: title clearly visible, contributor or year uncertain
+- 50-69: title visible but other fields very uncertain
+- Below 50: title unclear or not visible
+Set confidence_score to this integer value.
+
+COMPLETENESS NOTES:
+Brief note on any fields that were uncertain or could not be determined.
+Use null if all fields were clearly determinable.
+
+DO NOT include:
+- 024 (standard identifiers)
+- 028 (publisher numbers)
+- 518 (recording info)
+- Any local notes (KUT Radio, property notes)
+- Any identifiers that could be barcodes or product codes
+
+Return ONLY the JSON object. No markdown, no explanation."""
 
 
 def generate_marc_records_batch(barcodes, workflow_json_path, workflow_data, model_name):
@@ -633,6 +686,112 @@ function exportPage(){{
 def create_report(results_folder, barcodes_processed, marc_results, workflow_data, current_ts):
     """
     Create receipt/report of original cataloging processing.
+    Also creates batch-ready import file for records scoring >= confidence threshold.
+    Saves to:
+      1. deliverables/original-cataloging-report-[timestamp].txt
+      2. deliverables/original-cataloging-batch-ready-[timestamp].txt  (high confidence)
+      3. AI_Music_Operations/original-cataloging/[date]/
+    """
+    from cd_workflow_config import get_threshold_config
+    threshold = get_threshold_config("confidence").get("high_confidence", 70)
+    ops_dir = os.environ.get("AI_MUSIC_OPERATIONS_DIR")
+    deliverables = os.path.join(results_folder, "deliverables")
+
+    successful = [b for b in barcodes_processed if marc_results.get(b, {}).get("success")]
+    failed = [b for b in barcodes_processed if not marc_results.get(b, {}).get("success")]
+
+    # Split into high confidence (batch ready) and needs review
+    batch_ready = []
+    needs_review = []
+    for barcode in successful:
+        marc = marc_results.get(barcode, {}).get("marc_fields", {})
+        score = marc.get("confidence_score", 0) if marc else 0
+        record = workflow_data.get("records", {}).get(str(barcode), {})
+        extracted = record.get("step1_metadata_extraction", {}).get("extracted_fields", {})
+        title = (extracted.get("title_information") or {}).get("main_title") or "Unknown title"
+        if score >= threshold:
+            batch_ready.append((barcode, score, title))
+        else:
+            needs_review.append((barcode, score, title))
+
+    # Write batch-ready file (same format as copy cataloging: OCLC|barcode|title)
+    # For original cataloging OCLC number is not yet assigned — use placeholder
+    # Step 3c will fill in the real OCLC number after creation
+    batch_filename = f"original-cataloging-batch-ready-{current_ts}.txt"
+    batch_path = os.path.join(deliverables, batch_filename)
+    with open(batch_path, 'w', encoding='utf-8') as f:
+        for barcode, score, title in batch_ready:
+            f.write(f"PENDING|{barcode}|{title}\n")
+    print(f"Batch-ready file saved: {batch_path} ({len(batch_ready)} records)")
+
+    lines = [
+        "=" * 65,
+        "AI MUSIC METADATA PROJECT — ORIGINAL CATALOGING REPORT",
+        "=" * 65,
+        f"Generated:              {current_ts}",
+        f"Results folder:         {os.path.basename(results_folder)}",
+        f"Confidence threshold:   {threshold}%",
+        f"Total processed:        {len(barcodes_processed)}",
+        f"MARC generated:         {len(successful)}",
+        f"Failed:                 {len(failed)}",
+        f"Batch-ready (>={threshold}%):   {len(batch_ready)}",
+        f"Needs review (<{threshold}%):   {len(needs_review)}",
+        "",
+        "NEXT STEPS:",
+        f"  HIGH CONFIDENCE ({len(batch_ready)} records):",
+        "  1. Run step_3c_oclc_original_record.py to create OCLC records",
+        "  2. Run step_3d_original_catalog_alma_import.py to import to Alma",
+        f"  LOW CONFIDENCE ({len(needs_review)} records):",
+        "  1. Open original-catalog-index-[timestamp].html to review",
+        "  2. Export decisions CSV",
+        "  3. Run step_3c then step_3d for approved records",
+        "",
+        f"BATCH-READY RECORDS (>={threshold}% confidence):",
+        "-" * 40,
+    ]
+    for barcode, score, title in batch_ready:
+        lines.append(f"  {barcode}  |  {score:3d}%  |  {title[:45]}")
+
+    if needs_review:
+        lines += ["", f"NEEDS REVIEW (<{threshold}% confidence):", "-" * 40]
+        for barcode, score, title in needs_review:
+            lines.append(f"  {barcode}  |  {score:3d}%  |  {title[:45]}")
+
+    if failed:
+        lines += ["", "FAILED (MARC generation error):", "-" * 40]
+        for barcode in failed:
+            lines.append(f"  {barcode}")
+
+    lines += [
+        "",
+        "=" * 65,
+        "NOTE: All records use the approved minimal MARC template.",
+        "Fields: 007, 1xx, 245, 264, 300, 336-338, 500, 505, 588, 650x2",
+        "Omitted: 024, 028, 518, local notes",
+        "500: AI-generated minimum viable record.",
+        "650: Popular music. / Sound recordings. (no geographic subdivision)",
+        "=" * 65,
+    ]
+
+    report_text = "\n".join(lines)
+    report_filename = f"original-cataloging-report-{current_ts}.txt"
+    report_path = os.path.join(deliverables, report_filename)
+    with open(report_path, 'w', encoding='utf-8') as f:
+        f.write(report_text)
+    print(f"Report saved: {report_path}")
+
+    if ops_dir:
+        date_str = datetime.datetime.now().strftime('%Y-%m-%d')
+        ops_folder = os.path.join(ops_dir, "original-cataloging", date_str)
+        os.makedirs(ops_folder, exist_ok=True)
+        for fname, fpath in [(report_filename, report_path), (batch_filename, batch_path)]:
+            import shutil
+            shutil.copy2(fpath, os.path.join(ops_folder, fname))
+        print(f"Reports also saved to: {ops_folder}")
+
+    return report_path, batch_path
+    """
+    Create receipt/report of original cataloging processing.
     Saves to:
       1. deliverables/original-cataloging-report-[timestamp].txt
       2. AI_Music_Operations/original-cataloging/[date]/  (if env var set)
@@ -783,7 +942,7 @@ def main():
 
     # Create report/receipt
     print("\nGenerating report...")
-    report_path = create_report(
+    report_path, batch_path = create_report(
         results_folder, no_match_barcodes, marc_results, workflow_data, current_ts
     )
 

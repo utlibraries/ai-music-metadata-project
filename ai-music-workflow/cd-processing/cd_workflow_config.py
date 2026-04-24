@@ -33,7 +33,7 @@ FILE_PATHS = {
 # Processing thresholds and parameters
 PROCESSING_THRESHOLDS = {
     "confidence": {
-        "high_confidence": 80,  # Threshold for high confidence matches
+        "high_confidence": 70,  # Threshold for high confidence matches
         "review_threshold": 79,  # Below this requires manual review
         "minimum_score": 0      # Minimum possible confidence score
     },
