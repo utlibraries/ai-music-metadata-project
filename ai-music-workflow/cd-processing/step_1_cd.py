@@ -9,15 +9,13 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from openpyxl.drawing.image import Image
-from openai import OpenAI
-
 # Import custom modules
 from token_logging import create_token_usage_log, log_individual_response
 from batch_processor import BatchProcessor
 from model_pricing import calculate_cost, get_model_info
 from json_workflow import initialize_workflow_json, update_record_step1, log_error, log_processing_metrics
 from shared_utilities import get_workflow_json_path, extract_metadata_fields, group_images_by_barcode, create_batch_summary
-from cd_workflow_config import get_current_timestamp, get_file_path_config, get_model_config, get_token_limit_param
+from cd_workflow_config import get_current_timestamp, get_file_path_config, get_model_config, get_token_limit_param, get_openai_client
 from retry_utils import retry_api_call, log_failure
 
 STEP_NAME = "step1"
@@ -40,7 +38,7 @@ DEFAULT_MAX_TOKENS = MODEL_CONFIG["max_tokens"]
 DEFAULT_TEMPERATURE = MODEL_CONFIG["temperature"]
 
 
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+client = get_openai_client()
 
 def get_llm_prompt():
     return """Analyze these images of a compact disc and extract the following key metadata fields in the specified format. You are a music cataloger, and know that you are responsible for the accuracy of the information you produce.  If ANY information is unclear, partially visible, or not visible: mark it as 'Not visible' in the metadadata. If you have reason to believe that a sticker may be covering part of a key field, like the title or primary contributor, either mark it as 'Not visible' or make an educated guess based on the visible information and note that it may be partially obscured in parentheses.

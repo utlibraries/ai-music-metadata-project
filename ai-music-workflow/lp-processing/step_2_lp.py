@@ -624,7 +624,7 @@ def query_oclc_api(queries, barcode, limit=10):
     seen_oclc_numbers = set()
     accumulated_results = []
     total_records_found = 0
-    max_results_to_show = 10  # Our target - 10 LP results
+    max_results_to_show = 5  # Our target - 5 LP results
 
     # Try queries until we have 10 unique results or exhausted all queries
     for idx, query in enumerate(cleaned_queries, 1):
