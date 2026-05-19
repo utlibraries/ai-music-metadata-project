@@ -583,13 +583,19 @@ def main():
             oclc_number = create_oclc_record(marcxml, meta_token)
             print(f"  OCLC record created: {oclc_number}")
 
+            # Save to workflow JSON FIRST before attempting holdings
+            # This ensures OCLC number is never lost even if holdings fails
+            save_oclc_result_to_json(workflow_json_path, barcode, oclc_number, False,
+                                      all_decisions.get(barcode, {}))
+
             # Set IXA holdings
             print(f"  Setting IXA holdings on {oclc_number}...")
-            holding_resp = set_oclc_holding(oclc_number, meta_token)
+            holdings_num = oclc_number.lstrip("on") if isinstance(oclc_number, str) and oclc_number.startswith("on") else oclc_number
+            holding_resp = set_oclc_holding(holdings_num, meta_token)
             holding_set = True
             print(f"  Holdings set: {holding_resp.get('message', 'OK')}")
 
-            # Save to workflow JSON
+            # Update JSON with holdings status
             save_oclc_result_to_json(workflow_json_path, barcode, oclc_number, holding_set,
                                       all_decisions.get(barcode, {}))
 

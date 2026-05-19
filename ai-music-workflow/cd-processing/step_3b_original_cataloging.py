@@ -101,81 +101,166 @@ def title_case_catalog(text):
 
 
 def build_marc_prompt(barcode, extracted_fields):
-    """Build the minimal MARC generation prompt per Whit Williams approved template."""
+    """
+    Build the MARC generation prompt.
+    Generates a full enriched MARC record with only Whit Williams approved changes:
+    1. 500: 'AI-generated minimum viable record.' (removed 'Cataloger review completed.')
+    2. 650 Popular music: no $z United States subdivision
+    3. No 500 Property of KUT Radio note
+    4. Sentence case on 245 and 505 (first word only)
+    All other fields remain as original enriched record.
+    """
     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
     return f"""You are an expert music cataloger following RDA and MARC 21 standards for sound recordings.
 
-Generate a MINIMAL VIABLE catalog record for this CD. Use ONLY the fields listed below.
-This CD had no match in OCLC WorldCat and will be submitted as an original record.
+Generate a complete, enriched MARC record for this CD based on the extracted metadata below.
+This CD had no match in OCLC WorldCat and will be submitted as an original catalog record.
 
 EXTRACTED METADATA:
 {json.dumps(extracted_fields, indent=2, ensure_ascii=False)}
 
-Return a JSON object with EXACTLY these keys. Use null for fields that cannot be determined from the metadata.
+Return a JSON object with these exact keys. Use null for fields that cannot be determined.
 
 {{
-  "field_100_or_110": null,
+  "leader": "00000njm a2200000 i 4500",
+  "field_007": "sd fsngnnmmned",
+  "field_024": null,
+  "field_028": null,
+  "field_100": null,
+  "field_110": null,
   "field_245": null,
+  "field_246": null,
   "field_264": null,
+  "field_300": "1 audio disc : $b digital ; $c 4 3/4 in.",
+  "field_336": "performed music $b prm $2 rdacontent",
+  "field_337": "audio $b s $2 rdamedia",
+  "field_338": "audio disc $b sd $2 rdacarrier",
+  "field_500_general": null,
+  "field_500_ai": "AI-generated minimum viable record.",
   "field_505": null,
+  "field_518": null,
+  "field_588": "Description based on AI-assisted metadata extraction from cover image, {today_str}.",
+  "field_650": [],
+  "field_700": [],
   "confidence_score": 0,
   "completeness_notes": null
 }}
 
-STRICT RULES — follow exactly:
+RULES — follow exactly:
 
-TITLE CASE: All text in field_245 and field_505 must use sentence case:
-- Capitalize the FIRST word only
-- Do NOT capitalize every word
-- Example: "Blues for the modern age" not "Blues For The Modern Age"
-- Tracks in 505 separated by " -- " each with first word capitalized
+TITLE CASE — CRITICAL:
+All text in field_245 and field_505 MUST use sentence case:
+- Capitalize the FIRST word of the title only
+- Capitalize the first word after each " -- " separator in track listings
+- Do NOT capitalize every word regardless of what appears on the CD
+- The CD may show ALL CAPS or all lowercase — normalize both to sentence case
+- CORRECT 245: "Written all my letters / $c Karen Abrahams."
+- WRONG 245:   "Written All My Letters / $c Karen Abrahams."
+- CORRECT 505: "Can't find my way home -- Pain and sorrow lamini -- Little wing."
+- WRONG 505:   "CAN'T FIND MY WAY HOME -- PAIN AND SORROW LAMINI -- LITTLE WING."
 
-100/110 FIELD (field_100_or_110):
-- Use "100 1_" format for a personal name: "Lastname, Firstname, $e performer."
-- Use "110 2_" format for a group/band/ensemble: "Bandname. $e performer."
-- Use ONLY ONE. If unclear whether person or group, use 110.
-- Include $e relator term.
+field_024 — UPC/EAN barcode:
+- Look for a 12-digit UPC or 13-digit EAN barcode printed on the disc, back cover, or spine
+- Format: "$a 012345678901" — digits only, no spaces, no dashes
+- Both 12-digit (UPC-A) and 13-digit (EAN-13) barcodes are valid — include whichever is visible
+- CRITICAL: NEVER use barcodes starting with 05917 — those are UT Libraries institutional barcodes
+- NEVER guess or construct a barcode — only include if clearly visible on the CD packaging
+- If the only barcode visible starts with 05917, set field_024 to null
+- null if no UPC/EAN barcode is visible
 
-245 FIELD:
-- Format: "245 10 Title of album / $c Statement of responsibility."
-- ind1 = 1 (there is a 1xx), ind2 = 0 (no nonfiling characters unless starts with article)
-- Apply sentence case as described above.
-- End with period.
+field_028: always null — do not use this field
 
-264 FIELD:
-- Format: "264 _1 $a Place : $b Publisher, $c [year]."
-- Use copyright/phonogram year if visible: ℗YYYY or ©YYYY
-- If place not visible, omit $a entirely.
-- If publisher not visible, omit $b entirely.
-- If year not visible, use null for entire field.
+field_100 (personal name main entry):
+- Use for a single person as primary creator/performer
+- Format: "Lastname, Firstname, $e role."
+- Example: "Abrahams, Karen, $e performer."
+- Use ONE of 100 or 110, never both
 
-505 FIELD (track listing):
-- Format: "505 0_ Track one -- Track two -- Track three."
-- Apply sentence case to ALL track titles.
-- Include ALL tracks visible on the disc or cover.
-- If no tracks visible, use null.
+field_110 (corporate/group main entry):
+- Use for bands, ensembles, orchestras, groups
+- Format: "Bandname (Musical group), $e performer." or "Bandname, $e performer."
+- Example: "Antibalas (Musical group), $e performer."
+- Use ONE of 100 or 110, never both
+
+field_245:
+- Format: "Title of album / $c Statement of responsibility."
+- ind1=1 if field_100 or field_110 is present, ind1=0 if both are null
+- ind2=0 unless title begins with an article: The=3, A=2, An=3
+- Examples: "245 10" when 1xx present, "245 00" when no 1xx
+- Apply sentence case as described above
+- End with period
+- Do NOT include the MARC tag in the value itself
+
+field_246:
+- Include ONLY if there is a clear variant title
+- null if no variant title
+
+field_264:
+- Format: "$a Place : $b Publisher, $c ℗year." or "$a Place : $b Publisher, $c ©year."
+- Use ℗ for sound recording copyright
+- Omit $a if place not visible, omit $b if publisher not visible
+- null if year not visible
+- Do NOT include the MARC tag in the value itself
+
+field_028:
+- Publisher/label catalog number if visible on disc or sleeve
+- Format: "LABELNUMBER $b PUBLISHER"
+- Include if clearly visible — helps with identification
+- null if not visible or unclear
+
+field_500_general:
+- Any important general note visible on the CD
+- Include: recording info, dedications, liner notes, recommended tracks, website URLs
+- Do NOT include: Property of KUT Radio, or any local library notes
+- null if no significant note visible
+
+field_500_ai:
+- Always exactly: "AI-generated minimum viable record."
+- Do not change this text
+
+field_505:
+- Format: "Track one -- Track two -- Track three."
+- Apply sentence case: capitalize first word of each track title only
+- Include ALL tracks visible on disc or back cover
+- null if no track listing visible
+- Do NOT include the MARC tag in the value itself
+
+field_518:
+- Recording date and/or place if explicitly stated on the CD
+- Format: "Recorded at STUDIO, CITY, DATE."
+- null if not visible
+
+field_588:
+- Always exactly: "Description based on AI-assisted metadata extraction from cover image, {today_str}."
+- Do not change this text
+
+field_650:
+- ALWAYS include: "Popular music." — NO geographic subdivision, no $z United States
+- ALWAYS include: "Sound recordings."
+- Add specific genre if determinable: "Afrobeat (Music).", "Blues (Music).", "Jazz.", "Rock music.", "Country music.", "Folk music.", "Classical music.", etc.
+- Format each as plain string without MARC tag prefix
+- Example: ["Popular music.", "Sound recordings.", "Afrobeat (Music)."]
+
+field_700:
+- Added entries for additional contributors with roles
+- Include producers, engineers, photographers, designers if visible in credits
+- Format: "Lastname, Firstname, $e role, $e role." 
+- Example: "Fitzgerald, Michael, $e producer, $e engineer."
+- Empty array if no additional contributors visible
 
 CONFIDENCE SCORE (0-100):
-Score based on how completely you could fill the record from the metadata:
 - 100: title + contributor + year + tracks all clearly visible and readable
 - 85-99: title + contributor clearly visible, year or tracks partially visible
 - 70-84: title clearly visible, contributor or year uncertain
-- 50-69: title visible but other fields very uncertain
-- Below 50: title unclear or not visible
-Set confidence_score to this integer value.
+- 50-69: title visible but other key fields very uncertain
+- 0-49: title unclear or not visible
+Set confidence_score to this integer.
 
-COMPLETENESS NOTES:
-Brief note on any fields that were uncertain or could not be determined.
-Use null if all fields were clearly determinable.
+completeness_notes:
+- Brief note on any fields that were uncertain or could not be determined
+- null if all fields were clearly determinable
 
-DO NOT include:
-- 024 (standard identifiers)
-- 028 (publisher numbers)
-- 518 (recording info)
-- Any local notes (KUT Radio, property notes)
-- Any identifiers that could be barcodes or product codes
-
-Return ONLY the JSON object. No markdown, no explanation."""
+Return ONLY the JSON object. No markdown, no preamble, no explanation."""
 
 
 def generate_marc_records_batch(barcodes, workflow_json_path, workflow_data, model_name):
@@ -330,88 +415,135 @@ def save_marc_to_workflow_json(workflow_json_path, barcode, marc_result, extract
 
 
 def format_marc_for_display(marc_fields, barcode):
-    """Format MARC fields as readable text for HTML display."""
+    """Format MARC fields as readable text for HTML display.
+    Strips any accidental MARC tag prefixes the AI included in field values."""
     if not marc_fields:
         return "MARC generation failed — no fields available."
 
-    lines = []
-    field_map = [
-        ("field_007",     "007"),
-        ("field_028",     "028"),
-        ("field_100",     "100 1_"),
-        ("field_110",     "110 2_"),
-        ("field_245",     "245 10"),
-        ("field_246",     "246 1_"),
-        ("field_264",     "264 _1"),
-        ("field_300",     "300   "),
-        ("field_336",     "336   "),
-        ("field_337",     "337   "),
-        ("field_338",     "338   "),
-        ("field_500_general", "500   "),
-        ("field_500_kut", "500   "),
-        ("field_500_ai",  "500   "),
-        ("field_505",     "505 0_"),
-        ("field_518",     "518   "),
-        ("field_588",     "588   "),
-    ]
+    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
 
-    for key, tag in field_map:
-        val = marc_fields.get(key)
-        if val:
-            lines.append(f"{tag}  {val}")
+    def strip_tag(val, prefixes):
+        """Remove any accidental tag prefix from a field value."""
+        if not val:
+            return val
+        v = str(val).strip()
+        for p in prefixes:
+            if v.startswith(p):
+                v = v[len(p):].strip()
+        return v
+
+    lines = []
+
+    # 007
+    lines.append(f"007    {strip_tag(marc_fields.get('field_007','sd fsngnnmmned'), ['007'])}")
+
+    # 024 UPC
+    f024 = marc_fields.get('field_024')
+    if f024:
+        val = strip_tag(str(f024), ['024 1_','024 1 ','024'])
+        # Never show barcodes starting with 05917
+        if val and not val.startswith('05917') and not val.startswith('$a 05917'):
+            lines.append(f"024 1_ {val}")
+
+    # 1xx
+    f100 = marc_fields.get('field_100')
+    if f100:
+        lines.append(f"100 1_ {strip_tag(f100, ['100 1_','100 1 ','100'])}")
+    f110 = marc_fields.get('field_110')
+    if f110 and not f100:
+        lines.append(f"110 2_ {strip_tag(f110, ['110 2_','110 2 ','110'])}")
+
+    # 245
+    f245 = marc_fields.get('field_245')
+    if f245:
+        lines.append(f"245 10 {strip_tag(f245, ['245 10','245 00','245 1 ','245 0 ','245'])}")
+
+    # 246
+    f246 = marc_fields.get('field_246')
+    if f246:
+        lines.append(f"246 1_ {strip_tag(f246, ['246 1_','246 1 ','246'])}")
+
+    # 264
+    f264 = marc_fields.get('field_264')
+    if f264:
+        lines.append(f"264 _1 {strip_tag(f264, ['264 _1','264  1','264'])}")
+
+    # 300/336/337/338
+    lines.append(f"300    {strip_tag(marc_fields.get('field_300','1 audio disc : $b digital ; $c 4 3/4 in.'), ['300'])}")
+    lines.append(f"336    {strip_tag(marc_fields.get('field_336','performed music $b prm $2 rdacontent'), ['336'])}")
+    lines.append(f"337    {strip_tag(marc_fields.get('field_337','audio $b s $2 rdamedia'), ['337'])}")
+    lines.append(f"338    {strip_tag(marc_fields.get('field_338','audio disc $b sd $2 rdacarrier'), ['338'])}")
+
+    # 500 general note
+    f500g = marc_fields.get('field_500_general')
+    if f500g:
+        lines.append(f"500    {strip_tag(f500g, ['500   ','500  ','500'])}")
+
+    # 500 AI note
+    f500ai = marc_fields.get('field_500_ai', 'AI-generated minimum viable record.')
+    if f500ai:
+        lines.append(f"500    {strip_tag(f500ai, ['500   ','500  ','500'])}")
+
+    # 505
+    f505 = marc_fields.get('field_505')
+    if f505:
+        lines.append(f"505 0_ {strip_tag(f505, ['505 0_','505 0 ','505'])}")
+
+    # 518
+    f518 = marc_fields.get('field_518')
+    if f518:
+        lines.append(f"518    {strip_tag(f518, ['518   ','518  ','518'])}")
+
+    # 588
+    f588 = marc_fields.get('field_588',
+        f'Description based on AI-assisted metadata extraction from cover image, {today_str}.')
+    lines.append(f"588    {strip_tag(f588, ['588   ','588  ','588'])}")
 
     # 650 subjects
-    for subj in (marc_fields.get("field_650") or []):
+    for subj in (marc_fields.get('field_650') or []):
         if subj:
-            lines.append(f"650  _0  {subj}")
+            lines.append(f"650  _0 {strip_tag(subj, ['650  _0','650 _0','650  0','650'])}")
 
     # 700 added entries
-    for ae in (marc_fields.get("field_700") or []):
+    for ae in (marc_fields.get('field_700') or []):
         if ae:
-            lines.append(f"700 1_  {ae}")
+            lines.append(f"700 1_ {strip_tag(ae, ['700 1_','700 1 ','700'])}")
 
-    confidence = str(marc_fields.get("confidence_notes") or "")
-    if confidence:
-        lines.append(f"\nCATALOGER NOTE: {confidence}")
+    conf = marc_fields.get('confidence_score', 0)
+    notes = marc_fields.get('completeness_notes')
+    lines.append(f"\n[Confidence: {conf}%]")
+    if notes:
+        lines.append(f"[Note: {notes}]")
 
-    return "\n".join(lines) if lines else "No MARC fields generated."
+    return "\n".join(lines)
 
 
 def create_original_cataloging_html(results_folder, barcodes_with_marc, workflow_json_path,
                                      workflow_data, images_folder, current_ts, records_per_page=100):
     """
     Create HTML review pages for original cataloging records.
-    Uses the same structure as Step 6 but with distinct orange styling and
-    MARC fields display instead of OCLC match data.
-    Same localStorage/CSV export system — Step 7 reads it identically.
+    Wrapper that orchestrates index and page creation.
     """
+    import math
     print(f"Creating original cataloging HTML review ({len(barcodes_with_marc)} records)...")
-
     images_folder_name = os.path.basename(images_folder)
     total_pages = math.ceil(len(barcodes_with_marc) / records_per_page)
-
-    # Index page
     index_file = f"original-catalog-index-{current_ts}.html"
     index_path = os.path.join(results_folder, index_file)
-
     _create_orig_index(index_path, len(barcodes_with_marc), total_pages, current_ts, images_folder_name)
-
     page_files = []
     for page_num in range(1, total_pages + 1):
         start = (page_num - 1) * records_per_page
         end = min(start + records_per_page, len(barcodes_with_marc))
         page_records = barcodes_with_marc[start:end]
-
         page_file = f"original-catalog-page-{page_num}-{current_ts}.html"
         page_path = os.path.join(results_folder, page_file)
-
         _create_orig_page(
             page_path, page_records, workflow_data, images_folder, results_folder,
             page_num, total_pages, records_per_page, start, current_ts, images_folder_name
         )
         page_files.append(page_path)
         print(f"  Created page {page_num}/{total_pages} with {len(page_records)} records")
-
     return {"index_path": index_path, "page_files": page_files, "total_pages": total_pages}
 
 

@@ -34,8 +34,8 @@ MODEL_CONFIGS = {
 
 # File path configurations
 FILE_PATHS = {
-    "base_dir": "ai-music-workflow/cd-processing",
-    "images_folder": "local-cd-image-folders/cd-scans-10",
+    "base_dir": "",
+    "images_folder": "cd-image-folders/cd-scans-batch1-originals",
     "output_folders": "cd-output-folders",
     "results_folder_prefix": "results-",
     "logs_subfolder": "logs"
