@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Music Cataloging -- <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAh8AAABdCAMAAAAyjPStAAAA/1BMVEX///8yPkcoNkC9UQC8TQAvPEW8TgC+UwC8SwDV19nu1cL09fUvO0X//vwrOEK/VgD89vE8R0/MejfJzM6KkZUjMTxKVV33+Pjo6eo2Qkq6RQDDXwD9+vZPWmHO0dNbZWx3f4Sws7b049X47eODiY7FZybIcjLMe0Di4+Xku6DGbzu+wsSSmJzDYADpyLDRimDfsJOhpqrWlWbIbR/dqYLQhlHt0LjFaS57gof26NzWmXfgsI4XKTVsdHpnb3W2ur3ZnXHCXxbSi1XLfU7kvqgAGyrGaRnYn33Kcy3w2szPgUbQiWDdqorYm23DYiHnxrO2NwDQgkDXlV0AFybSjmekkr4bAAAgAElEQVR4nO1dZ2PiOLd2wQWDW8A0m2YngAOYQIDECYSSLG2Tybt78/9/yz2SbTAlbSb7TvZeng8zxkU6kh6dJtkhiCOOOOKII4444ogjjjjiiH81RNEwlDAMQxR/t1BHfAOIlrvs27fdcWdarS48rKrTzrhrO4LpKkeW/D+EqCiW2be7wInK2Y+JLMscR3P0BvALTk4mP64q1elT1xZMSzF+t9RH/LewrM7kCM9HWAD8z/O0rDcvF9WTaq/Xq56cXM6ausyiC8EttD7r/G6pj/hvoc9h9fDjqtrrdG/t/tK0rMDv8P0QyzWXjn077qwqV1jD0IvtMoxtKJbyen2id4+4Ody/5Wfa8cmHoFV+xTvC/0zd70L8VLHfyo4LYFB6YDM+1gLFWqIHTrbPdisni5MV6JtVBVyWmZ6zXy1A7J6g+xYOHN9WkIp62r3j+ab76R4S5nPrU/frMn/rHU5BnBUWHv3792dr/giUzuqNGbOL55v5N2IIDDc93zkHIYzlKhC2gCrZD16ae/x4yfW63e4Vy3URxhP+dX4Q7nOL5Z8ECx92+MqzuXODcs/zn57FnRy9/MTt5kSecL6QM34KQk/YCfw7zS3efvDn4ORk4cM3K+c8/wk2/dNA/Hhc/1IE4dme92Z0LpebTfVcjpcX08eHZyHU+wtujx8yDLL4QuuYSu7ZW/wgCJvm+/6hk9vVHiBCj29+ev50ck3MM3GXbQfhnlVdK9CYl3g0KvQ5qpurfLbmfYjmrvgrmh6/3yTL04DGPa9/M/2xGU6zKbMR7nI1tu3bSmR1Yd8+nczYCM3db55Y0Xv8uIcuNlq0jHlvvsOPC5p3/EM7d8DTNQX3062wBBf3qX35EdXTChvA5gr9C/yAJ8Xp5aer3oNd3Zn+7uREbr5r/qzKg3fwM+3/54DciYf1L3fyw4GJJbrLpWjzlrI0FcJQ3As+xI/OHj9sNN7KV/HjF9DnZx/ghynnQmqmg1W/xw9CGP+yDE7ufIcfj+f9CX/xzmNKNffwzi2/BcAPORguQnT0K8v+88aRaVqwedfOsV37/GVpRqruWueN9/iBL+3wQ3GE9ROW0w8N2wF+GPim4AHw9kVwe0QU5KAD/KzRd4JBNdAvz6CbTmD4cNU2famIHtB9ohgKHJS+4wZNzoVmqHeHzw98v+v0g8ehHCyBd9Ny0ybFcbZZYDh+8TZ/vs1RBVzwK7oaPGmI4XrXYlmX7PP6ic0dgvMhi/nPAfEjcAcI8z9cxereOIqpGESXXxIGqJDbF2FJ0/q6O27ZXX5ghPnxQDyAB6N7OlVY6JMct5k/u/x4nl/mTNFGD0BPuRc9+ZLoywhAsz4L9s8krK58RudWFmE8P81mljHNydClt/pkltMfROVh2ry0iAtZx+k9FLCfQN1TFJr5w7A8kc/Y3ImLTKguc4uTxbbH6PMDGNKf6XpOdwhlhsq5JZbgj3NjqO35kud9N2e5os/k3MnaZojmnIvkUGMedV2e9Ka9bqiHc0uiG8GdLD53LpEmUS5W+gw9veygglauuQDRK9Pe1ETtb0JtD1O9KrqdHJ/r/NZsJPBjsu4q60Q+B7HFpWNfGN3c0r21FUtEGnny91pK+11+sN1W7mTGRXAn2fLYtR55el3JDj/Ev07kiN2K/DXjWHCU7ZMzekEYZottLpFXY/Njl7DO9aUlnPEd0erBQCtdnucIsZd7tCybqyrCSYWuWMZtt8fpwnJpT9gnJLXVkh/8IbTllmktZ3zFhVC4I9Od7nw73lnzo8vfWu6Y5VzCtTnuzCJEENK1COecs5fPswiKPQX9TLDc3tqLUZ4m1WdzzOZccdyt0pPxfB6ysB3dIEwaB4nG+C9saazVgr4C0Za6DAV1cg/L8Vjnet1510XtBydIOFmw5/aZ/pfMsZ+JzL4cgsxNNirMmpwrf8279Nn5vTXPLZfVq2Uzx9lu2D993rMvGCF+cNwNNP6SvheROa6ikzP2z4Bge/bFmsjyjUKIC++eeWSB5fLumvIWaGjMrgeaB0lN/azLzx2HcFga6hPPkTv4wFcQE2y6iUqYsmdIibuTlq/LH3I4LrEqkRNi1754CPhxkZuitnDsmECaEkI76wpNYOUeX5jzKxB0xd/A8XLND+E/LGgHhcd+1y1/vhV+WDyw3ujRnoeqVD1P5JZH/JjyyDk2/4MoMwvsy5jFTrId4X44uB/e9Ob+aQA/zja95TbvDXtpgXkRiXHOQfbYXD4Ilhzih/AuPyI4YO5EUFhT9Zo3ZauBNt7jhzmJ4FxVh2+hAm4wP4wK20P/0UCv58g9Grw+pgzMuRx+3oGoEU4vkU9gRzA/Ljwz6PAc5lMwgMa5nwzrsryLysntGXWfH9a5N1tnmNvKitXNeRMVadxOUaXzCLBRrNJo5BQnaJE77SCtG8FN7fLb/qktoxIfuAgWxjr3+NH1+MFi3w95IMAP3z/tePy45c9QI6yr386Pq7UddTnuHqXTzfF0ajzlHLP399gyXcXSucW60cu9/BjGXvwy5oEf5oRe9U4WM9mb4AgH+IFPiFv8gP5Bes3JCVgfTFeLS51GA77U/cyWckXTTdsTa5sfxoy9geE9kcWgjbxn3QQeMfENfoC1na5AXJrHjHTP6Flo9hDWC4u0lcNxkelyJ0lhuOwhfij3V2Dyls7ES61s86NPc+yJgBXXAX5coZq/AT827XFZ+k9xllv1VzeP4lPOtuZPC2HBd6wmd7m+ydQ/wY++TN/YFzZg7e8f4gd6YIcfFs7LvFSwpTq/uECFXJiIH7o/YssTnmaruKxtfhCPEXAclNzYr8bh/OyqxbPdN/nxQMtzX1zRf7IV2EWxP1/IHOIHONMsy43DKQ2I+nT5ED/MtcuM9cg2Pwhbj9ByC/Pg+/KjupkJpv4nsbQMxQJMwVOz0GKd6yqz+9A9M/oz/FgnSwPYH+OH+BJZKe4PZBgu2damerAvweiKTpWjadTfO/xYohJtLnDsHjjW0x/Aj7f1B/Bj65Irc7QXebmdyaQlzFkv+WV1JxDSrQnirOSrW4s+xI8x1IXC5D6PPdQdfhBK94xlfyy/NT96m1+uft9/uHipzmRgPAeBoHzZu7lw7GbI/3CvPsGP5QR7emE4csRfGiMec8hTOcwPuI82n1nURyv6aqPkQ/xAgaJMo0Bxhx9ijz0hWvfBzO8HPp7LI2q+wY++zIZHQ6m0Vh5jlFauZ/r+hyfGlI4EQeySp5Gd4w/wQ5T9FR1lRiMTvcsPaH2LYzvfmR/0dPPLbHKyPjnvPd1CsHjegn8791cQXtDVzT1W9SA/9vLrmB/GFfdjZzCQS+IdKfdY577CD+Wc797gO+1IaIko4IfSeUIjekHLbpgfHiccXu5P1mk/68yvEU4bb/LDveJCGVij9cMyZfrewkYVqSDMDwGvPosy3fLvG/NnxCv+qZMLEj+PdORhzQ+xwwI/hL9QQdY9kPkb84MNrZEpjtMX3FD+Dm0wM4W+E8omKbg9ezBe/MHB+TEC88NA6UT6HkggChfrXmtF/IytnZt7cahncIAfXnzrF9/lT3RsnKwrmkMT1Ar7H8o9th826+mPqscP2SIs8ByNprziNgM95nGNRgsPTv9wfCt6ddIdE+Vn0aA8Itt4ISMNaOrIG3Im9MKAwBYL2OQD/TGOTBTCusHGi+hGwKP119rASK6TB8sJmmQQIK0MQujx3BUoV3ll4AU5T3/AHEBLe09rfljEt+BH9/27wjD+PMAPxRWqrPxsglvoTPg5DKYy5c+XCqINO+lNK/p4zQ+rwspd01p2ZZxdtxyZ76LR7/H3S8Uw/+QvTc/Ic3RFCYTkKtPeZLEER1CW7SUa33lutVSEmWwTojXnz/oosKDhtjOUr3jk6XFIul5kYitWh75FabMLOvdguqHwQzGXP9gzPC+MKk2DuGf6reFe0EifWVU2YluohKdVtQva1lHoCHhmj/xl4H8IPL16Opv3ImcdBSaEXJlOsAUVLWdyLnh3WcIZzTmW8RLhrs71lkPLPUe5inQt5ZGumMiU0fK0em4Zbi8ycxXRGvM/+gbMqx9894Obc/4RgH15Ej6HQ/rjb31WrVYv9RVx26xWZ0+i0bmsVptPKAO6YHP6PJzOtuZNtHOg5Z37Cz0wFo3VZbXSfOzrlWpVx5QVp7NgSUJoyTl29aAQygrqWeh/wTn3ZpaLyC9QiHm5gLqmBlyN5CoONhQ9OZx2VKBGVn5B2siYoRKal5voQ/GEn+konaI8zvjc7NEkhOaiOoNhvoBrsybhVtnckyKuVjcC4fQiOfryYlOCPcuBpnuetWBiWFU+V33GI+peXnpyQVtWTVRF03UXdG7mgKSooOceBwV5W5se5Jw8dwmv/WN3Bk3SBdBbJyDsx3ePfDkEvPkYQd6FvnfGv/FAfLt+G4LwNiUGZ/A1c2ltJwtEa+n0g1mhbD0gbp5ba2mAYQmmEaoIl6IsvYI3z4At9B4VO62tSQc1BkKEStgTHte6RIl9r1Ck/gPxTJTxUPAufiTNVhJMWaIEmbdvey0DEW7LugbQtBaxKWgZFCRaeF0/eMbrDP/nb9wPgtb3vZ3JLN6ZXKn2Wi8388cL23Ee7IvH+c1Lq1ddzJrgpEbwLmX6cH7se8HeC6uP+Cmg/MdT99Z2hOXSxekOxfCXoPHs9V+XgivuUnh27O64c3YwfvlWUPTZ7xbh/wiCdbB9KK9tqr2JfHN+dHsL/ltutvkXQlhnq5SdLeAOtx0FPgdx1st358eUjyw+tZ39iFdhBvwwqrntfeyd7dcUlEs/1SN+e3483t8f1ccXYc0Pe9I531pxugrSnB6W8txTKMafka0L3w/Gb/X4/2/B9RdIlCvblMMG5VnmuDBf7IXivcuktCKhjPwR/7dh/fDy6+ZkKeghfog39CUdNjDOTHnECyPKfeT4/u3/GygVdkoYf4+diTW/DwUshl4xJ6FldcLllw8z4S+bsCr8JzPyR3wN0un/fp3iir0njEtZlrs/kLpwbAfjNtclepNb74eNctWt1ViW2Uf0ftzeyxy1eiIRjUYLiUQCtyENRwX0u157vepY5ivb+4WltU+TydNE8As1KoGbF/WbiPBVdXmI+RXAf5ndS/6JWL19ffoFNe2W/x467LlizB4eOboj/A12psezNB2JsE0L7QBGP1h2bBFmR6jQE6E1J5Y6/bxbSEPTNEmSKE1jMCEyRU2jJAnOJl8VVCWl7CdlfR0ZiqTyX1RWeQCiD9r+r1hRo7QBADUoOKKkL6rLR0LTvOI1qrx9QWKoEvw/yksURaV+tZ5yPK6V378tjC5/5oq9DtG7N+X/CGBYHtG2zmcBrZILwnOXpnUIFsV5riPkbPBiCYHef9s4k6gn4ySpthNRT39EE6M8Ex+OEq/qj+iAJAdfNuXrA5JRv6ioLAyTFuIHIw0bgCQJDUyio2H8q+oKECvU21kov1EvbM/vhkZKRfi/nS9myfgvz4BrmEaNzz3i8BOBeJBNYbJo9V7QGaHC9oLIZVmh8bHV7M56C+VCtgg7Mjv0TldUIpl8uHHXEjV6o97Cl/JjpH0VP6KUliwDov7vWFGSYvggSzIpfFRLfTU/UPEqQ2Zju2cbFCndeYcp5tf5UZI+zQ+Tlh3C6J33aV648DxUt5OrYBUhOnLuwluq5pXH3NRGuZJx5PxQchLxIxXmR0mi3lJlmT8G2i/ryzUK/zMYDNe/6p81shvU8lRx6wTYF6/gzJofRIn6J/gB+mNP7vIfg4E/oF/BjyRYx7cm7QF4G5eUnkzTxm0Qwdj4xR1wRSf+Mijw45mj9QsIaBbsn4eyT5/lBxFN1Pamy8+jUNiU1hj8vPs4pKjth4Ef3gngR9znR33w3+JHGtrlK9mv4EcmEX0jYDgIpRdBWyXE5QttvLz4J02IXgiDMFrBWyuK3hdktL2PMOjDG84+zY9/CukGpf00P2qDuLrdg7G836qQ/khr2i8IeBiH+RHCV/DjJyDO2ZlCmFed20lXD15SGeeWxm3FIW55P1Rxb6o3Fbv3ohACf3jB99vwAxxf6qf50daY1DY/0nW/sBA/iMQnlfQH8F35QTgyvyTc3D3H8eO595aocTVzqjk6N7Z5L5X+rNsVlj6rgP25ZfmDa6Mf4EcsGv2URclEo3sdFstk1mXUDirLqEZShQ/XkYZCQl5yktpuRFiaED/W0hyQcA/bNaCSdk/goj7Kj9qBTkxnMutHobr9G0LX35TkQJeak0iXMOQH86oqyPIL8i0EeSKzY3PKT2T8jqI1m7T6fEuZ3oDJYQ9/Y+dVfqRjicYpqrVQVFP500D2dLR9Cp5X4RqHjKdJ9GisjX6c4tAyXThNqWo+6cuLCoFbMsNUyos8a+2iqqbuyl55sUL7GtdWH4HLzwyTgFMPuIDyKYpQr3eFriVRIcWgkProjiFT9Wj0EPFC/kfQZCwhrqB8iptxDbomlsSN8BuaTgxRDe31MGTKwxScaOzlwQ7yA5pd8vWXz496atMp0IllnMhrpFJ+lFO4huryQenp2gj3Zj2VKtYQjeqN6yAwI9IjLEl73aZM+w51aXtHihVbEYmubrjyyZ99vK33kWZn4JiKtzKH9+l1LwW5uoJoRkBseiQO4RV+pNt3pKZpdah8QDHxuHaHxakP1YGmQXtHKVKjKEotIrEzQ0bTqBQaxuhwoA7vJImSUPvbQyhkkCHSJYrRkD9fS1KDfAkVnYIHR7i0U6gNHHQN+hll5lDKiZLUItYlSZWiNDW/PbGgDnJYSmmSlsI3nQ4GEkky4OP/sR3DeL23oz+i14Ps8I6EOsDYnKqoNopso9wgSWmaWkR9kRnlQR5Kig/81Ge6zQxSpSHczeyYqAP8gL5jNGrga2HMj9ipJsUZjcQPJ0qpAU7UlLW4hLgTGw3/AOsqMdod4mPtNA+dAE0pqBKj1mKNIqVtfLN6fpAf5ilJK3psiyVJJFpW07Lb5vmWh3G3KlWrw98Q8gP6CEGk5y3VCTP8KYOTR2VGO315jN432doYHuquw/yI5dU8Scbr0byWVUkG+gBXfp3Nw3QsIu0ShYanfJUYa1PxUQyOR6p2monFEvga9I0Kt1M15B5IiB+xFAxFLB2r3eEkyxDVQSVhPE6vr+/ipFSugQooFONMquBP47pKnca26VFPaXcZKKSdjUuIIOnT69MUQ6rD6+tSm9jDDj8K6uC6FotF8wyjRsHs1WF8mbbX0VQ2gaxgpp2iUu1oJpGPk77XW6Koa6gyk6S0nTzEIX6kULu0DT+KtTuNVLPQ05hdbTKvklobRIkzVAroVKSyjUQtWoyTGiJ8QkulSKYIvSUxklrLMPBz7Zu141o5FouVKdIL6GMlTWugLr2Oa9utt2R2jl4/iUz4F6J5QRBL+mL9HaWbGTBlcaE0uSb3KKJ3Ye8Pbzt8zb6kiSi0PA8dlSFqJYakPOtBECoT92YpGASy7j9UpIpoCBIUzirDGGokStGniQz0RG1EUfnhHZSa1CQvKZHA8xBKozA/vFOB/9GmSCmYpXC8Vqwe6gPK02VEAhjli35KbSf5QtjmRyLr50kSpF9zeeAPcEJivOaUB3EN119nyDg+GA3iXkUxdWcQDtqXNFGjQvwg1bjaroFaAAsaz+BmFxmtXEtp6t1diSj8EfeSXzAUmt/LDYq5I4YaCddr8HMkBfxoaJInQBJqwCp6wHjpqKi6k4JHLgXaeL8cVyuW/AAuaChAEW8Fwlg9CvT0Ar1StPReEjuA1/3TArScGuJL0fgmf7fmx7qHYQw03LAYNNsbzZhGemLXVIYsq1QblEqaiN0xzBBb9FjWa0x6ww+glN8HNY2UgqRZURtua49MnpECVkKH+8MF/Ei9kiHY9j/yUtx7OpNiGGxLiCJ0/inSmEFGa6RJA9yMQhZUmld83Cs+PRy8rz9Qh23xQ8JWGJq/ToPmGao9HJRAkcWIwkDSsEwwlyjfngE/ho1BsRDzdGc54EdUCuZB3R+SIuPzA+Tfoe6zjD+K9fz8zFWuuvLO+3xGq3mhz3rCswBsadH0K7uW3+SH5HdGLLsexg0/CNCHqvdkW9My+D+mGGSFQFeiptVUMkul/LgEdRDjuXyFkdffh/hBwG2aN9pRTdqx91CHGjiNGZXxVcPb/Njoj9HAJwXqWH9cgXEkNDmpBcusibuhR0/QoB4/YLJKHk+jox119gF+MClfYOCbP7xQJUP5w1m7G5a81dFUfMMPMquV1s5xwA/w44LuQrKhGxDnkr5oOz2gVOgzg7DOOI7mu3OZ28pviPMI59xHWBmFusvJq3uD3uRH0ITD/GiDEcGjly5p2A0vxiVwFjK1aAJZ9QEqFfhBbvymJDih0nWohw/zA1mnhl9Fdse2g3OydkLTJckv/KP8uJakkidhAoZI8iRBi4T5kWchcbH+rN3wYwQ2iLqr7xaNu+Z9fqzzH6BfySyuEyrfODJBdaDSQvyQQooz4EctBXYJguJoIdEGrxDZWRgEiPsOJwYcHn3lYn6v2JPO/e3FJJzgeM4Jrafq/dJE3wDrsZPXPt76C/zAKhqXoeJoJUOiKOIPwGAAQcEfPj+ojdqLqRBoSIPSJlY7yI8YkADHLLHi7kYDtCFgs51i7al8kB9IVcR9CSFu8Y0hGg1G2/dfMuXAvhBDCsldrH80/3GYH8RpYCfy604MVVcP2xeSCtUV8COBxQh6WEOqMIZF0+4SB9ZMlQV9ZhEWPyZMmr1V9PD+jl7PuKerilLpGYTAsq9+KPoX+IHsv4q6uIwlJaKgNIvJNU59+xJ2myAcArUuqadBoH+QH9j1TWARqB11XtA2knj91vYk+ZD/AfOPyW8kTAZ7eEBJS6Wd5+rJFMjq8yNTQiE0KJ8dcT7JD2iX52qAEzXcfqLQKEJ1IX4woYsBP0bgmZU24uMUSKY4iINo5PWeaPi7KFMUzV46vUiPqD6ufQwDAl5Xly+6dE9Bdkh/9b2SX+EH2FN8R9HzEoEfe6vQO/yAKV+kgCGUH/m8wo8alISyKY1d7xRHORt+jOIk5TuQH9IfEJNLhzZzQSdsiZlJlOKD7HU7sC9IvCGFhmHXB/wcP0DfBfojzI9MIkkO4sNyKsyPeKi4gB/Iou9bubrXpQd2EIlTFpkPt6OzsiysHjv+u1LLlqM/z2k5cok+3/FI868EL4Q36bf4MZQoT4T3+YHVZAxFL3hsIMqRSjtqbo8fRKadBZPpL6e9wg8UU2RjRDq/txSUGIADs/4F/PiUfaml4tIu45AUEHeTzHqBL91OUQOyEUXCr/lBxEZ5DTFkZ3w+qz8Y3/8I8QOmzIA5jaZjW/7HIX6UNXI3vsZNLKvICyH3vRBLp8/wrh/L6sn67dVkgvOosvzU0WXb+4M//Qjdev1LFBkUn4dVU57JevV8gB9I3gSE4OudFqS60/v7/IDSGmQQGr/GjwSOXAsDdbfna1R4O1b5k/5pBkWD+/c1BqUGWJjAQR1pcaqMeB4N8wNVh2PV7Rbu8qOWR4R9zf8IlonC/IgOGCaJqtuOXw7xI0GRu3bJQ7qtItH2m2ZzLPpOnVBtyvyP/rnTOkNLtQ/jjp2LyDMwLuhjj/KhjWNB+8D2xkNzIkbFfU/tA/yAvgc7MAx0HvLKd8LRLX4UEj4R23HfPX+NH+BIMndEcrC38oK2a5HrbmhQft7qo/mPkhR2l30kQP+lU9I6oihK/ogG/KglCp5aTAAXsm/z4/R/UCMO8yN9x/gKNsyPUyruxdzv86Om4qxvCNGErzTq4LJlD0RY3Qg7hiCX7rj2+Uy2jeajWJ0TizN52jebU5GwKjT3ypvcHlAMEBqG8jqD/AF+4LxlVA2mVBtlxbaHaYsfwyBIAKUl3b3FD6ItMaloUdv3uVAqIrTH1Bf2w/kPZNp2dBI4wSBhNMv46eA0E3RI1O+Bssb4o1CMk8yb/KhROO1zmB9RNe7b7hA/YkAaL2mY2XhHr/ADBfTbJrzhZZ7gUj6+SWeHYKxY9Ekmm74wlBe6olwsTN1c8uwDYbZmJqH02Hc+RFVjoD9CE5cKTMRH+JEAs91Ym0SYAKR0549TFJ/d4kdb87e2rmfKNj+8O3F7azCojezdvq8A47imQp2S/JH/KD/S6jqbCXVgIxJLadfof5gnfvKKJL2wvTb0He4EQ/kzqBiP59/kR9LbfHmYH0lK85drQ/xI30lezi52Gl9bj1f4gdxzUkv6BEnUEeH93gd+xPMHQhj0Hb1I1yCcyaR3QtMd+6yv969kelrVqyZh9Wh6/289bQM6Jq764XOmqK0rQdrVH/m0eiC/ji+gHCqzHpl6HLpfbRQytVGJGeDoK8yPOuXnV0dM4ORsrb8wqUKmXvIGaShlVWnfI8dKSsr7+hivAiOcvr7/I7aVX6+DmmCwhPVSFgkeK2n+hEBsKKEDlL4txzLlbB7loDIxFPZQ3jpDltnbHKOGTU5U9YpA6y++pQWfJet10IiiguRtPr6xL6AR441YbJRKwRD7K547/Nisv5yibEe+Hc1Ey0WtBKJpjOd1FKj4K/vKrRmLvsjmPsxvbOeSrix1ute/uHnsG4RbYen3/85EQ2PiUqmcSNST2cF6+tcbJJzFW4YLZTi8GyUyRK1eRvN3tN5JjCKukMfUpsCboTSGGgxQujFab6Mn22Xv/qgkUcNyodBWNQbb9XpZYqTiCL9clIEgLU4xA63h7SQAofa8U6+L0Kp4ORotpwb+ukZiVJRg0Ef13Q3OmUS93CCZeLZRrie8QRxBqAKxYFwaDIoJePKakob45Y4aGicpWa8RdQlYnlL/OI2h1xRS+QwoVRiTRGGUB+Ob3ip/1MjCnEg2vIzPdVFC0xn6Dga05FWpUoiQiUICtIe3mgVPqXEm1S57ufoaBM5aKgU9D9OGUVOFdKKOnMJGe+RxolC/ZhiQDDlBaWg9yWgUow2oa0TvAWgf6NJyStt3rHy49yx7j/6UHPrK33Sy0oMb7wwAAAL6SURBVG3D++M/zoz+AD3QWzxo60M8TpHrDGH6GhSD6muQVBwOcS4R3AI4VJm1C5CRpFR420GiSKIXhrJDXNAQF5KNx73dC+lRPqtpwALV2/2TxKVl/Ri1IVEStU7zxO5S2ivvnZVVBkrJxlP+/qCEGs+ichh/E8IG4AczSAKVBNXtuxCJO0/Cu3oMTXN4ksSzuiFlcctAnY2yaNcJMLgWz6aKyQwRvVO1AaiX7HC7goQUj+PiEST4AVLV8dIOlgfryMIwK2kaaC0m6NxR0Im+6qynKIqS2mkwdWSqeF3LYKmg7z3DFEvh4iBuw53WBmUGPaX6HVW/gy5lGEp9JceOoIAPontfHjdsmZ15f2lPeWQ5+mN/czRWb5TuiqV2yH7V0IuW0QKe2lH/JcIMUH99GAxBedsepxON0rogrxD0cqN/U7rQPi01gmleC0rDV9P1ZGnzeiQRGx7wTj1kRsnSdTsoE73lGPXfctzxVzLrFyzD1xLt61Lb60182YtOMn6D0SBE4Q5ceaIQZNbKyeHp7tocqrkQDeC/wRnDQYV3Ih08Wxqelguhp/xe8XV1Bjql7omTWUuFnvfqK/iS+UFUZtQoXZc3mjJaPh0md9fmtqGMaU7uoGyHoHfN3gplycwqTe+u6b6BNFqA/xq8/T7yW1fD18rabq7t43W8h/efPnDHr9T4XoWfbM7O7R942p7Q7AzZFfyHMtCX6GWarfzGD3D+KsAVPLheesTPYbmgOa4XEMKugm3p/Zs/5nWnFb9Knx2BYHRljuOngkEoDyc5jp68mRX71kin0+1Dy01H/ApE4QyUht66vecQUX7zH9j8BdTuhkOV2V3JOeKXYVxMaJljOdn/80z/UkQH0qFlkiN+HWYvR8s0Pf43ex4oJ0jG1deC2yN+CcL9pPOd/hD8TyCqplLqJz93ccRHYf79yk71fw0yjXa7cVQfRxxxxBFHHHHEEUccccQRRxxxxBFHHHHEEUccccQRRxxxxBFHHHHEEUccccQRO/hf5qKE/Ze0MG0AAAAASUVORK5CYII=" alt="UT Austin Libraries" style="width:190px;filter:brightness(0) invert(1);opacity:0.9;display:block;"></title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--orange:#BF5700;--orange-dark:#9A4500;--orange-dim:rgba(191,87,0,0.1);--navy:#0C2340;--navy2:#12304F;--cream:#FDF6EE;--text:#1A1A1A;--text2:#4A4A4A;--text3:#8A8A8A;--border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.14);--green:#2E7D32;--green-dim:rgba(46,125,50,0.1);--red:#C62828;--red-dim:rgba(198,40,40,0.1);--teal:#006064;--teal-dim:rgba(0,96,100,0.1);--mono:"DM Mono",monospace;--serif:"Libre Baskerville",serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--cream);color:var(--text);font-family:var(--mono);font-size:15px;line-height:1.7;min-height:100vh;}
+.shell{display:grid;grid-template-columns:230px 1fr;min-height:100vh;}
+.sidebar{background:var(--navy);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;}
+.logo-block{padding:16px 14px 14px;border-bottom:1px solid rgba(255,255,255,0.08);}
+.logo-sub{font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:0.08em;margin-top:8px;}
+.nav{padding:10px 0;flex:1;}
+.nav-sec{font-size:8.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(255,255,255,0.3);padding:12px 16px 5px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 16px;cursor:pointer;color:rgba(255,255,255,0.55);transition:all 0.15s;border-left:2px solid transparent;font-size:13px;}
+.nav-item:hover{color:rgba(255,255,255,0.85);background:rgba(255,255,255,0.05);}
+.nav-item.active{color:#fff;border-left-color:var(--orange);background:rgba(191,87,0,0.15);}
+.nav-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.25);flex-shrink:0;}
+.nav-item.active .nav-dot{background:var(--orange);}
+.conn-bar{padding:14px 16px;border-top:1px solid rgba(255,255,255,0.06);}
+.conn-item{display:flex;align-items:center;gap:7px;font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:5px;}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.2);flex-shrink:0;}
+.conn-dot.ok{background:#4CAF50;box-shadow:0 0 5px #4CAF50;}
+.conn-dot.err{background:#EF5350;}
+.conn-dot.chk{background:var(--orange);animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.35}}
+.main{padding:28px 32px;overflow-y:auto;max-width:1100px;}
+.page{display:none;}.page.active{display:block;}
+.page-hdr{margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid var(--orange);}
+.page-title{font-family:var(--serif);font-size:22px;color:var(--navy);font-weight:700;}
+.page-title span{color:var(--orange);}
+.page-desc{color:var(--text3);margin-top:4px;font-size:12px;}
+.card{background:#fff;border:1px solid var(--border);border-radius:6px;padding:18px 22px;margin-bottom:14px;}
+.card-title{font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);margin-bottom:12px;font-weight:500;}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+.stat{background:#fff;border:1px solid var(--border);border-radius:6px;padding:14px 16px;}
+.stat-num{font-family:var(--serif);font-size:28px;font-weight:700;line-height:1;margin-bottom:3px;}
+.stat-label{font-size:10px;color:var(--text3);}
+.stat.orange .stat-num{color:var(--orange);}
+.stat.green .stat-num{color:var(--green);}
+.stat.teal .stat-num{color:var(--teal);}
+.stat.red .stat-num{color:var(--red);}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;border:1px solid var(--border2);background:#fff;color:var(--text);font-family:var(--mono);font-size:12px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.btn:hover{background:#f5f5f5;}
+.btn-primary{background:var(--orange);border-color:var(--orange);color:#fff;font-weight:500;}
+.btn-primary:hover{background:var(--orange-dark);}
+.btn-green{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+.btn-red{background:var(--red-dim);border-color:var(--red);color:var(--red);}
+.btn-teal{background:var(--teal-dim);border-color:var(--teal);color:var(--teal);}
+.btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none;}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.term-wrap{margin-top:12px;}
+.term-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.term-label{font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);}
+.term-clear{font-size:10px;color:var(--text3);cursor:pointer;}
+.term-clear:hover{color:var(--orange);}
+.terminal{background:#0C1B2E;border:1px solid var(--navy2);border-radius:6px;padding:14px;font-family:var(--mono);font-size:11.5px;height:280px;overflow-y:auto;}
+.ll{margin:1px 0;line-height:1.5;}
+.ll.info{color:#94A3B8;}
+.ll.success{color:#4CAF50;}
+.ll.error{color:#EF5350;}
+.ll.warning{color:#FF9800;}
+.ll.system{color:#4DD0E1;}
+.lts{color:#475569;margin-right:7px;font-size:10px;}
+.pipeline{display:flex;align-items:center;margin:16px 0 8px;overflow-x:auto;padding-bottom:4px;}
+.sn{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
+.sc{width:36px;height:36px;border-radius:50%;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;color:var(--text3);background:#fff;transition:all 0.3s;}
+.sc.done{border-color:var(--green);color:var(--green);background:var(--green-dim);}
+.sc.active{border-color:var(--orange);color:var(--orange);background:var(--orange-dim);animation:pulse 1.5s infinite;}
+.sl{font-size:8.5px;color:var(--text3);margin-top:4px;text-align:center;max-width:50px;line-height:1.3;}
+.conn{width:20px;height:2px;background:var(--border);flex-shrink:0;margin-bottom:18px;}
+.conn.done{background:var(--green);}
+.prog-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin:6px 0 12px;}
+.prog-fill{height:100%;background:var(--orange);border-radius:2px;transition:width 0.5s ease;width:0%;}
+.step-card{border:1px solid var(--border);border-radius:6px;padding:16px 18px;margin-bottom:10px;background:#fff;}
+.step-card:hover{border-color:var(--orange);}
+.step-card.running{border-color:var(--orange);background:rgba(191,87,0,0.05);}
+.step-card.done{border-color:var(--green);background:var(--green-dim);}
+.step-card.error{border-color:var(--red);background:var(--red-dim);}
+.step-num{font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--orange);font-weight:500;margin-bottom:3px;}
+.step-name{font-size:15px;color:var(--navy);font-weight:500;font-family:var(--serif);}
+.step-desc{font-size:13px;color:var(--text2);margin-top:5px;line-height:1.6;}
+.fg{margin-bottom:10px;}
+.fl{font-size:9px;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;display:block;font-weight:500;}
+input[type=text],select{background:#fff;border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;padding:7px 11px;width:100%;outline:none;}
+input[type=text]:focus,select:focus{border-color:var(--orange);}
+.alert{padding:10px 13px;border-radius:6px;font-size:12px;margin-bottom:12px;display:flex;align-items:flex-start;gap:8px;line-height:1.5;}
+.alert.warn{background:rgba(230,81,0,0.1);border:1px solid #E65100;color:#7B2D00;}
+.alert.info{background:var(--teal-dim);border:1px solid var(--teal);color:var(--teal);}
+.alert.ok{background:var(--green-dim);border:1px solid var(--green);color:var(--green);}
+.tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.tbl th{text-align:left;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);padding:7px 11px;border-bottom:1px solid var(--border);font-weight:500;}
+.tbl td{padding:8px 11px;border-bottom:1px solid var(--border);color:var(--text2);}
+.tbl tr:last-child td{border-bottom:none;}
+.batch-item{border:1px solid var(--border);border-radius:6px;padding:12px 16px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:#fff;}
+.batch-item:hover{border-color:var(--orange);}
+.batch-item.sel{border-color:var(--orange);background:var(--orange-dim);}
+.pill{font-size:10px;padding:2px 7px;border-radius:20px;border:1px solid;display:inline-block;margin:1px;}
+.pill.green{color:var(--green);border-color:var(--green);background:var(--green-dim);}
+.pill.orange{color:var(--orange);border-color:var(--orange);background:var(--orange-dim);}
+.pill.teal{color:var(--teal);border-color:var(--teal);background:var(--teal-dim);}
+.pill.red{color:var(--red);border-color:var(--red);background:var(--red-dim);}
+.cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cfg-item{background:rgba(191,87,0,0.06);border-radius:6px;padding:9px 12px;border:1px solid var(--border);}
+.cfg-key{font-size:9px;color:var(--text3);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.06em;}
+.cfg-val{font-size:12px;color:var(--orange-dark);word-break:break-all;font-weight:500;}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--orange);border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="sidebar">
+  <div class="logo-block">
+  <img src="data:image/png;base64,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" alt="UT Austin Libraries" style="width:100%;max-width:196px;filter:brightness(0) invert(1);opacity:0.92;display:block;">
+  <div class="logo-sub">AI Music Cataloging &middot; KUT Radio</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-sec">Overview</div>
+    <div class="nav-item active" onclick="go('dashboard')"><div class="nav-dot"></div>Dashboard</div>
+    <div class="nav-sec">CD Workflow</div>
+    <div class="nav-item" onclick="go('new-batch')"><div class="nav-dot"></div>New Batch</div>
+    <div class="nav-item" onclick="go('steps')"><div class="nav-dot"></div>Run Individual Steps</div>
+    <div class="nav-item" onclick="go('batches')"><div class="nav-dot"></div>Batch History</div>
+    <div class="nav-sec">Cataloging</div>
+    <div class="nav-item" onclick="go('original')"><div class="nav-dot"></div>Original Cataloging</div>
+    <div class="nav-item" onclick="go('lowconf')"><div class="nav-dot"></div>Low Confidence Review</div>
+    <div class="nav-sec">Import &amp; Holdings</div>
+    <div class="nav-item" onclick="go('alma')"><div class="nav-dot"></div>Alma Import</div>
+    <div class="nav-item" onclick="go('oclc')"><div class="nav-dot"></div>OCLC Holdings</div>
+    <div class="nav-sec">System</div>
+    <div class="nav-item" onclick="go('settings')"><div class="nav-dot"></div>Settings &amp; Status</div>
+  </nav>
+  <div class="conn-bar">
+    <div class="conn-item"><div class="conn-dot chk" id="dot-oclc"></div><span id="lbl-oclc">OCLC...</span></div>
+    <div class="conn-item"><div class="conn-dot chk" id="dot-alma"></div><span id="lbl-alma">Alma...</span></div>
+    <div class="conn-item"><div class="conn-dot chk" id="dot-ai"></div><span id="lbl-ai">OpenAI...</span></div>
+  </div>
+</aside>
+<main class="main">
+<div class="page active" id="page-dashboard">
+  <div class="page-hdr"><div class="page-title">KUT Radio <span>Collection</span></div><div class="page-desc">AI-assisted cataloging pipeline &middot; University of Texas at Austin Libraries</div></div>
+  <div class="stats-grid">
+    <div class="stat orange"><div class="stat-num" id="s-total">0</div><div class="stat-label">Items in latest batch</div></div>
+    <div class="stat green"><div class="stat-num" id="s-imported">0</div><div class="stat-label">Imported to Alma</div></div>
+    <div class="stat teal"><div class="stat-num" id="s-original">0</div><div class="stat-label">Original cataloging</div></div>
+    <div class="stat red"><div class="stat-num" id="s-review">0</div><div class="stat-label">Needs review</div></div>
+  </div>
+  <div class="card" style="border-left:3px solid var(--orange)">
+    <div class="card-title">Current configuration</div>
+    <div class="cfg-grid">
+      <div class="cfg-item"><div class="cfg-key">Images folder</div><div class="cfg-val" id="c-folder">loading...</div></div>
+      <div class="cfg-item"><div class="cfg-key">Estimated CDs</div><div class="cfg-val" id="c-cds">-</div></div>
+      <div class="cfg-item"><div class="cfg-key">Step 1 model</div><div class="cfg-val" id="c-m1">-</div></div>
+      <div class="cfg-item"><div class="cfg-key">Step 3 model</div><div class="cfg-val" id="c-m3">-</div></div>
+      <div class="cfg-item"><div class="cfg-key">Library / Location</div><div class="cfg-val" id="c-lib">-</div></div>
+      <div class="cfg-item"><div class="cfg-key">Confidence threshold</div><div class="cfg-val" id="c-conf">-</div></div>
+    </div>
+  </div>
+  <div class="card"><div class="card-title">Quick actions</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="go('new-batch')">Start new batch</button>
+      <button class="btn btn-teal" onclick="go('original')">Original cataloging</button>
+      <button class="btn btn-teal" onclick="go('lowconf')">Low confidence review</button>
+      <button class="btn" onclick="go('alma')">Alma import</button>
+      <button class="btn" onclick="go('oclc')">OCLC holdings</button>
+    </div>
+  </div>
+</div>
+<div class="page" id="page-new-batch">
+  <div class="page-hdr"><div class="page-title">New <span>Batch</span></div><div class="page-desc">Configure image folder and run the full CD processing pipeline</div></div>
+  <div class="card" style="border-left:3px solid var(--orange)">
+    <div class="card-title">Batch configuration</div>
+    <div class="fg"><label class="fl">Image folder name (inside cd-image-folders/)</label>
+      <div style="display:flex;gap:8px"><input type="text" id="img-folder" placeholder="cd-scans-batch3"><button class="btn btn-primary" onclick="setFolder()">Set folder</button></div>
+      <div style="margin-top:5px;font-size:11px" id="folder-msg"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Pipeline progress</div>
+    <div class="pipeline">
+      <div class="sn"><div class="sc" id="sc-05">0.5</div><div class="sl">Validate</div></div>
+      <div class="conn" id="cn-1"></div>
+      <div class="sn"><div class="sc" id="sc-1">1</div><div class="sl">Extract</div></div>
+      <div class="conn" id="cn-15"></div>
+      <div class="sn"><div class="sc" id="sc-15">1.5</div><div class="sl">Clean</div></div>
+      <div class="conn" id="cn-2"></div>
+      <div class="sn"><div class="sc" id="sc-2">2</div><div class="sl">OCLC search</div></div>
+      <div class="conn" id="cn-3"></div>
+      <div class="sn"><div class="sc" id="sc-3">3</div><div class="sl">AI match</div></div>
+      <div class="conn" id="cn-4"></div>
+      <div class="sn"><div class="sc" id="sc-4">4</div><div class="sl">Verify</div></div>
+      <div class="conn" id="cn-5"></div>
+      <div class="sn"><div class="sc" id="sc-5">5</div><div class="sl">Outputs</div></div>
+    </div>
+    <div class="prog-bar"><div class="prog-fill" id="main-prog"></div></div>
+  </div>
+  <div class="card">
+    <div class="term-wrap"><div class="term-hdr"><div class="term-label">Live output</div><div class="term-clear" onclick="clr('main-term')">clear</div></div>
+    <div class="terminal" id="main-term"><div class="ll system"><span class="lts">--:--:--</span>Ready. Set image folder above and click Start.</div></div></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-start" onclick="startWorkflow()">Start full workflow (Steps 0.5 to 5)</button>
+      <button class="btn btn-red" id="btn-stop" style="display:none" onclick="stopJob('main-term','btn-start','btn-stop')">Stop</button>
+    </div>
+  </div>
+</div>
+<div class="page" id="page-steps">
+  <div class="page-hdr"><div class="page-title">Individual <span>Steps</span></div><div class="page-desc">Run any step independently</div></div>
+  <div class="step-card" id="card-05"><div class="step-num">Step 0.5</div><div class="step-name">Validate image filenames</div><div class="step-desc">Checks all image files follow the barcode naming convention before any API calls are made.</div><div class="btn-row"><button class="btn btn-primary" onclick="runStep('validate','steps-term','card-05')">Run Step 0.5</button></div></div>
+  <div class="step-card" id="card-1"><div class="step-num">Step 1 -- AI Metadata Extraction</div><div class="step-name">Extract metadata from CD cover images</div><div class="step-desc">Sends CD cover images to OpenAI vision model. Extracts title, artist, publisher, UPC, tracks, year. Uses batch processing automatically for 50% cost saving when batch has 10+ items.</div><div class="btn-row"><button class="btn btn-primary" onclick="runStep('step1','steps-term','card-1')">Run Step 1</button></div></div>
+  <div class="step-card" id="card-15"><div class="step-num">Step 1.5 -- Metadata Normalization</div><div class="step-name">Clean and normalize extracted metadata</div><div class="step-desc">Standardizes extracted metadata -- fixes date formats, normalizes publisher names, extracts UPC codes so OCLC queries are as accurate as possible.</div><div class="btn-row"><button class="btn btn-primary" onclick="runStep('step15','steps-term','card-15')">Run Step 1.5</button></div></div>
+  <div class="step-card" id="card-2"><div class="step-num">Step 2 -- OCLC WorldCat Search</div><div class="step-name">Search OCLC for matching records</div><div class="step-desc">Builds multiple search queries per CD (UPC first, then title+artist combinations) and searches OCLC WorldCat. Returns up to 5 CD-format matches. Checks IXA holdings for each match.</div><div class="btn-row"><button class="btn btn-primary" onclick="runStep('step2','steps-term','card-2')">Run Step 2</button></div></div>
+  <div class="step-card" id="card-3"><div class="step-num">Step 3 -- AI Match Analysis</div><div class="step-name">AI confidence scoring of OCLC matches</div><div class="step-desc">GPT-4.1 compares extracted metadata against OCLC results. Selects best match, assigns 0-100% confidence score. Records scoring 70%+ go to high confidence batch upload. Uses batch mode for 50% cost savings.</div><div class="btn-row"><button class="btn btn-primary" onclick="runStep('step3','steps-term','card-3')">Run Step 3</button></div></div>
+  <div class="step-card" id="card-4"><div class="step-num">Step 4 -- Verification and Alma Holdings Check</div><div class="step-name">Verify tracks, years, and check Alma for duplicates</div><div class="step-desc">Cross-checks track listings and years. Queries live Alma to confirm whether each OCLC number is already held by UT Libraries. Deduplication layer 2.</div><div class="btn-row"><button class="btn btn-primary" onclick="runStep('step4','steps-term','card-4')">Run Step 4</button></div></div>
+  <div class="step-card" id="card-5"><div class="step-num">Step 5 -- Generate Output Files</div><div class="step-name">Sort records and create all deliverable files</div><div class="step-desc">Sorts all records into: High Confidence (Alma batch upload), Held by UT Libraries, Low Confidence (cataloger review), Duplicates. Creates sorting spreadsheet, batch upload file, tracking spreadsheet, MARC file.</div><div class="btn-row"><button class="btn btn-primary" onclick="runStep('step5','steps-term','card-5')">Run Step 5</button></div></div>
+  <div class="step-card" id="card-6"><div class="step-num">Step 6 -- HTML Review Interface (Optional)</div><div class="step-name">Generate visual cataloger review interface</div><div class="step-desc">Creates a visual HTML review interface showing each CD image alongside the AI-suggested OCLC match and confidence score. Recommended for batches of 500 items or fewer.</div><div class="btn-row"><button class="btn btn-primary" onclick="runStep('step6','steps-term','card-6')">Run Step 6</button></div></div>
+  <div class="card" style="margin-top:16px"><div class="term-wrap"><div class="term-hdr"><div class="term-label">Step output</div><div class="term-clear" onclick="clr('steps-term')">clear</div></div><div class="terminal" id="steps-term"><div class="ll system"><span class="lts">--:--:--</span>Click any step button above to run it.</div></div></div></div>
+</div>
+<div class="page" id="page-batches">
+  <div class="page-hdr"><div class="page-title">Batch <span>History</span></div><div class="page-desc">All processed batches with results breakdown</div></div>
+  <div id="batch-list"><div style="color:var(--text3)">Loading...</div></div>
+</div>
+<div class="page" id="page-original">
+  <div class="page-hdr"><div class="page-title">Original <span>Cataloging</span></div><div class="page-desc">Three-step automated workflow for CDs with no OCLC match</div></div>
+  <div class="alert info">Records scoring 70%+ confidence are processed automatically. Records below 70% require HTML review before OCLC submission.</div>
+  <div class="step-card" id="oc-3b"><div class="step-num">Step 3b -- AI MARC Generation</div><div class="step-name">Generate enriched MARC records from CD images</div><div class="step-desc">Reads Step 1 metadata for all no-OCLC-match records. GPT-4.1 generates complete MARC records: 007, 1xx, 245, 264, 300, 336-338, 500, 505, 518, 588, 650, 700. Applies sentence case. Records 70%+ confidence go to batch-ready file automatically.</div><div class="btn-row"><button class="btn btn-primary" onclick="runStep('step3b','orig-term','oc-3b')">Run Step 3b -- Generate MARC records</button><button class="btn btn-teal" id="btn-orig-html" style="display:none" onclick="openOrigHTML()">Open HTML review interface</button></div></div>
+  <div class="step-card" id="oc-3c"><div class="step-num">Step 3c -- Create OCLC Records</div><div class="step-name">Submit approved records to OCLC WorldCat</div><div class="step-desc">Accepts batch-ready .txt file (70%+ confidence, no review needed) or cataloger decisions CSV from HTML review. Searches OCLC before creating any record (deduplication). Creates new OCLC bibliographic records. Sets IXA holdings immediately.</div>
+    <div class="fg" style="margin-top:12px"><label class="fl">Input file -- batch-ready .txt or cataloger decisions .csv</label><input type="text" id="orig-input" placeholder="paste full path to file"></div>
+    <div class="btn-row"><button class="btn btn-primary" onclick="runStep3c()">Run Step 3c -- Create OCLC records</button></div>
+  </div>
+  <div class="step-card" id="oc-3d"><div class="step-num">Step 3d -- Import to Alma</div><div class="step-name">Import approved original records to production Alma</div><div class="step-desc">Reads workflow JSON for records with assigned OCLC numbers. Checks Alma before creating any record (deduplication layer 3). Creates bib + holdings (sf/sffi) + item record. Internal note: KUT Collection AI Assisted Cataloging -- Original Record.</div>
+    <div class="alert warn" style="margin-top:10px">Warning: This writes to PRODUCTION Alma. Dedup check runs before every record.</div>
+    <div class="btn-row"><button class="btn btn-primary" onclick="runStep('step3d','orig-term','oc-3d')">Run Step 3d -- Import to Alma</button></div>
+  </div>
+  <div class="card" style="margin-top:14px"><div class="term-wrap"><div class="term-hdr"><div class="term-label">Original cataloging output</div><div class="term-clear" onclick="clr('orig-term')">clear</div></div><div class="terminal" id="orig-term"><div class="ll system"><span class="lts">--:--:--</span>Ready. Run Step 3b first.</div></div></div></div>
+</div>
+<div class="page" id="page-lowconf">
+  <div class="page-hdr"><div class="page-title">Low Confidence <span>Review</span></div><div class="page-desc">OCLC matches found but AI confidence below 70% -- requires cataloger review</div></div>
+  <div class="step-card"><div class="step-num">Step 6 -- HTML Review Interface</div><div class="step-name">Visual cataloger review of low confidence matches</div><div class="step-desc">Shows each CD image alongside the AI-suggested OCLC match and confidence score. Cataloger approves, selects different OCLC number, or flags for original cataloging. Export decisions to CSV when review is complete.</div><div class="btn-row"><button class="btn btn-teal" onclick="openReviewHTML()">Open HTML review interface</button><button class="btn btn-primary" onclick="runStep('step6','lc-term','')">Re-generate HTML interface</button></div></div>
+  <div class="step-card"><div class="step-num">Step 7 -- Apply Cataloger Decisions</div><div class="step-name">Process exported decisions CSV</div><div class="step-desc">After reviewing and exporting decisions from the HTML interface, Step 7 updates the sorting spreadsheet, batch upload file, tracking spreadsheet, MARC file, and decisions-history audit trail.</div>
+    <div class="fg" style="margin-top:12px"><label class="fl">Cataloger decisions CSV</label><input type="text" id="s7-csv" placeholder="paste full path to cataloger-decisions CSV"></div>
+    <div class="fg"><label class="fl">Results folder path</label><input type="text" id="s7-results" placeholder="paste full path to results folder"></div>
+    <div class="btn-row"><button class="btn btn-primary" onclick="showStep7Cmd()">Show terminal command for Step 7</button></div>
+    <div id="s7-out" style="display:none;margin-top:10px"></div>
+  </div>
+  <div class="card" style="margin-top:14px"><div class="term-wrap"><div class="term-hdr"><div class="term-label">Low confidence output</div><div class="term-clear" onclick="clr('lc-term')">clear</div></div><div class="terminal" id="lc-term"><div class="ll system"><span class="lts">--:--:--</span>Ready.</div></div></div></div>
+</div>
+<div class="page" id="page-alma">
+  <div class="page-hdr"><div class="page-title">Alma <span>Import</span></div><div class="page-desc">Import high-confidence batch upload file to production Alma ILS</div></div>
+  <div class="alert warn">Warning: This writes to PRODUCTION Alma -- University of Texas at Austin. Three-layer deduplication runs before every record.</div>
+  <div class="step-card"><div class="step-num">Alma Batch Upload</div><div class="step-name">Import high-confidence OCLC-matched records</div><div class="step-desc">Takes the batch upload file from Step 5. For each record: checks if OCLC number already exists in Alma, fetches MARCXML from OCLC WorldCat, imports bib, creates holdings at sf/sffi, creates item with CD policy and KUT internal note. Writes receipt CSV to AI_Music_Operations/alma-imports/.</div>
+    <div class="fg" style="margin-top:12px"><label class="fl">Select batch</label><select id="alma-sel" onchange="loadAlmaPath()"><option value="">Loading...</option></select></div>
+    <div id="alma-info" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
+    <div class="btn-row" style="margin-top:12px"><button class="btn btn-primary" onclick="runAlmaImport()">Import to Alma</button></div>
+  </div>
+  <div class="card" style="margin-top:14px"><div class="term-wrap"><div class="term-hdr"><div class="term-label">Import output</div><div class="term-clear" onclick="clr('alma-term')">clear</div></div><div class="terminal" id="alma-term"><div class="ll system"><span class="lts">--:--:--</span>Select a batch above.</div></div></div></div>
+</div>
+<div class="page" id="page-oclc">
+  <div class="page-hdr"><div class="page-title">OCLC <span>Holdings</span></div><div class="page-desc">Set IXA holdings in OCLC WorldCat after Alma import</div></div>
+  <div class="step-card"><div class="step-num">OCLC Holdings Update</div><div class="step-name">Set UT Austin institutional holdings in WorldCat</div><div class="step-desc">After records are imported to Alma, this step notifies OCLC WorldCat that UT Austin Libraries holds these titles -- making them visible for interlibrary loan. Extracts OCLC numbers from the batch upload file, saves to AI_Music_Operations/oclc-holdings/cd/, then sets IXA holdings via the OCLC Metadata API.</div>
+    <div class="fg" style="margin-top:12px"><label class="fl">Select batch</label><select id="oclc-sel"><option value="">Loading...</option></select></div>
+    <div id="oclc-info" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
+    <div class="btn-row" style="margin-top:12px"><button class="btn btn-primary" onclick="runOCLC()">Set OCLC holdings</button></div>
+  </div>
+  <div class="card" style="margin-top:14px"><div class="term-wrap"><div class="term-hdr"><div class="term-label">Holdings output</div><div class="term-clear" onclick="clr('oclc-term')">clear</div></div><div class="terminal" id="oclc-term"><div class="ll system"><span class="lts">--:--:--</span>Select a batch above.</div></div></div></div>
+</div>
+<div class="page" id="page-settings">
+  <div class="page-hdr"><div class="page-title">Settings <span>&amp; Status</span></div><div class="page-desc">Connection status and environment configuration</div></div>
+  <div class="card" style="border-left:3px solid var(--orange)"><div class="card-title">Service connections</div>
+    <table class="tbl"><thead><tr><th>Service</th><th>Status</th><th>Details</th></tr></thead><tbody id="conn-tbody"><tr><td>OCLC WorldCat</td><td><span class="spinner"></span></td><td style="color:var(--text3)">Testing...</td></tr><tr><td>Alma ILS</td><td><span class="spinner"></span></td><td style="color:var(--text3)">Testing...</td></tr><tr><td>OpenAI</td><td><span class="spinner"></span></td><td style="color:var(--text3)">Checking...</td></tr></tbody></table>
+    <div class="btn-row" style="margin-top:12px"><button class="btn" onclick="testConn()">Re-test all connections</button></div>
+  </div>
+  <div class="card"><div class="card-title">Environment variables</div><table class="tbl"><thead><tr><th>Variable</th><th>Status</th><th>Purpose</th></tr></thead><tbody id="env-tbody"></tbody></table></div>
+  <div class="card"><div class="card-title">Server info</div><div style="font-size:12px;color:var(--text2);line-height:1.8"><div>Access URL: <strong>http://localhost:8000</strong></div><div>For shared access: deploy to a UT Libraries server for a stable institutional URL</div></div></div>
+</div>
+</main>
+</div>
+<script>
+var currentBatch=null,currentWS=null,almaPath=null;
+
+function go(id){
+  document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});
+  document.querySelectorAll(".nav-item").forEach(function(n){n.classList.remove("active");});
+  var pg=document.getElementById("page-"+id);
+  if(pg) pg.classList.add("active");
+  document.querySelectorAll(".nav-item").forEach(function(n){
+    var oc=n.getAttribute("onclick");
+    if(oc&&oc.indexOf(id)>=0) n.classList.add("active");
+  });
+  if(id==="batches") loadBatches();
+  if(id==="alma") loadAlmaBatches();
+  if(id==="oclc") loadOCLCBatches();
+  if(id==="settings"){testConn();loadEnv();}
+}
+
+function init(){
+  loadConfig();
+  checkConnStatus();
+  loadLatestStats();
+}
+
+function loadConfig(){
+  fetch("/api/config").then(function(r){return r.json();}).then(function(d){
+    document.getElementById("c-folder").textContent=d.images_folder||"not set";
+    document.getElementById("c-cds").textContent=d.estimated_cds?(d.estimated_cds+" CDs"):"0";
+    document.getElementById("c-m1").textContent=d.step1_model||"-";
+    document.getElementById("c-m3").textContent=d.step3_model||"-";
+    document.getElementById("c-lib").textContent=(d.library_code||"?")+" / "+(d.location_code||"?");
+    document.getElementById("c-conf").textContent=d.confidence_threshold?(d.confidence_threshold+"%"):"-";
+    if(d.images_folder){var parts=d.images_folder.split("/");document.getElementById("img-folder").value=parts[parts.length-1];}
+  }).catch(function(e){console.error("Config load failed:",e);});
+}
+
+function checkConnStatus(){
+  fetch("/api/test/oclc").then(function(r){return r.json();}).then(function(d){
+    document.getElementById("dot-oclc").className="conn-dot "+(d.ok?"ok":"err");
+    document.getElementById("lbl-oclc").textContent=d.ok?"OCLC connected":"OCLC error";
+  }).catch(function(){document.getElementById("dot-oclc").className="conn-dot err";document.getElementById("lbl-oclc").textContent="OCLC unreachable";});
+  fetch("/api/test/alma").then(function(r){return r.json();}).then(function(d){
+    document.getElementById("dot-alma").className="conn-dot "+(d.ok?"ok":"err");
+    document.getElementById("lbl-alma").textContent=d.ok?"Alma "+(d.environment||""):"Alma error";
+  }).catch(function(){document.getElementById("dot-alma").className="conn-dot err";document.getElementById("lbl-alma").textContent="Alma unreachable";});
+  fetch("/api/config").then(function(r){return r.json();}).then(function(d){
+    var ok=d.env_check&&d.env_check.openai;
+    document.getElementById("dot-ai").className="conn-dot "+(ok?"ok":"err");
+    document.getElementById("lbl-ai").textContent=ok?"OpenAI key set":"OpenAI key missing";
+  }).catch(function(){});
+}
+
+function loadLatestStats(){
+  fetch("/api/batches").then(function(r){return r.json();}).then(function(d){
+    if(!d.batches||!d.batches.length) return;
+    var b=d.batches[0];
+    currentBatch=b.id;
+    var s=b.stats||{};
+    document.getElementById("s-total").textContent=b.total||0;
+    document.getElementById("s-imported").textContent=s["Alma Batch Upload (High Confidence)"]||0;
+    document.getElementById("s-original").textContent=s["Cataloger Review (Low Confidence)"]||0;
+    document.getElementById("s-review").textContent=s["Cataloger Review (Low Confidence)"]||0;
+    if(b.has_original_cataloging){var btn=document.getElementById("btn-orig-html");if(btn)btn.style.display="inline-flex";}
+  }).catch(function(e){console.error("Stats load failed:",e);});
+}
+
+function runJob(jobType,params,termId,onDone){
+  if(currentWS){currentWS.close();currentWS=null;}
+  var term=document.getElementById(termId);
+  var ws=new WebSocket("ws://"+location.host+"/ws/run/"+jobType);
+  currentWS=ws;
+  ws.onopen=function(){
+    ws.send(JSON.stringify(params||{}));
+    addLog(term,"system","Starting "+jobType+"...");
+  };
+  ws.onmessage=function(e){
+    var msg=JSON.parse(e.data);
+    if(msg.type==="done"){currentWS=null;if(onDone)onDone(msg.code);}
+    else{addLog(term,msg.type||"info",msg.message,msg.ts);updatePipeline(msg.message);}
+  };
+  ws.onerror=function(){addLog(term,"error","WebSocket error -- is the server running?");};
+  ws.onclose=function(){if(currentWS===ws)currentWS=null;};
+}
+
+function addLog(term,level,msg,ts){
+  if(!term) return;
+  var d=document.createElement("div");
+  d.className="ll "+(level||"info");
+  var t=ts||new Date().toTimeString().slice(0,8);
+  d.innerHTML="<span class=\"lts\">"+t+"</span>"+esc(msg);
+  term.appendChild(d);
+  term.scrollTop=term.scrollHeight;
+}
+
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function clr(id){var el=document.getElementById(id);if(el)el.innerHTML="";}
+
+var stepKw={"sc-05":["validat","step 0.5"],"sc-1":["step 1:","extract metadata"],"sc-15":["step 1.5","normaliz"],"sc-2":["step 2:","oclc","query"],"sc-3":["step 3:","analyze","confidence"],"sc-4":["step 4:","verif"],"sc-5":["step 5:","output","sorting"]};
+var doneSteps={},activeStep=null;
+
+function updatePipeline(msg){
+  var lo=msg.toLowerCase();
+  for(var id in stepKw){
+    var kws=stepKw[id];
+    var found=false;
+    for(var i=0;i<kws.length;i++){if(lo.indexOf(kws[i])>=0){found=true;break;}}
+    if(found){
+      if(activeStep&&activeStep!==id){
+        var prev=document.getElementById(activeStep);
+        if(prev)prev.className="sc done";
+        doneSteps[activeStep]=true;
+        var cn=document.getElementById("cn-"+activeStep.replace("sc-",""));
+        if(cn)cn.className="conn done";
+      }
+      if(!doneSteps[id]){var el=document.getElementById(id);if(el)el.className="sc active";activeStep=id;}
+    }
+  }
+  var total=Object.keys(stepKw).length;
+  var done=Object.keys(doneSteps).length;
+  var pb=document.getElementById("main-prog");
+  if(pb)pb.style.width=Math.round(done/total*100)+"%";
+}
+
+function resetPipeline(){
+  doneSteps={};activeStep=null;
+  for(var id in stepKw){var el=document.getElementById(id);if(el)el.className="sc";}
+  var pb=document.getElementById("main-prog");if(pb)pb.style.width="0%";
+}
+
+function startWorkflow(){
+  resetPipeline();
+  var s=document.getElementById("btn-start");
+  var st=document.getElementById("btn-stop");
+  if(s){s.disabled=true;s.style.display="none";}
+  if(st)st.style.display="inline-flex";
+  runJob("step1",{},"main-term",function(code){
+    if(s){s.disabled=false;s.style.display="inline-flex";}
+    if(st)st.style.display="none";
+    if(code===0)loadLatestStats();
+  });
+}
+
+function stopJob(termId,startId,stopId){
+  if(currentWS){currentWS.close();currentWS=null;}
+  var term=document.getElementById(termId);
+  if(term)addLog(term,"warning","Stopped by user.");
+  var s=document.getElementById(startId);if(s){s.disabled=false;s.style.display="inline-flex";}
+  var st=document.getElementById(stopId);if(st)st.style.display="none";
+}
+
+function runStep(jobType,termId,cardId){
+  if(cardId){var c=document.getElementById(cardId);if(c)c.classList.add("running");}
+  runJob(jobType,{},termId,function(code){
+    if(cardId){var c=document.getElementById(cardId);if(c){c.classList.remove("running");c.classList.add(code===0?"done":"error");setTimeout(function(){if(c)c.classList.remove("done","error");},4000);}}
+    if(jobType==="step3b"&&code===0){var btn=document.getElementById("btn-orig-html");if(btn)btn.style.display="inline-flex";loadLatestStats();}
+  });
+}
+
+function runStep3c(){
+  var input=document.getElementById("orig-input").value.trim();
+  if(!input){alert("Enter the path to the batch-ready .txt file or decisions .csv file.");return;}
+  var c=document.getElementById("oc-3c");if(c)c.classList.add("running");
+  runJob("step3c",{"csv_path":input},"orig-term",function(code){
+    var c=document.getElementById("oc-3c");
+    if(c){c.classList.remove("running");c.classList.add(code===0?"done":"error");setTimeout(function(){c.classList.remove("done","error");},4000);}
+  });
+}
+
+function setFolder(){
+  var name=document.getElementById("img-folder").value.trim();
+  if(!name) return;
+  var folder="cd-image-folders/"+name;
+  fetch("/api/config/images-folder",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({"folder":folder})})
+  .then(function(r){return r.json();})
+  .then(function(r){
+    var msg=document.getElementById("folder-msg");
+    if(r.ok){msg.textContent="Config updated -- folder set to "+folder;msg.style.color="var(--green)";loadConfig();}
+    else{msg.textContent="Error: "+(r.error||"Unknown");msg.style.color="var(--red)";}
+  }).catch(function(e){var msg=document.getElementById("folder-msg");msg.textContent="Error: "+e.message;msg.style.color="var(--red)";});
+}
+
+function loadBatches(){
+  var c=document.getElementById("batch-list");
+  c.innerHTML="<div style=\"color:var(--text3)\">Loading...</div>";
+  fetch("/api/batches").then(function(r){return r.json();}).then(function(d){
+    if(!d.batches.length){c.innerHTML="<div style=\"color:var(--text3)\">No batches found.</div>";return;}
+    c.innerHTML="";
+    d.batches.forEach(function(b){
+      var s=b.stats||{};
+      var div=document.createElement("div");
+      div.className="batch-item"+(b.id===currentBatch?" sel":"");
+      var pills="";
+      if(s["Alma Batch Upload (High Confidence)"]||0) pills+='<span class="pill green">'+(s["Alma Batch Upload (High Confidence)"]||0)+' imported</span>';
+      if(s["Held by UT Libraries (IXA)"]||0) pills+='<span class="pill teal">'+(s["Held by UT Libraries (IXA)"]||0)+' held</span>';
+      if(s["Cataloger Review (Low Confidence)"]||0) pills+='<span class="pill orange">'+(s["Cataloger Review (Low Confidence)"]||0)+' review</span>';
+      if(s["Duplicate"]||0) pills+='<span class="pill red">'+(s["Duplicate"]||0)+' dupes</span>';
+      if(b.has_original_cataloging) pills+='<span class="pill orange">orig catalog</span>';
+      div.innerHTML='<div><div style="font-family:var(--serif);font-size:14px;color:var(--navy)">'+b.date+'</div><div style="font-size:11px;color:var(--text3);margin-top:2px">'+(b.total||0)+' items total</div></div><div style="display:flex;gap:5px;flex-wrap:wrap">'+pills+'</div>';
+      div.onclick=function(){currentBatch=b.id;document.querySelectorAll(".batch-item").forEach(function(x){x.classList.remove("sel");});div.classList.add("sel");};
+      c.appendChild(div);
+    });
+  }).catch(function(e){c.innerHTML="<div style=\"color:var(--red)\">Error: "+e.message+"</div>";});
+}
+
+function loadAlmaBatches(){
+  var sel=document.getElementById("alma-sel");
+  fetch("/api/batches").then(function(r){return r.json();}).then(function(d){
+    sel.innerHTML=d.batches.map(function(b){return '<option value="'+b.id+'">'+b.date+' ('+(b.total||0)+' items)</option>';}).join("");
+    if(d.batches.length)loadAlmaPath();
+  }).catch(function(){});
+}
+
+function loadAlmaPath(){
+  var id=document.getElementById("alma-sel").value;
+  if(!id) return;
+  fetch("/api/batches/"+id+"/batch-upload-path").then(function(r){return r.json();}).then(function(d){
+    almaPath=d.path;
+    document.getElementById("alma-info").textContent=d.path?"-> "+d.path:"No batch upload file found.";
+  }).catch(function(){});
+}
+
+function runAlmaImport(){
+  if(!almaPath){alert("No batch upload file found. Run Step 5 first.");return;}
+  if(!confirm("Import to PRODUCTION Alma?\n\nFile: "+almaPath+"\n\nDeduplication will run before every record.")) return;
+  runJob("alma_import",{"txt_path":almaPath},"alma-term",function(){loadLatestStats();});
+}
+
+function loadOCLCBatches(){
+  var sel=document.getElementById("oclc-sel");
+  fetch("/api/batches").then(function(r){return r.json();}).then(function(d){
+    sel.innerHTML=d.batches.map(function(b){return '<option value="'+b.id+'">'+b.date+' ('+(b.total||0)+' items)</option>';}).join("");
+  }).catch(function(){});
+}
+
+function runOCLC(){
+  var id=document.getElementById("oclc-sel").value;
+  if(!id) return;
+  fetch("/api/batches/"+id+"/oclc-numbers-path").then(function(r){return r.json();}).then(function(d){
+    if(!d.path){alert("Error: "+(d.error||"Could not get OCLC numbers"));return;}
+    document.getElementById("oclc-info").textContent=d.count+" OCLC numbers -> "+d.path;
+    if(!confirm("Set IXA holdings for "+d.count+" OCLC numbers?\n\n"+d.path)) return;
+    runJob("oclc_holdings",{"numbers_path":d.path,"format":"cd"},"oclc-term",null);
+  }).catch(function(e){alert("Error: "+e.message);});
+}
+
+function openOrigHTML(){
+  if(!currentBatch) return;
+  fetch("/api/batches/"+currentBatch+"/files").then(function(r){return r.json();}).then(function(d){
+    var f=null;
+    for(var i=0;i<d.files.length;i++){if(d.files[i].name.indexOf("original-catalog-index")===0){f=d.files[i];break;}}
+    if(f) window.open("file://"+f.path,"_blank");
+    else alert("No original cataloging HTML found. Run Step 3b first.");
+  }).catch(function(){});
+}
+
+function openReviewHTML(){
+  if(!currentBatch) return;
+  fetch("/api/batches/"+currentBatch+"/files").then(function(r){return r.json();}).then(function(d){
+    var f=null;
+    for(var i=0;i<d.files.length;i++){if(d.files[i].name.indexOf("review-index")===0){f=d.files[i];break;}}
+    if(f) window.open("file://"+f.path,"_blank");
+    else alert("No review HTML found. Run Step 6 first.");
+  }).catch(function(){});
+}
+
+function showStep7Cmd(){
+  var csv=document.getElementById("s7-csv").value.trim();
+  var res=document.getElementById("s7-results").value.trim();
+  var out=document.getElementById("s7-out");
+  out.style.display="block";
+  out.innerHTML='<div class="alert info">Run in terminal:<br><br>cd ~/Documents/ai-music-metadata-project/ai-music-workflow/cd-processing<br>python3 step_7_cd.py<br><br>When prompted enter:<br>CSV path: '+esc(csv||"paste CSV path")+"<br>Results folder: "+esc(res||"paste results path")+"</div>";
+}
+
+function testConn(){
+  var tbody=document.getElementById("conn-tbody");
+  tbody.innerHTML='<tr><td>OCLC WorldCat</td><td><span class="spinner"></span></td><td style="color:var(--text3)">Testing...</td></tr><tr><td>Alma ILS</td><td><span class="spinner"></span></td><td style="color:var(--text3)">Testing...</td></tr><tr><td>OpenAI</td><td><span class="spinner"></span></td><td style="color:var(--text3)">Checking...</td></tr>';
+  Promise.all([
+    fetch("/api/test/oclc").then(function(r){return r.json();}),
+    fetch("/api/test/alma").then(function(r){return r.json();}),
+    fetch("/api/config").then(function(r){return r.json();})
+  ]).then(function(results){
+    var oclc=results[0],alma=results[1],cfg=results[2];
+    var rows=[
+      [oclc.ok,"OCLC WorldCat",oclc.ok?"Connected":"Error: "+(oclc.error||oclc.status)],
+      [alma.ok,"Alma ILS",alma.ok?(alma.environment||"")+" "+(alma.institution||""):"Error: "+(alma.error||alma.status)],
+      [cfg.env_check&&cfg.env_check.openai,"OpenAI",cfg.env_check&&cfg.env_check.openai?"OPENAI_API_KEY is set":"OPENAI_API_KEY not found"]
+    ];
+    tbody.innerHTML=rows.map(function(r){
+      return '<tr><td>'+r[1]+'</td><td style="color:'+(r[0]?"var(--green)":"var(--red)")+'">'+( r[0]?"OK":"Error")+"</td><td style=\"color:var(--text3)\">"+r[2]+"</td></tr>";
+    }).join("");
+  }).catch(function(e){tbody.innerHTML='<tr><td colspan=3 style="color:var(--red)">Error: '+e.message+"</td></tr>";});
+}
+
+function loadEnv(){
+  var tbody=document.getElementById("env-tbody");
+  fetch("/api/config").then(function(r){return r.json();}).then(function(d){
+    var vars=[
+      ["OPENAI_API_KEY",d.env_check&&d.env_check.openai,"AI metadata extraction and MARC generation"],
+      ["OCLC_CLIENT_ID",d.env_check&&d.env_check.oclc_id,"OCLC WorldCat search and record creation"],
+      ["OCLC_SECRET",d.env_check&&d.env_check.oclc_id,"OCLC WorldCat authentication"],
+      ["OCLC_INSTITUTION_SYMBOL",d.env_check&&d.env_check.oclc_symbol,"Original cataloging (IXA)"],
+      ["ALMA_SANDBOX_API_KEY",d.env_check&&d.env_check.alma,"Alma API key for record creation"],
+      ["ALMA_LIBRARY_CODE",!!(d.library_code),"Library code for holdings (sf)"],
+      ["ALMA_LOCATION_CODE",!!(d.location_code),"Location code for holdings (sffi)"],
+      ["AI_MUSIC_OPERATIONS_DIR",true,"Output directory for reports and logs"]
+    ];
+    tbody.innerHTML=vars.map(function(r){
+      return '<tr><td>'+r[0]+'</td><td style="color:'+(r[1]?"var(--green)":"var(--red)")+'">'+( r[1]?"Set":"Missing")+"</td><td style=\"color:var(--text3)\">"+r[2]+"</td></tr>";
+    }).join("");
+  }).catch(function(){});
+}
+
+init();
+</script>
+</body>
+</html>

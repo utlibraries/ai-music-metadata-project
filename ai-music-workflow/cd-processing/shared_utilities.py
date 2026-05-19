@@ -43,11 +43,18 @@ def get_workflow_json_path(results_folder: str) -> str:
     Returns:
         Full path to the workflow JSON file
     """
+    # Handle both structures: data/ subfolder or results folder directly
+    import os as _os
+    if not _os.path.exists(results_folder):
+        # Try parent folder (results root) instead of data/ subfolder
+        parent = _os.path.dirname(results_folder)
+        if _os.path.exists(parent):
+            results_folder = parent
+
     # Look for any file matching the pattern
     matching_files = [f for f in os.listdir(results_folder)
                       if f.startswith("full-workflow-data-cd-") and f.endswith(".json")]
 
-    
     if not matching_files:
         raise FileNotFoundError(f"No workflow JSON file found in {results_folder}")
     

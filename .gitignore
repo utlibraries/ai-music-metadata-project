@@ -61,3 +61,6 @@ AI_Music_Operations/
 *.csv
 test-upload.txtai-music-workflow/cd-processing/cd-image-folders/
 ai-music-workflow/lp-processing/lp-image-folders/
+
+# Local image folders and assets
+*.png

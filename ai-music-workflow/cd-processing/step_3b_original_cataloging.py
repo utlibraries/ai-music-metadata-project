@@ -47,6 +47,24 @@ def get_no_match_barcodes(results_folder):
     import glob
 
     deliverables = os.path.join(results_folder, "deliverables")
+
+    # Fallback: if no deliverables folder exists, read all barcodes from Step 1 JSON
+    # This supports standalone Step 3b runs on targeted no-match batches
+    if not os.path.exists(deliverables):
+        print("No deliverables folder found — reading all barcodes from Step 1 data.")
+        from shared_utilities import get_workflow_json_path
+        from json_workflow import load_workflow_json
+        data_folder = os.path.join(results_folder, "data")
+        try:
+            json_path = get_workflow_json_path(data_folder)
+            workflow_data = load_workflow_json(json_path)
+            barcodes = list(workflow_data.get("records", {}).keys())
+            print(f"Found {len(barcodes)} records from Step 1 data.")
+            return barcodes
+        except Exception as e:
+            print(f"Could not read Step 1 data: {e}")
+            return []
+
     files = [f for f in os.listdir(deliverables) if f.startswith("cd-workflow-sorting-") and f.endswith(".xlsx")]
     if not files:
         print("No sorting spreadsheet found in deliverables.")
@@ -850,6 +868,7 @@ def create_report(results_folder, barcodes_processed, marc_results, workflow_dat
     # For original cataloging OCLC number is not yet assigned — use placeholder
     # Step 3c will fill in the real OCLC number after creation
     batch_filename = f"original-cataloging-batch-ready-{current_ts}.txt"
+    os.makedirs(deliverables, exist_ok=True)
     batch_path = os.path.join(deliverables, batch_filename)
     with open(batch_path, 'w', encoding='utf-8') as f:
         for barcode, score, title in batch_ready:
