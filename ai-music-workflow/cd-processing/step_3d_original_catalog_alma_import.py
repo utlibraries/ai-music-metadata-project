@@ -296,7 +296,7 @@ def get_records_ready_for_alma(workflow_data):
                 step3b.get("marc_fields")):
             ready.append({
                 "barcode": barcode,
-                "oclc_number": step3b["assigned_oclc_number"],
+                "oclc_number": step3b["assigned_oclc_number"].lstrip("on") if isinstance(step3b["assigned_oclc_number"], str) and step3b["assigned_oclc_number"].startswith("on") else step3b["assigned_oclc_number"],
                 "marc_fields": step3b["marc_fields"]
             })
     return ready
