@@ -666,7 +666,26 @@ def main():
     records_skipped_none_matches = 0
     records_main_match_at_ixa = 0
     records_other_matches_at_ixa = 0
-    
+
+    # ── RESUME: load already-verified barcodes from workflow JSON ────────────
+    import json as _json, glob as _glob
+    _already_verified = set()
+    _json_files = _glob.glob(os.path.join(results_folder_path, "data", "*.json"))
+    if not _json_files:
+        _json_files = _glob.glob(os.path.join(results_folder_path, "*.json"))
+    if _json_files:
+        try:
+            with open(sorted(_json_files)[-1]) as _jf:
+                _wf = _json.load(_jf)
+            for _bc, _rec in _wf.get("records", {}).items():
+                _s4 = _rec.get("step4_verification", {})
+                if _s4.get("alma_verified") is not None:
+                    _already_verified.add(str(_bc).strip())
+            if _already_verified:
+                print(f"Resume: {len(_already_verified)} records already verified — skipping")
+        except Exception as _e:
+            print(f"Resume check warning: {_e}")
+
     print(f"Starting verification for records with confidence ≥ 80% that mention tracks...")
     print(f"Total rows in spreadsheet: {sheet.max_row - 1}")
     
@@ -702,6 +721,12 @@ def main():
                     records_other_matches_at_ixa += 1
             else:
                 sheet[f'{OTHER_IXA_HOLDING_COLUMN}{row}'].value = 'N/A'
+
+            # ── RESUME: skip if already verified in previous run ───────────
+            _bc_key = str(barcode).strip() if barcode else ""
+            if _bc_key and _bc_key in _already_verified:
+                records_skipped += 1
+                continue
 
             # Verify holdings against Alma API (more reliable than OCLC)
             alma_verification_result = None
