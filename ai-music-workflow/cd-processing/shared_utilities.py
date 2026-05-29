@@ -256,7 +256,13 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
 
         # Try YAML parsing first
         try:
+            # Guard: empty or whitespace-only string — skip to regex fallback
+            if not yaml_str or not yaml_str.strip():
+                raise yaml.YAMLError("Empty input")
             parsed_json = yaml.safe_load(yaml_str)
+            # Guard: YAML returned None or non-dict (e.g. plain string) — skip to regex
+            if not isinstance(parsed_json, dict):
+                raise yaml.YAMLError("YAML did not return a dict")
         except yaml.YAMLError:
             # If YAML fails, try JSON
             import json
@@ -265,13 +271,23 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
             if json_match:
                 json_str = json_match.group(1)
             else:
-                # Try to find JSON-like structure
-                json_match = re.search(r'(\{.*\})', metadata_str, re.DOTALL)
+                # Try to find JSON-like structure — extract first complete {...} block
+                json_match = re.search(r'(\{.*?\})', metadata_str, re.DOTALL)
                 if json_match:
                     json_str = json_match.group(1)
                 else:
-                    json_str = metadata_str
+                    json_str = metadata_str.strip()
+            # Guard: empty JSON string — raise so outer except catches and uses regex
+            if not json_str or not json_str.strip():
+                raise ValueError("Empty JSON string")
+            # Strip any trailing text after the closing brace
+            brace_end = json_str.rfind('}')
+            if brace_end != -1:
+                json_str = json_str[:brace_end+1]
             parsed_json = json.loads(json_str)
+            # Guard: parsed to non-dict
+            if not isinstance(parsed_json, dict):
+                raise ValueError("JSON did not return a dict")
         
         def parse_list_field(value: Any) -> List[str]:
             """Parse a field that might be a list, bracketed string, or comma-separated string."""
