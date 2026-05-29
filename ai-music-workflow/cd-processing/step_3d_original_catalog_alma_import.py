@@ -488,6 +488,28 @@ def main():
         print(f"\n[{i}/{total}] Barcode: {barcode} | OCLC: {oclc_number}")
         result = {"barcode": barcode, "oclc_number": oclc_number}
 
+        # ── RESUME: skip if already successfully imported in previous run ────
+        import json as _json, glob as _glob
+        _data_folder = os.path.join(results_folder, "data")
+        _json_files  = _glob.glob(os.path.join(_data_folder, "*.json"))
+        if not _json_files:
+            _json_files = _glob.glob(os.path.join(results_folder, "*.json"))
+        _already_done = False
+        if _json_files:
+            try:
+                with open(sorted(_json_files)[-1]) as _jf:
+                    _wf = _json.load(_jf)
+                _step3d = _wf.get("records",{}).get(str(barcode),{}).get("step3d_alma_import",{})
+                if _step3d.get("mms_id") and _step3d.get("status") == "success":
+                    print(f"  RESUME: Already in Alma (MMS: {_step3d['mms_id']}) — skipping")
+                    result.update({"status":"already_exists","existing_mms":_step3d["mms_id"]})
+                    processing_results.append(result)
+                    _already_done = True
+            except Exception:
+                pass
+        if _already_done:
+            continue
+
         max_retries = 3
         for attempt in range(max_retries):
             try:

@@ -97,7 +97,7 @@ def get_access_token(client_id, client_secret):
         "grant_type": "client_credentials",
         "scope": "wcapi"  
     }
-    response = requests.post(token_url, data=data, auth=(client_id, client_secret))
+    response = requests.post(token_url, data=data, auth=(client_id, client_secret), timeout=30)
     if response.status_code == 200:
         return response.json()["access_token"]
     else:

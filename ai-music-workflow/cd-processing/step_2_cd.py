@@ -484,7 +484,7 @@ def get_holdings_info(oclc_number, access_token):
     }
     
     try:
-        response = requests.get(endpoint, params=params, headers=headers)
+        response = requests.get(endpoint, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
         
@@ -616,7 +616,7 @@ def query_oclc_api(metadata, barcode, limit=10):
         }
 
         try:
-            response = requests.get(endpoint, params=params, headers=headers)
+            response = requests.get(endpoint, params=params, headers=headers, timeout=20)
             api_calls['count'] += 1
             response.raise_for_status()
             data = response.json()
@@ -758,10 +758,27 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
     # Temporary file path
     temp_output_file = "temp_cd_metadata_progress.xlsx"
     temp_output_path = os.path.join(results_folder_path, temp_output_file)
-    
+
+    # ── RESUME: load already-processed barcodes from temp file ──────────────
+    already_processed = set()
+    if os.path.exists(temp_output_path):
+        try:
+            resume_wb = openpyxl.load_workbook(temp_output_path)
+            resume_ws = resume_wb.active
+            for r in range(2, resume_ws.max_row + 1):
+                bc  = resume_ws.cell(row=r, column=4).value
+                val = resume_ws.cell(row=r, column=6).value
+                if bc and val and str(val).strip() not in ("", "None"):
+                    already_processed.add(str(bc).strip())
+            resume_wb.close()
+            if already_processed:
+                print(f"Resuming — {len(already_processed)} rows already processed, skipping them")
+        except Exception as re_err:
+            print(f"Warning: could not read resume file: {re_err}")
+
     total_rows = ws.max_row
-    processed_rows = 0
-    
+    processed_rows = len(already_processed)
+
     for row in range(2, total_rows + 1):
         metadata_str = ws.cell(row=row, column=5).value  # Column E
         barcode = ws.cell(row=row, column=4).value       # Column D
@@ -772,6 +789,24 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
                 temp_cell = temp_ws.cell(row=row, column=col_idx, value=cell_value)
                 if ws.cell(row=row, column=col_idx).alignment:
                     temp_cell.alignment = Alignment(vertical='top', wrap_text=True)
+            continue
+
+        # ── RESUME: skip if already done ────────────────────────────────────
+        if str(barcode).strip() in already_processed:
+            # Copy existing result from temp file
+            if os.path.exists(temp_output_path):
+                try:
+                    rw2 = openpyxl.load_workbook(temp_output_path)
+                    rs2 = rw2.active
+                    for r2 in range(2, rs2.max_row + 1):
+                        if str(rs2.cell(row=r2, column=4).value).strip() == str(barcode).strip():
+                            for col_idx in range(1, rs2.max_column + 1):
+                                temp_ws.cell(row=row, column=col_idx,
+                                             value=rs2.cell(row=r2, column=col_idx).value)
+                            break
+                    rw2.close()
+                except Exception:
+                    pass
             continue
 
         try:
@@ -890,6 +925,10 @@ def process_metadata_file(input_file, results_folder_path, workflow_json_path):
                     error_message=str(json_error)
                 )
 
+        except requests.exceptions.Timeout:
+            print(f"   TIMEOUT on row {row} (barcode {barcode}) — OCLC took too long, skipping")
+            error_message = "OCLC API timeout — marked for manual review"
+            items_with_issues += 1
         except Exception as e:
             print(f"   Error processing row {row}: {str(e)}")
             error_message = f"Error: {str(e)}"

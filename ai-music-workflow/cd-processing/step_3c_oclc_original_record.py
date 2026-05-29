@@ -557,6 +557,19 @@ def main():
 
         result = {"barcode": barcode, "oclc_created": False, "skipped": False}
 
+        # ── RESUME CHECK: skip if already processed in a previous run ────────
+        existing_record = workflow_data.get("records", {}).get(str(barcode), {})
+        existing_step3c = existing_record.get("step3b_original_cataloging", {})
+        if (existing_step3c.get("status") == "oclc_created" and
+                existing_step3c.get("assigned_oclc_number")):
+            existing_num = existing_step3c["assigned_oclc_number"]
+            print(f"  RESUME: Already has OCLC number {existing_num} — skipping creation")
+            result.update({"oclc_created": True, "oclc_number": existing_num,
+                            "holding_set": existing_step3c.get("holding_set_in_oclc", False),
+                            "note": "Resumed — record already created in previous run"})
+            processing_results.append(result)
+            continue
+
         try:
             # DEDUP CHECK — mandatory
             print(f"  Checking OCLC for existing records...")
