@@ -670,9 +670,9 @@ def main():
     # ── RESUME: load already-verified barcodes from workflow JSON ────────────
     import json as _json, glob as _glob
     _already_verified = set()
-    _json_files = _glob.glob(os.path.join(results_folder_path, "data", "*.json"))
+    _json_files = _glob.glob(os.path.join(results_folder, "data", "*.json"))
     if not _json_files:
-        _json_files = _glob.glob(os.path.join(results_folder_path, "*.json"))
+        _json_files = _glob.glob(os.path.join(results_folder, "*.json"))
     if _json_files:
         try:
             with open(sorted(_json_files)[-1]) as _jf:
