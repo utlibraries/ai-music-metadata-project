@@ -898,13 +898,17 @@ def determine_sort_group(record, confidence_threshold=70):
     held_by_ixa = record.get("held_by_ixa", False)
     confidence_score = record.get("confidence_score", 0)
     
-    # Check confidence level first - low confidence items are always for review
+    # Check confidence level first
     try:
         conf_score = float(confidence_score)
         if conf_score < confidence_threshold:
+            # 0% with no OCLC = original cataloging, not review
+            oclc = record.get("selected_oclc_number") or record.get("oclc_number", "")
+            if conf_score == 0 and not oclc or str(oclc).strip() in ("", "None", "Not found", "N/A", "No OCLC number"):
+                return "Original Cataloging"
             return "Cataloger Review (Low Confidence)"
     except (ValueError, TypeError):
-        return "Cataloger Review (Low Confidence)"
+        return "Original Cataloging"
     
     # Only for high confidence items, check if held by IXA
     if held_by_ixa:
@@ -1286,40 +1290,28 @@ def main():
             print(f"  {group}: {count}")
 
         # ── NEXT STEPS INSTRUCTIONS ──────────────────────────────────────────
-        alma_count    = result['sort_group_counts'].get("Alma Batch Upload (High Confidence)", 0)
-        review_count  = result['sort_group_counts'].get("Cataloger Review (Low Confidence)", 0)
-        orig_count    = result['sort_group_counts'].get("Original Cataloging", 0)
-
-        # Count 0% no-OCLC records as original cataloging candidates
-        import openpyxl as _ox, glob as _gl, os as _os
-        _data_files = _gl.glob(_os.path.join(result.get('results_folder',''), 'data', '*.xlsx'))
-        no_oclc_count = 0
-        if _data_files:
-            try:
-                _wb = _ox.load_workbook(sorted(_data_files)[-1], read_only=True)
-                _ws = _wb.active
-                for _row in _ws.iter_rows(min_row=2, values_only=True):
-                    if not _row[3]: continue
-                    _oclc = str(_row[7]).strip() if _row[7] else ""
-                    try: _conf = int(float(str(_row[8]))) if _row[8] else 0
-                    except: _conf = 0
-                    if _conf == 0 and _oclc in ("","None","Not found","N/A"):
-                        no_oclc_count += 1
-                _wb.close()
-            except Exception: pass
+        alma_count   = result['sort_group_counts'].get("Alma Batch Upload (High Confidence)", 0)
+        review_count = result['sort_group_counts'].get("Cataloger Review (Low Confidence)", 0)
+        orig_count   = result['sort_group_counts'].get("Original Cataloging", 0)
+        dup_count    = result['sort_group_counts'].get("Duplicate", 0)
+        ixa_count    = result['sort_group_counts'].get("Held by UT Libraries (IXA)", 0)
 
         print(f"\n{'='*60}")
         print(f"NEXT STEPS")
         print(f"{'='*60}")
         print(f"  ✓  {alma_count} records ready for Alma Batch Upload")
         print(f"     → Run: Alma Batch Upload from the UI")
-        if no_oclc_count > 0:
-            print(f"\n  →  {no_oclc_count} records have no OCLC match")
+        if orig_count > 0:
+            print(f"\n  →  {orig_count} records have no OCLC match — Original Cataloging queue")
             print(f"     → Run: Step 3b (Original Cataloging) when ready")
             print(f"     → No manual file setup needed — pipeline reads these automatically")
         if review_count > 0:
             print(f"\n  →  {review_count} records need cataloger review (<70% confidence with OCLC match)")
             print(f"     → Run: Step 6 to generate HTML review interface for cataloger")
+        if dup_count > 0:
+            print(f"\n  ✓  {dup_count} within-batch duplicates excluded")
+        if ixa_count > 0:
+            print(f"  ✓  {ixa_count} records already held by UT Libraries (IXA) — excluded")
         print(f"{'='*60}")
     else:
         print("Failed to create all records spreadsheet.")
