@@ -200,10 +200,26 @@ def build_command(job_type: str, params: dict) -> list:
         "step3d":   [py,"-u",str(BASE_DIR/"step_3d_original_catalog_alma_import.py")],
     }
     if job_type == "step3c":
-        csv = params.get("csv_path","")
+        csv = params.get("csv_path","").strip()
+        if not csv:
+            # Auto-detect latest batch-ready file from current results folder
+            import glob as _g
+            results = sorted(_g.glob(str(BASE_DIR/"cd-output-folders/results-*")))
+            if results:
+                candidates = sorted(_g.glob(results[-1]+"/deliverables/original-cataloging-batch-ready-*.txt"))
+                if candidates:
+                    csv = candidates[-1]
         return [py,"-u",str(BASE_DIR/"step_3c_oclc_original_record.py"),csv,"--yes"] if csv else []
     if job_type == "alma_import":
-        txt = params.get("txt_path","")
+        txt = params.get("txt_path","").strip()
+        if not txt:
+            # Auto-detect latest batch upload file
+            import glob as _g
+            results = sorted(_g.glob(str(BASE_DIR/"cd-output-folders/results-*")))
+            if results:
+                candidates = sorted(_g.glob(results[-1]+"/deliverables/batch-upload-alma-cd-*.txt"))
+                if candidates:
+                    txt = candidates[-1]
         return [py,"-u",str(BASE_DIR/"alma_batch_upload_cd.py"),txt,"--yes"] if txt else []
     if job_type == "oclc_holdings":
         np = params.get("numbers_path","")
