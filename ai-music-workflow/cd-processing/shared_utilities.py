@@ -51,16 +51,26 @@ def get_workflow_json_path(results_folder: str) -> str:
         if _os.path.exists(parent):
             results_folder = parent
 
-    # Look for any file matching the pattern
-    matching_files = [f for f in os.listdir(results_folder)
-                      if f.startswith("full-workflow-data-cd-") and f.endswith(".json")]
+    # Look in results_folder and data/ subfolder
+    search_folders = [results_folder, os.path.join(results_folder, "data")]
+    matching_files = []
+    found_folder = results_folder
+    for folder in search_folders:
+        if os.path.exists(folder):
+            files = [f for f in os.listdir(folder)
+                     if f.startswith("full-workflow-data-cd-") and f.endswith(".json")]
+            if files:
+                matching_files = files
+                found_folder = folder
+                break
 
     if not matching_files:
         raise FileNotFoundError(f"No workflow JSON file found in {results_folder}")
+    results_folder = found_folder
     
     # Get the most recent one (sorted alphabetically works since they're timestamped)
     latest_file = sorted(matching_files)[-1]
-    return os.path.join(results_folder, latest_file)
+    return os.path.join(found_folder, latest_file)
 
 def find_latest_cd_metadata_file(results_folder: str) -> Optional[str]:
     """
@@ -73,12 +83,21 @@ def find_latest_cd_metadata_file(results_folder: str) -> Optional[str]:
     Returns:
         Path to the latest CD metadata file, or None if not found
     """
-    files = [f for f in os.listdir(results_folder) 
+    # Search results_folder first, then data/ subfolder
+    found_folder = results_folder
+    files = [f for f in os.listdir(results_folder)
              if f.startswith("full-workflow-data-cd-") and f.endswith(".xlsx")]
+    if not files:
+        data_folder = os.path.join(results_folder, "data")
+        if os.path.exists(data_folder):
+            files = [f for f in os.listdir(data_folder)
+                     if f.startswith("full-workflow-data-cd-") and f.endswith(".xlsx")]
+            if files:
+                found_folder = data_folder
     if not files:
         return None
     latest_file = max(files)
-    return os.path.join(results_folder, latest_file)
+    return os.path.join(found_folder, latest_file)
 
 def get_bib_info_from_workflow(oclc_number: str, workflow_json_path: str) -> Dict[str, Any]:
     """
