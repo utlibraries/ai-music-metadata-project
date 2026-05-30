@@ -163,12 +163,21 @@ async def run_job(websocket: WebSocket, job_type: str):
             await websocket.send_json({"type":"done","code":1})
             return
         await send(f"Running: {cmd[-1]}", "system")
+        # Log file — process output survives WebSocket disconnection
+        import time as _t
+        _log_dir = BASE_DIR / "logs"
+        _log_dir.mkdir(exist_ok=True)
+        _log_path = str(_log_dir / f"live_{job_type}_{int(_t.time())}.log")
+        _log_file = open(_log_path, "w", buffering=1)
+        await send(f"Log: tail -f {_log_path}", "system")
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
             cwd=str(BASE_DIR), env={**os.environ,"PYTHONUNBUFFERED":"1"})
         async for line in proc.stdout:
             text = line.decode("utf-8", errors="replace").rstrip()
             if not text: continue
+            _log_file.write(text + "\n")
+            _log_file.flush()
             lo = text.lower()
             level = "error" if any(w in lo for w in ["error","failed","traceback","exception"]) else \
                     "success" if any(w in lo for w in ["success","completed","ok —","created","imported","done"]) else \
@@ -178,10 +187,14 @@ async def run_job(websocket: WebSocket, job_type: str):
         await proc.wait()
         code = proc.returncode
         msg = "Completed successfully" if code==0 else "Exited with code "+str(code)
+        _log_file.write(msg + "\n")
+        _log_file.close()
         await send(msg, "success" if code==0 else "error")
         await websocket.send_json({"type":"done","code":code})
     except WebSocketDisconnect: pass
     except Exception as e:
+        try: _log_file.close()
+        except: pass
         try: await websocket.send_json({"type":"error","message":str(e)})
         except Exception: pass
 
