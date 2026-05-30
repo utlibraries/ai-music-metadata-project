@@ -202,13 +202,22 @@ def build_command(job_type: str, params: dict) -> list:
     if job_type == "step3c":
         csv = params.get("csv_path","").strip()
         if not csv:
-            # Auto-detect latest batch-ready file from current results folder
+            # Auto-detect: prefer cataloger decisions CSV, fall back to batch-ready TXT
             import glob as _g
             results = sorted(_g.glob(str(BASE_DIR/"cd-output-folders/results-*")))
             if results:
-                candidates = sorted(_g.glob(results[-1]+"/deliverables/original-cataloging-batch-ready-*.txt"))
-                if candidates:
-                    csv = candidates[-1]
+                latest = results[-1]
+                # Priority 1: cataloger decisions CSV
+                csv_files = sorted(_g.glob(latest+"/deliverables/*decisions*.csv"))
+                if not csv_files:
+                    csv_files = sorted(_g.glob(latest+"/*decisions*.csv"))
+                if csv_files:
+                    csv = csv_files[-1]
+                else:
+                    # Priority 2: batch-ready TXT
+                    txt_files = sorted(_g.glob(latest+"/deliverables/original-cataloging-batch-ready-*.txt"))
+                    if txt_files:
+                        csv = txt_files[-1]
         return [py,"-u",str(BASE_DIR/"step_3c_oclc_original_record.py"),csv,"--yes"] if csv else []
     if job_type == "alma_import":
         txt = params.get("txt_path","").strip()
