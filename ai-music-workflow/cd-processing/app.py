@@ -197,7 +197,7 @@ def build_command(job_type: str, params: dict) -> list:
         "step5":    [py,"-u",str(BASE_DIR/"step_5_cd.py")],
         "step6":    [py,"-u",str(BASE_DIR/"step_6_cd.py")],
         "step3b":   [py,"-u",str(BASE_DIR/"step_3b_original_cataloging.py")],
-        "step3d":   [py,"-u",str(BASE_DIR/"step_3d_original_catalog_alma_import.py")],
+        "step3d":   [py,"-u",str(BASE_DIR/"step_3d_original_catalog_alma_import.py"),"--yes"],
     }
     if job_type == "step3c":
         csv = params.get("csv_path","").strip()
