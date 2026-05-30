@@ -40,7 +40,7 @@ async def get_config():
             "step1_model": MODEL_CONFIGS.get("step1_metadata_extraction",{}).get("model",""),
             "step3_model": MODEL_CONFIGS.get("step3_ai_analysis",{}).get("model",""),
             "batch_threshold": MODEL_CONFIGS.get("step1_metadata_extraction",{}).get("batch_threshold",10),
-            "confidence_threshold": PROCESSING_THRESHOLDS.get("confidence",{}).get("high_confidence",80),
+            "confidence_threshold": PROCESSING_THRESHOLDS.get("confidence",{}).get("high_confidence",70),
             "library_code": os.environ.get("ALMA_LIBRARY_CODE",""),
             "location_code": os.environ.get("ALMA_LOCATION_CODE",""),
             "env_check": {

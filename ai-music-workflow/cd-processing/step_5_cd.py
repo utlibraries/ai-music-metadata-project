@@ -747,7 +747,7 @@ def move_workflow_data_files(results_folder, data_folder):
         import traceback
         traceback.print_exc()
     
-def find_duplicate_groups(all_records, similarity_threshold=0.9, confidence_threshold=80):
+def find_duplicate_groups(all_records, similarity_threshold=0.9, confidence_threshold=70):
     """
     Find groups of duplicate records based on similar OCLC numbers or titles.
     Only includes records with confidence >= confidence_threshold in duplicate detection.
@@ -826,7 +826,7 @@ def find_duplicate_groups(all_records, similarity_threshold=0.9, confidence_thre
     
     return duplicate_groups
 
-def determine_sort_group_for_duplicates(duplicate_group, confidence_threshold=80):
+def determine_sort_group_for_duplicates(duplicate_group, confidence_threshold=70):
     """
     Determine sort groups for a group of duplicate records.
     Priority: IXA held > highest confidence > first encountered
@@ -884,7 +884,7 @@ def determine_sort_group_for_duplicates(duplicate_group, confidence_threshold=80
     for record in sorted_duplicates[1:]:
         record["sort_group"] = "Duplicate"
 
-def determine_sort_group(record, confidence_threshold=80):
+def determine_sort_group(record, confidence_threshold=70):
     """
     Determine the sort group for a non-duplicate record.
     
@@ -1055,7 +1055,7 @@ def create_all_records_spreadsheet():
         
         # Only look for duplicates among records with valid OCLC numbers AND high confidence
         records_with_oclc = [record for record in all_records if record["has_valid_oclc"]]
-        duplicate_groups = find_duplicate_groups(records_with_oclc, confidence_threshold=80)
+        duplicate_groups = find_duplicate_groups(records_with_oclc, confidence_threshold=70)
         
         print(f"Found {len(duplicate_groups)} duplicate groups (high confidence only)")
         for i, group in enumerate(duplicate_groups):
@@ -1064,7 +1064,7 @@ def create_all_records_spreadsheet():
         # Process duplicate groups
         print("Processing duplicate groups...")
         for group in duplicate_groups:
-            determine_sort_group_for_duplicates(group, confidence_threshold=80)
+            determine_sort_group_for_duplicates(group, confidence_threshold=70)
         
         # Process remaining records (including low confidence items that were excluded from duplicate detection)
         print("Processing non-duplicate records...")

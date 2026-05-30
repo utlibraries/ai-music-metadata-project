@@ -35,7 +35,7 @@ MODEL_CONFIGS = {
 # File path configurations
 FILE_PATHS = {
     "base_dir": "",
-    "images_folder": "cd-image-folders/cd-scans-batch1-originals",
+    "images_folder": "cd-image-folders/cd-scans-batch3",
     "output_folders": "cd-output-folders",
     "results_folder_prefix": "results-",
     "logs_subfolder": "logs"
@@ -49,7 +49,7 @@ PROCESSING_THRESHOLDS = {
         "minimum_score": 0      # Minimum possible confidence score
     },
     "verification": {
-        "track_similarity_threshold": 80,  # Track similarity percentage threshold
+        "track_similarity_threshold": 70,  # Track similarity percentage threshold
         "track_count_ratio_threshold": 0.7 # Minimum ratio for track count comparison
     },
 }

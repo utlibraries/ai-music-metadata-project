@@ -373,7 +373,7 @@ def calculate_track_similarity(metadata_tracks, oclc_tracks):
         print(f"Final similarity after penalties: {final_similarity:.2f}%")
     
     # Apply multi-part track bonus if needed
-    if multi_part_groups and final_similarity < 80:
+    if multi_part_groups and final_similarity < 70:
         adjusted_similarity = min(79.0, final_similarity + 10.0)
         print(f"Applying multi-part track bonus: final similarity {adjusted_similarity:.2f}%")
         return adjusted_similarity
@@ -686,7 +686,7 @@ def main():
         except Exception as _e:
             print(f"Resume check warning: {_e}")
 
-    print(f"Starting verification for records with confidence ≥ 80% that mention tracks...")
+    print(f"Starting verification for records with confidence ≥ 70% that mention tracks...")
     print(f"Total rows in spreadsheet: {sheet.max_row - 1}")
     
     for row in range(2, sheet.max_row + 1):
@@ -791,7 +791,7 @@ def main():
                 
             try:
                 conf_score = float(confidence_score)
-                if conf_score < 80:
+                if conf_score < 70:
                     # Clear the verification columns for skipped rows
                     sheet[f'{VERIFICATION_COLUMN}{row}'].value = None
                     sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value = None
@@ -894,7 +894,7 @@ def main():
             adjustment_reasons = []
             
             # Check track similarity
-            if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 80:
+            if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 70:
                 adjust_confidence = True
                 adjustment_reasons.append(f"track listing mismatch (similarity {track_similarity:.2f}%, below 80% threshold)")
             
@@ -941,7 +941,7 @@ def main():
                 note = f"\n\n[AUTOMATIC REVIEW: Confidence reduced due to: {'; '.join(adjustment_reasons)}. Please verify manually.]"
                 
                 # Add track comparison details if needed
-                if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 80:
+                if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 70:
                     note += "\n\nTrack comparison:"
                     for i, meta_track in enumerate(metadata_tracks):
                         best_match = 0
@@ -978,7 +978,7 @@ def main():
                 
                 sheet[f'{EXPLANATION_COLUMN}{row}'].value = explanation + note
                 
-                if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 80:
+                if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 70:
                     records_adjusted_tracks += 1
                 
                 if metadata_year and oclc_year and metadata_year != oclc_year:
@@ -989,7 +989,7 @@ def main():
                 verification_result = sheet[f'{VERIFICATION_COLUMN}{row}'].value
                 year_verification_result = sheet[f'{YEAR_VERIFICATION_COLUMN}{row}'].value
                 
-                if track_similarity < 80 and len(metadata_tracks) > 0 and len(oclc_tracks) > 0:
+                if track_similarity < 70 and len(metadata_tracks) > 0 and len(oclc_tracks) > 0:
                     actions.append("track mismatch")
                 
                 if metadata_year and oclc_year and metadata_year != oclc_year:
@@ -1098,8 +1098,8 @@ def main():
         
     # Updated summary statistics
     print(f"Summary:")
-    print(f"  - Processed: {records_processed} records with confidence >= 80% and track listings mentioned")
-    print(f"  - Adjusted for tracks: {records_adjusted_tracks} records due to low track similarity (< 80% match)")
+    print(f"  - Processed: {records_processed} records with confidence >= 70% and track listings mentioned")
+    print(f"  - Adjusted for tracks: {records_adjusted_tracks} records due to low track similarity (< 70% match)")
     print(f"  - Adjusted for years: {records_adjusted_years} records due to publication year mismatch (any difference when both years present)")
     print(f"  - Skipped: {records_skipped} records (low confidence or no track listings)")
     print(f"IXA Holdings:")
