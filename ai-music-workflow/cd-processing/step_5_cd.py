@@ -1076,7 +1076,7 @@ def create_all_records_spreadsheet():
         for record in all_records:
             if id(record) not in processed_records:
                 if record["has_valid_oclc"]:
-                    record["sort_group"] = determine_sort_group(record, confidence_threshold=80)
+                    record["sort_group"] = determine_sort_group(record, confidence_threshold=70)
                 else:
                     # Records without valid OCLC numbers are always low confidence
                     record["sort_group"] = "Cataloger Review (Low Confidence)"
