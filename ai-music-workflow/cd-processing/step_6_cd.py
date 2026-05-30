@@ -1171,6 +1171,41 @@ def main():
     print(f"\nAll cataloger decisions, once processed by Script 7, will be stored in the decisions history spreadsheet.")
     print(f"\n=== Decisions History Spreadsheet Created ===")
     print(f"File: {decisions_file}")
+
+    # ── ORIGINAL CATALOGING QUEUE NOTICE ────────────────────────────────────
+    import openpyxl as _ox, glob as _gl
+    _data_files = _gl.glob(results_folder + "/data/*.xlsx")
+    no_oclc_count = 0
+    review_count  = 0
+    if _data_files:
+        try:
+            _wb = _ox.load_workbook(sorted(_data_files)[-1], read_only=True)
+            _ws = _wb.active
+            for _row in _ws.iter_rows(min_row=2, values_only=True):
+                if not _row[3]: continue
+                _oclc = str(_row[7]).strip() if _row[7] else ""
+                try: _conf = int(float(str(_row[8]))) if _row[8] else 0
+                except: _conf = 0
+                if _conf == 0 and _oclc in ("","None","Not found","N/A"):
+                    no_oclc_count += 1
+                elif 0 < _conf < 70 and _oclc not in ("","None","Not found","N/A"):
+                    review_count += 1
+            _wb.close()
+        except Exception: pass
+
+    print(f"\n{'='*60}")
+    print(f"NEXT STEPS")
+    print(f"{'='*60}")
+    if no_oclc_count > 0:
+        print(f"  →  {no_oclc_count} records have no OCLC match — ready for original cataloging")
+        print(f"     Run Step 3b when ready. No manual file setup needed.")
+    if review_count > 0:
+        print(f"  →  {review_count} records need cataloger review (<70% confidence with OCLC match)")
+        print(f"     Open the HTML index page above and make decisions, then run Step 7.")
+    if no_oclc_count == 0 and review_count == 0:
+        print(f"  ✓  No original cataloging or review queue — all records processed automatically!")
+    print(f"{'='*60}")
+
     return result
 
 if __name__ == "__main__":
