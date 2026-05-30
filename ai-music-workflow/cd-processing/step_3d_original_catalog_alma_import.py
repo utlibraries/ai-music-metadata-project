@@ -19,6 +19,7 @@ Reuses: find_latest_results_folder, get_workflow_json_path, load_workflow_json,
         check_if_oclc_exists_in_alma from alma_batch_upload_cd (dedup — reuse exactly)
 """
 
+from generate_batch_report import generate_batch_report
 import os
 import csv
 import time
@@ -599,6 +600,15 @@ def main():
         print(f"They will appear in Primo VE within 24-48 hours after indexing.")
         if skipped == 0:
             print(f"OCLC holdings were set in Step 3c — no further action needed.")
+
+    # Auto-generate complete batch report
+    try:
+        ops_dir = os.environ.get("AI_MUSIC_OPERATIONS_DIR", "")
+        if ops_dir and results_folder:
+            print(f"\nGenerating complete batch report...")
+            generate_batch_report(results_folder, ops_dir)
+    except Exception as rpt_err:
+        print(f"Note: Report generation skipped: {rpt_err}")
 
 
 if __name__ == "__main__":
