@@ -114,14 +114,43 @@ async def get_oclc_numbers_path(batch_id: str):
     folder = OUTPUT_BASE / batch_id / "deliverables"
     files = list(folder.glob("batch-upload-alma-cd-*.txt")) if folder.exists() else []
     if not files: return {"path": None}
-    lines_data = max(files).read_text(encoding="utf-8").strip().split("\n")
-    nums = [l.split("|")[0].strip() for l in lines_data if "|" in l]
+
+    # Combine ALL batch upload files — avoids missing records when batch was split
+    seen = set()
+    nums = []
+    for f in sorted(files):
+        for line in f.read_text(encoding="utf-8").strip().split("\n"):
+            if "|" not in line: continue
+            oclc = line.split("|")[0].strip()
+            if oclc and oclc not in seen:
+                seen.add(oclc)
+                nums.append(oclc)
+
+    # Also check alma-imports for already-set holdings — avoid duplicates
+    already_set = set()
+    if OPS_DIR and OPS_DIR.exists():
+        holdings_dir = OPS_DIR / "oclc-holdings" / "cd"
+        for csv_file in holdings_dir.glob("*.csv"):
+            try:
+                import csv as _csv
+                with open(csv_file) as cf:
+                    for row in _csv.DictReader(cf):
+                        oclc = (row.get("OCLC") or row.get("oclc_number") or "").strip()
+                        if oclc: already_set.add(oclc)
+            except Exception: pass
+
+    # Filter out already-set holdings
+    new_nums = [n for n in nums if n not in already_set]
+    skipped  = len(nums) - len(new_nums)
+
     if OPS_DIR and OPS_DIR.exists():
         out_dir = OPS_DIR / "oclc-holdings" / "cd"
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"{batch_id}-oclc-numbers.txt"
-        out_path.write_text("\n".join(nums), encoding="utf-8")
-        return {"path": str(out_path), "count": len(nums)}
+        out_path.write_text("\n".join(new_nums), encoding="utf-8")
+        msg = f"{len(new_nums)} new"
+        if skipped: msg += f" ({skipped} already set — skipped)"
+        return {"path": str(out_path), "count": len(new_nums), "message": msg}
     return {"path": None, "error": "AI_MUSIC_OPERATIONS_DIR not set"}
 
 @app.get("/api/test/oclc")
