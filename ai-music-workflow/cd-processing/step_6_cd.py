@@ -96,54 +96,102 @@ def create_review_index(index_path, sort_groups, current_timestamp, total_pages,
     
     total_records = sum(len(records) for records in sort_groups.values())
     
-    html_content = f"""<!DOCTYPE html>
-<html lang="en">
+    review_only_count = len(sort_groups.get("Cataloger Review (Low Confidence)", []))
+    orig_cat_count    = len(sort_groups.get("Original Cataloging", []))
+
+    html_content = f\"\"\"<!DOCTYPE html>
+<html lang=\'en\'>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset=\'UTF-8\'>
     <title>CD Review Index - {current_timestamp}</title>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
-        .header {{ background-color: #2c3e50; color: white; padding: 20px; border-radius: 5px; margin-bottom: 30px; }}
-        .summary {{ background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .page-links {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }}
-        .page-link {{ background-color: #3498db; color: white; padding: 15px; text-decoration: none; border-radius: 5px; text-align: center; font-weight: bold; }}
-        .page-link:hover {{ background-color: #2980b9; }}
-        .sort-group {{ margin: 10px 0; padding: 10px; background-color: #f8f9fa; border-left: 4px solid #3498db; }}
+        body{{font-family:Arial,sans-serif;margin:20px;background:#f5f5f5}}
+        .header{{background:#0C2340;color:white;padding:20px;border-radius:5px;margin-bottom:20px}}
+        .summary{{background:white;padding:20px;border-radius:8px;margin-bottom:20px;box-shadow:0 2px 4px rgba(0,0,0,.1)}}
+        .page-links{{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;margin-top:16px}}
+        .page-link{{background:#3498db;color:white;padding:15px;text-decoration:none;border-radius:5px;text-align:center;font-weight:bold;display:block}}
+        .page-link:hover{{opacity:.85}}
+        .page-link.review{{background:#BF5700}}
+        .sort-group{{margin:8px 0;padding:10px;background:#f8f9fa;border-left:4px solid #3498db}}
+        .sort-group.review{{border-left-color:#BF5700;background:#FAE5D3}}
+        .sort-group.orig{{border-left-color:#e74c3c;background:#fdecea}}
+        .toggle-bar{{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}}
+        .tbtn{{padding:9px 20px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;transition:opacity .2s}}
+        .tbtn.on{{opacity:1}}.tbtn.off{{opacity:.4}}
+        .tbtn.all{{background:#0C2340;color:white}}
+        .tbtn.rev{{background:#BF5700;color:white}}
+        .notice{{padding:11px 15px;border-radius:6px;margin-top:12px;font-weight:bold}}
+        .notice.orig{{background:#fdecea;border-left:4px solid #e74c3c;color:#c0392b}}
+        .notice.ok{{background:#e8f5e9;border-left:4px solid #27ae60;color:#1e8449}}
+        .notice.warn{{background:#FAE5D3;border-left:4px solid #BF5700;color:#7d3400}}
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>CD Cataloger Review Index</h1>
-        <p>Generated: {current_timestamp} | Total Records: {total_records} | Pages: {total_pages}</p>
-    </div>
-    
-    <div class="summary">
-        <h2>Sort Group Summary</h2>"""
-    
+<div class=\'header\'>
+    <h1 style=\'margin:0 0 6px\'>CD Cataloger Review Index</h1>
+    <p style=\'margin:0\'>Generated: {current_timestamp} &nbsp;|&nbsp; Total: {total_records} records &nbsp;|&nbsp; Pages: {total_pages}</p>
+</div>
+<div class=\'summary\'>
+    <h2>Sort Group Summary</h2>\"\"\"
+
     for group, records in sorted(sort_groups.items()):
-        html_content += f'<div class="sort-group"><strong>{group}:</strong> {len(records)} records</div>'
-    
-    html_content += f"""
+        css = "review" if "Low Confidence" in group else ("orig" if "Original" in group else "")
+        html_content += f'<div class="sort-group {css}"><strong>{group}:</strong> {len(records)} records</div>'
+
+    if orig_cat_count > 0:
+        html_content += f'<div class="notice orig">&#9888; {orig_cat_count} records have no OCLC match &mdash; run Step 3b for Original Cataloging. No review needed here.</div>'
+    if review_only_count == 0:
+        html_content += '<div class="notice ok">&#10003; No cataloger review needed &mdash; all matched records met the 70% confidence threshold.</div>'
+    else:
+        html_content += f'<div class="notice warn">&#8594; {review_only_count} records need review &mdash; use the Review Queue filter below.</div>'
+
+    html_content += f\"\"\"
+</div>
+<div class=\'summary\'>
+    <h2>Review Pages</h2>
+    <div class=\'toggle-bar\'>
+        <span style=\'font-weight:bold;color:#555\'>View:</span>
+        <button class=\'tbtn all on\'  id=\'btn-all\'  onclick=\'setFilter(\"all\")\'>All Records ({total_records})</button>
+        <button class=\'tbtn rev {"on" if review_only_count > 0 else "off"}\'  id=\'btn-rev\'  onclick=\'setFilter(\"rev\")\'>Review Queue ({review_only_count})</button>
     </div>
-    
-    <div class="summary">
-        <h2>Review Pages</h2>
-        <div class="page-links">"""
-    
+    <div id=\'pall\' class=\'page-links\'>\"\"\"
+
     for page_num in range(1, total_pages + 1):
         start_record = (page_num - 1) * records_per_page + 1
-        end_record = min(page_num * records_per_page, total_records)
+        end_record   = min(page_num * records_per_page, total_records)
         page_filename = f"review-page-{page_num}-{current_timestamp}.html"
-        
-        html_content += f'''
-            <a href="{page_filename}" class="page-link">
-                Page {page_num}<br>
-                Records {start_record}-{end_record}
-            </a>'''
-    
-    html_content += """
+        html_content += f'<a href="{page_filename}" class="page-link">Page {page_num}<br><small>Records {start_record}-{end_record}</small></a>'
+
+    html_content += f\"\"\"
+    </div>
+    <div id=\'prev\' style=\'display:none\'>
+        <p style=\'color:#BF5700;font-style:italic\'>Showing only Cataloger Review records. Use the filter on each page to see review queue only.</p>
+        <div class=\'page-links\'>\"\"\"
+
+    for page_num in range(1, total_pages + 1):
+        page_filename = f"review-page-{page_num}-{current_timestamp}.html"
+        html_content += f'<a href="{page_filename}#review-only" class="page-link review">Page {page_num} &mdash; Review Queue</a>'
+
+    html_content += \"\"\"
         </div>
+    </div>
+</div>
+<script>
+function setFilter(m){{
+    document.getElementById('pall').style.display = m==='all'?'grid':'none';
+    document.getElementById('prev').style.display = m==='rev'?'block':'none';
+    ['all','rev'].forEach(function(x){{
+        var b=document.getElementById('btn-'+x);
+        b.classList.toggle('on', x===m);
+        b.classList.toggle('off',x!==m);
+    }});
+    try{{localStorage.setItem('idx-filter',m)}}catch(e){{}}
+}}
+try{{var s=localStorage.getItem('idx-filter');if(s)setFilter(s);}}catch(e){{}}
+</script>\"\"\"
+
+    html_content += f\"\"\"
+    </div>
     </div>
     
     <div class="summary">
