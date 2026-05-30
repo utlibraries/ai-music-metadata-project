@@ -356,6 +356,7 @@ function runJob(jobType,params,termId,onDone){
   ws.onmessage=function(e){
     var msg=JSON.parse(e.data);
     if(msg.type==="done"){currentWS=null;if(onDone)onDone(msg.code);}
+    else if(msg.type==="ping"){ws.send(JSON.stringify({type:"pong"}));}
     else{addLog(term,msg.type||"info",msg.message,msg.ts);updatePipeline(msg.message);}
   };
   ws.onerror=function(){addLog(term,"error","WebSocket error -- is the server running?");};

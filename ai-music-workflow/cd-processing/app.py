@@ -173,6 +173,9 @@ async def run_job(websocket: WebSocket, job_type: str):
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
             cwd=str(BASE_DIR), env={**os.environ,"PYTHONUNBUFFERED":"1"})
+
+        last_ping = asyncio.get_event_loop().time()
+
         async for line in proc.stdout:
             text = line.decode("utf-8", errors="replace").rstrip()
             if not text: continue
@@ -184,6 +187,12 @@ async def run_job(websocket: WebSocket, job_type: str):
                     "warning" if any(w in lo for w in ["warning","skip","dedup","blocked"]) else \
                     "system" if any(w in lo for w in ["step ","starting","batch id","authenticat","processing mode","running"]) else "info"
             await send(text, level)
+            # Heartbeat ping every 20s to keep WebSocket alive
+            now = asyncio.get_event_loop().time()
+            if now - last_ping > 20:
+                try: await websocket.send_json({"type":"ping","ts":datetime.now().strftime("%H:%M:%S")})
+                except Exception: pass
+                last_ping = now
         await proc.wait()
         code = proc.returncode
         msg = "Completed successfully" if code==0 else "Exited with code "+str(code)
