@@ -398,12 +398,8 @@ def build_marcxml_from_discovery_record(rec: dict) -> str:
         if "UPC" in id_type and oid.get("id"):
             f024 = df("024", "1", " "); sf(f024, "a", oid["id"])
 
-    # 050/082 (light-touch)
-    cls = rec.get("classification") or {}
-    if cls.get("lc"):
-        f050 = df("050"); sf(f050, "a", cls["lc"])
-    if cls.get("dewey"):
-        f082 = df("082"); sf(f082, "a", cls["dewey"])
+    # 050/082 removed per Whit Williams + Corey Halaychik decision
+    # KUT Radio Collection uses local media call numbers — no LC/Dewey call numbers
 
     # 5xx notes
     note = rec.get("note") or {}
