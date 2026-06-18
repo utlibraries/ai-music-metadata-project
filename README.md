@@ -300,15 +300,14 @@ Settings include:
 ## Support
 
 **Questions, ideas, comments?**  
+Kayode Ishola - kayode.ishola@austin.utexas.edu
 Hannah Moutran - hlm2454@my.utexas.edu
-
 ---
 
 ## License
 
 MIT License
 
----
 ---
 ## Original Cataloging Workflow (Steps 3b, 3c, 3d)
 
