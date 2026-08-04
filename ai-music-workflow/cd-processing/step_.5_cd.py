@@ -44,18 +44,28 @@ def remove_spaces_from_filenames(directory_path):
     
     return modified_files
 
+BARCODE_PREFIX = "059173"  # Required prefix for all UT LSF barcodes
+
 def is_valid_format(filename):
     """Check if filename matches the expected format: {DIGITS_COUNT}digits + letter + extension."""
     name_without_ext = os.path.splitext(filename)[0]
     extension = os.path.splitext(filename)[1].lower()
-    
+
     # Check if extension is valid
     if extension not in VALID_EXTENSIONS:
         return False
-    
+
     # Check if name matches pattern: exact number of digits + single letter
     pattern = f'^\\d{{{DIGITS_COUNT}}}[a-z]$'
-    return bool(re.match(pattern, name_without_ext))
+    if not bool(re.match(pattern, name_without_ext)):
+        return False
+
+    # Check required barcode prefix -- barcodes must start with 059173
+    barcode = name_without_ext[:-1]  # strip trailing letter
+    if not barcode.startswith(BARCODE_PREFIX):
+        return False
+
+    return True
 
 def create_validation_log(results_folder_path, valid_files, invalid_files):
     """Create a log file with validation results."""
