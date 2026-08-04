@@ -271,7 +271,12 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
             if code_block_match:
                 yaml_str = code_block_match.group(1)
             else:
-                yaml_str = metadata_str
+                # Handle truncated responses that have an opening fence but no closing fence
+                opening_fence_match = re.match(r'```(?:yaml)?\s*\n(.*)', metadata_str, re.DOTALL)
+                if opening_fence_match:
+                    yaml_str = opening_fence_match.group(1)
+                else:
+                    yaml_str = metadata_str
 
         # Try YAML parsing first
         try:
@@ -307,6 +312,12 @@ def extract_metadata_fields(metadata_str: str) -> Dict[str, Any]:
             # Guard: parsed to non-dict
             if not isinstance(parsed_json, dict):
                 raise ValueError("JSON did not return a dict")
+            # Guard: dict must have at least one expected top-level catalog key;
+            # otherwise we accidentally grabbed a track object from inside the tracks list
+            _expected_top_level = {"Title Information", "Publishers", "Dates", "Language",
+                                   "Format", "Physical Description", "Contents", "Notes"}
+            if not any(k in parsed_json for k in _expected_top_level):
+                raise ValueError("JSON dict is missing expected top-level catalog keys")
         
         def parse_list_field(value: Any) -> List[str]:
             """Parse a field that might be a list, bracketed string, or comma-separated string."""
