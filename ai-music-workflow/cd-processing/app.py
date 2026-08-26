@@ -37,6 +37,7 @@ async def get_config():
             "images_folder_exists": full_images_path.exists(),
             "total_images": len(all_images),
             "estimated_cds": cd_count,
+            "pdf_count": len(list(full_images_path.glob("*.pdf"))) + len(list(full_images_path.glob("*.PDF"))) if full_images_path.exists() else 0,
             "step1_model": MODEL_CONFIGS.get("step1_metadata_extraction",{}).get("model",""),
             "step3_model": MODEL_CONFIGS.get("step3_ai_analysis",{}).get("model",""),
             "batch_threshold": MODEL_CONFIGS.get("step1_metadata_extraction",{}).get("batch_threshold",10),
@@ -239,6 +240,7 @@ async def run_job(websocket: WebSocket, job_type: str):
 def build_command(job_type: str, params: dict) -> list:
     py = sys.executable
     scripts = {
+        "convert_pdfs": [py,"-u",str(BASE_DIR/"step_0_4_convert_pdfs_cd.py")],  # Step 0.4: PDF -> JPEG
         "validate": [py,"-u",str(BASE_DIR/"step_.5_cd.py")],
         "step1":    [py,"-u",str(BASE_DIR/"step_1_cd.py")],
         "step15":   [py,"-u",str(BASE_DIR/"step_1.5_cd.py")],

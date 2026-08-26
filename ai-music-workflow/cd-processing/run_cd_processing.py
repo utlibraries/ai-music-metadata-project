@@ -230,6 +230,12 @@ def main():
         print(f"\nPlease fix environment issues and try again.")
         return
     
+    # Convert any PDFs to JPEGs before validation (Step 0.4)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    pdf_script = os.path.join(script_dir, "step_0_4_convert_pdfs_cd.py")
+    if os.path.exists(pdf_script):
+        run_script("step_0_4_convert_pdfs_cd.py", "0.4", "Convert PDF scans to JPEGs")
+
     # Validate image files before starting processing
     if not validate_image_files():
         print(f"\nFile validation failed. Please fix issues and try again.")
