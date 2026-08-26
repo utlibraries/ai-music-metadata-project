@@ -18,6 +18,7 @@ Another optional component is the batch upload to Alma Sandbox, which is designe
 
 ## Processing Pipeline
 
+0. **Step 0.4** *(NEW)*: Convert PDF scans to JPEGs — for batches scanned as multi-page PDFs. Runs automatically before Step 0.5.
 1. **Step 0.5**: Validate image file naming
 2. **Step 1**: Extract metadata from images using AI
 3. **Step 1.5**: Clean and normalize extracted metadata
@@ -38,6 +39,8 @@ Another optional component is the batch upload to Alma Sandbox, which is designe
 - **OCLC Integration**: Automated WorldCat searches return up to 10 matching records per item
 - **AI Match Analysis**: LLM evaluates matches, assigns confidence scores, and briefly explains reasoning
 - **Additional Verification**: Automatic track listing and publication year validation
+- **PDF Support**: Batches scanned as multi-page PDFs are automatically converted to JPEGs before processing
+- **Web UI**: Browser-based interface for running the pipeline, monitoring progress, reviewing batches, and triggering Alma imports without using the terminal
 - **Batch Processing**: 50% cost savings for batches over 10 items (automatic)
 - **HTML Review Interface** (Optional but a very convenient tool): Visual review of matches with images.  Make decisions on the page, then export decisions to CSV and process using script 7 to automatically edit cataloging files.
 - **Alma Batch Uploads**: Creates new bibs, holdings, and items by importing bibliographic information from OCLC. Intended for experimentation in Alma SANDBOX and excluded from the automated run script.
@@ -112,7 +115,18 @@ Another optional component is the batch upload to Alma Sandbox, which is designe
 
 ## Quick Start
 
-### Run Workflow - Steps .5 - 6 
+### Option A: Web UI (recommended)
+
+**For CDs and LPs:**
+```bash
+cd ai-music-workflow/cd-processing
+python3 app.py
+```
+Open **http://localhost:8000** in a browser. The UI runs the full pipeline, streams live output, and provides access to all workflow steps including PDF conversion.
+
+### Option B: Terminal
+
+### Run Workflow - Steps 0.4 - 6 
 
 **For CDs:**
 ```bash
@@ -145,12 +159,12 @@ The workflow will automatically generate an outputs folder with organized result
 ### Naming Convention
 Images must be named with barcode + letter suffix:
 **Examples:**
-- `39015012345678a.jpeg`- Front image (required)
-- `39015012345678b.jpeg`- Back image (optional)
-- `39015012345678c.jpeg`- Additional image (optional)
+- `[barcode]a.jpeg`- Front image (required)
+- `[barcode]b.jpeg`- Back image (optional)
+- `[barcode]c.jpeg`- Additional image (optional)
 
 ### Format
-- **Supported**: JPEG (.jpg, .jpeg) or PNG (.png)
+- **Supported**: JPEG (.jpg, .jpeg), PNG (.png), or PDF (.pdf) — PDFs are converted to JPEGs automatically via Step 0.4
 - **Aim for metadata clarity**: Images with clear, legible text, minimal glare, multiple elements for the pipeline to use when generating metadata/searching for item
 - **Recommendation**: JPEG files, which will be faster and cheaper to process 
 
@@ -255,6 +269,7 @@ Settings include:
 ## Best Practices
 
 ### Before Processing
+0. **Convert PDFs** - If your batch was scanned as PDFs, run Step 0.4 first (automatically runs via the run script)
 1. **Validate file naming** - Run Step 0.5 pre-check (this will automatically run if using the run script)
 2. **Use clear images** - Legible text, minimal glare, good lighting
 3. **Test small batches** 
