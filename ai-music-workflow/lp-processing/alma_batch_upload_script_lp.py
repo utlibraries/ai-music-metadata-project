@@ -671,7 +671,7 @@ def create_item(mms_id, holding_id, barcode, item_policy_code, material_value="L
         <item_data>
             <barcode>{barcode}</barcode>
             <physical_material_type>{material_value}</physical_material_type>
-            <policy><value>{item_policy_code}</value></policy>
+            <policy><value>{item_policy_code}</value><desc>LPS (PHNDISC)</desc></policy>
             <arrival_date>{today}</arrival_date>
             <internal_note_2>{INTERNAL_NOTE_2}</internal_note_2>
             <process_type>PHYSICAL_PROCESSING</process_type>
