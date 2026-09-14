@@ -663,7 +663,7 @@ def create_item(mms_id, holding_id, barcode, item_policy_code, material_value="C
   <item_data>
     <barcode>{barcode}</barcode>
     <physical_material_type>{material_value}</physical_material_type>
-    <policy><value>{item_policy_code}</value><desc>compact discs 14 days</desc></policy>
+    <policy desc="compact discs 14 days">{item_policy_code}</policy>
     <arrival_date>{today}</arrival_date>
     <internal_note_2>{INTERNAL_NOTE_2}</internal_note_2>
     <process_type>PHYSICAL_PROCESSING</process_type>
