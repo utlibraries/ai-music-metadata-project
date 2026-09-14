@@ -73,6 +73,7 @@ def check_oclc_for_existing(marc_fields, search_token):
 
     # Extract title for search
     title_raw = marc_fields.get("field_245", "") or ""
+    if isinstance(title_raw, dict): title_raw = title_raw.get("value", "") or title_raw.get("a", "") or str(title_raw)
     # Strip MARC subfield codes for searching
     title_clean = title_raw.replace("$b", "").replace("$c", "").replace("$a", "").strip()
     title_clean = title_clean.rstrip("./,;").strip()
