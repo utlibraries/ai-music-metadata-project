@@ -698,7 +698,7 @@ def main():
     
     print(f"Results saved to: {full_output_path}")
     print(f"Token usage log saved to: {os.path.join(logs_folder_path, 'step1_token_usage_log.txt')}")
-    print(f"Full responses log saved to: {os.path.join(logs_folder_path, 'step1_llm_responses_log.txt')}")
+    print(f"Full responses log saved to: {os.path.join(logs_folder_path, 'step1_llm_response_log.txt')}")
     
     try:
         batch_summary = create_batch_summary(

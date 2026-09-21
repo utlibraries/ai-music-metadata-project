@@ -1231,7 +1231,7 @@ def main():
 
     print(f"Processing complete - results saved in-place")
     print(f"Token usage log saved to {os.path.join(logs_folder_path, 'step3_token_usage_log.txt')}")
-    print(f"Full responses log saved to {os.path.join(logs_folder_path, 'step3_llm_responses_log.txt')}")
+    print(f"Full responses log saved to {os.path.join(logs_folder_path, 'step3_llm_response_log.txt')}")
 
     print(f"\nSTEP 3 COMPLETED!")
     print(f"Successfully analyzed: {successful_calls} records")

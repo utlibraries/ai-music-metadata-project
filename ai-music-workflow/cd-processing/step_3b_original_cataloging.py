@@ -31,10 +31,29 @@ from cd_workflow_config import (
 from json_workflow import load_workflow_json, save_workflow_json, log_error, log_processing_metrics
 from batch_processor import BatchProcessor
 from shared_utilities import create_batch_summary
+from token_logging import create_token_usage_log, log_individual_response
 
 STEP_NAME = "step3b"
 client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 bp = BatchProcessor(default_step="step3")  # Reuse step3 config for batch decisions
+
+
+def summarize_marc_tokens(marc_results):
+    """Summarize prompt/completion token totals from generated MARC results."""
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    total_cached_tokens = 0
+
+    for result in marc_results.values():
+        tokens = result.get("tokens", {}) if isinstance(result, dict) else {}
+        if not isinstance(tokens, dict):
+            continue
+
+        total_prompt_tokens += int(tokens.get("prompt_tokens", 0) or 0)
+        total_completion_tokens += int(tokens.get("completion_tokens", 0) or 0)
+        total_cached_tokens += int(tokens.get("cached_tokens", 0) or 0)
+
+    return total_prompt_tokens, total_completion_tokens, total_cached_tokens
 
 
 def get_no_match_barcodes(results_folder):
@@ -281,7 +300,7 @@ completeness_notes:
 Return ONLY the JSON object. No markdown, no preamble, no explanation."""
 
 
-def generate_marc_records_batch(barcodes, workflow_json_path, workflow_data, model_name):
+def generate_marc_records_batch(barcodes, workflow_json_path, workflow_data, model_name, logs_folder_path=None):
     """
     Submit all records to OpenAI batch API for MARC generation.
     Returns dict of barcode -> marc_fields.
@@ -344,7 +363,7 @@ def generate_marc_records_batch(barcodes, workflow_json_path, workflow_data, mod
     processed = bp.process_batch_results(results_raw, id_map)
     marc_results = {}
 
-    for custom_id, result in processed.get("results", {}).items():
+    for i, (custom_id, result) in enumerate(processed.get("results", {}).items(), 1):
         barcode = id_map.get(custom_id)
         if not barcode:
             continue
@@ -358,17 +377,68 @@ def generate_marc_records_batch(barcodes, workflow_json_path, workflow_data, mod
                     if content.startswith("json"):
                         content = content[4:]
                 marc_fields = json.loads(content.strip())
-                marc_results[barcode] = {"marc_fields": marc_fields, "success": True, "tokens": result.get("usage", {})}
+                usage = result.get("usage", {}) or {}
+                prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+                completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+                cached_tokens = int((usage.get("prompt_tokens_details", {}) or {}).get("cached_tokens", 0) or 0)
+                marc_results[barcode] = {
+                    "marc_fields": marc_fields,
+                    "success": True,
+                    "tokens": {
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "cached_tokens": cached_tokens
+                    }
+                }
+                if logs_folder_path:
+                    log_individual_response(
+                        logs_folder_path=logs_folder_path,
+                        script_name="step3b",
+                        row_number=i,
+                        barcode=str(barcode),
+                        response_text=content.strip(),
+                        model_name=model_name,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        processing_time=0,
+                        cached_tokens=cached_tokens
+                    )
             except Exception as e:
                 print(f"  Parse error for {barcode}: {e}")
                 marc_results[barcode] = {"marc_fields": {}, "success": False, "error": str(e)}
+                if logs_folder_path:
+                    log_individual_response(
+                        logs_folder_path=logs_folder_path,
+                        script_name="step3b",
+                        row_number=i,
+                        barcode=str(barcode),
+                        response_text=f"ERROR: {str(e)}",
+                        model_name=model_name,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        processing_time=0,
+                        cached_tokens=0
+                    )
         else:
             marc_results[barcode] = {"marc_fields": {}, "success": False, "error": result.get("error", "Unknown")}
+            if logs_folder_path:
+                log_individual_response(
+                    logs_folder_path=logs_folder_path,
+                    script_name="step3b",
+                    row_number=i,
+                    barcode=str(barcode),
+                    response_text=f"ERROR: {result.get('error', 'Unknown')}",
+                    model_name=model_name,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    processing_time=0,
+                    cached_tokens=0
+                )
 
     return marc_results
 
 
-def generate_marc_records_individual(barcodes, workflow_data, model_name):
+def generate_marc_records_individual(barcodes, workflow_data, model_name, logs_folder_path=None):
     """Fallback: generate MARC records one at a time."""
     marc_results = {}
     total = len(barcodes)
@@ -397,17 +467,47 @@ def generate_marc_records_individual(barcodes, workflow_data, model_name):
             )
             content = response.choices[0].message.content.strip()
             marc_fields = json.loads(content)
+            prompt_tokens = int(response.usage.prompt_tokens)
+            completion_tokens = int(response.usage.completion_tokens)
+            cached_tokens = int(getattr(getattr(response.usage, 'prompt_tokens_details', None), 'cached_tokens', 0) or 0)
             marc_results[barcode] = {
                 "marc_fields": marc_fields,
                 "success": True,
                 "tokens": {
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "cached_tokens": cached_tokens
                 }
             }
+            if logs_folder_path:
+                log_individual_response(
+                    logs_folder_path=logs_folder_path,
+                    script_name="step3b",
+                    row_number=i,
+                    barcode=str(barcode),
+                    response_text=content,
+                    model_name=model_name,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    processing_time=0,
+                    cached_tokens=cached_tokens
+                )
         except Exception as e:
             print(f"    Error: {e}")
             marc_results[barcode] = {"marc_fields": {}, "success": False, "error": str(e)}
+            if logs_folder_path:
+                log_individual_response(
+                    logs_folder_path=logs_folder_path,
+                    script_name="step3b",
+                    row_number=i,
+                    barcode=str(barcode),
+                    response_text=f"ERROR: {str(e)}",
+                    model_name=model_name,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    processing_time=0,
+                    cached_tokens=0
+                )
 
     return marc_results
 
@@ -1033,6 +1133,9 @@ def main():
         print("No results folder found. Run Steps 1-5 first.")
         return
 
+    logs_folder_path = os.path.join(results_folder, "logs")
+    os.makedirs(logs_folder_path, exist_ok=True)
+
     print(f"Results folder: {results_folder}")
 
     # Get workflow JSON from data subfolder (Step 5 moves it there)
@@ -1058,11 +1161,13 @@ def main():
     # Generate MARC records
     if use_batch:
         marc_results = generate_marc_records_batch(
-            no_match_barcodes, workflow_json_path, workflow_data, model_name
+            no_match_barcodes, workflow_json_path, workflow_data, model_name,
+            logs_folder_path=logs_folder_path
         )
     else:
         marc_results = generate_marc_records_individual(
-            no_match_barcodes, workflow_data, model_name
+            no_match_barcodes, workflow_data, model_name,
+            logs_folder_path=logs_folder_path
         )
 
     # Save results to workflow JSON
@@ -1101,6 +1206,28 @@ def main():
     duration = (datetime.datetime.now() - start_time).total_seconds()
     successful = sum(1 for b in no_match_barcodes if marc_results.get(b, {}).get("success"))
     failed = len(no_match_barcodes) - successful
+    total_prompt_tokens, total_completion_tokens, total_cached_tokens = summarize_marc_tokens(marc_results)
+
+    create_token_usage_log(
+        logs_folder_path=logs_folder_path,
+        script_name="step3b",
+        model_name=model_name,
+        total_items=len(no_match_barcodes),
+        items_with_issues=failed,
+        total_time=duration,
+        total_prompt_tokens=total_prompt_tokens,
+        total_completion_tokens=total_completion_tokens,
+        total_cached_tokens=total_cached_tokens,
+        additional_metrics={
+            "Processing mode": "BATCH" if use_batch else "INDIVIDUAL",
+            "Records processed": len(no_match_barcodes),
+            "Records generated": successful,
+            "Records failed": failed,
+            "Total script execution time": f"{duration:.2f}s"
+        }
+    )
+    print(f"Token usage log saved to: {os.path.join(logs_folder_path, 'step3b_token_usage_log.txt')}")
+    print(f"Full responses log saved to: {os.path.join(logs_folder_path, 'step3b_llm_response_log.txt')}")
 
     try:
         log_processing_metrics(
@@ -1111,7 +1238,7 @@ def main():
                 successful_items=successful,
                 failed_items=failed,
                 total_time=duration,
-                total_tokens=0,
+                total_tokens=total_prompt_tokens + total_completion_tokens,
                 estimated_cost=0,
                 processing_mode="BATCH" if use_batch else "INDIVIDUAL"
             )
