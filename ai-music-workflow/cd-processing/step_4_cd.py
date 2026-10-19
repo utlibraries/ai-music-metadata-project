@@ -896,7 +896,7 @@ def main():
             # Check track similarity
             if len(metadata_tracks) > 0 and len(oclc_tracks) > 0 and track_similarity < 70:
                 adjust_confidence = True
-                adjustment_reasons.append(f"track listing mismatch (similarity {track_similarity:.2f}%, below 80% threshold)")
+                adjustment_reasons.append(f"track listing mismatch (similarity {track_similarity:.2f}%, below 70% threshold)")
             
             # Check year match - any difference is considered a mismatch
             if metadata_year and oclc_year and metadata_year != oclc_year:
