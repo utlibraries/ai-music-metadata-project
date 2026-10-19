@@ -909,7 +909,7 @@ def main():
             # Apply confidence adjustment if needed
             if adjust_confidence:
                 old_confidence = confidence_score
-                new_confidence = 79
+                new_confidence = 69
                 sheet[f'{CONFIDENCE_SCORE_COLUMN}{row}'].value = new_confidence
                 
                 # Update JSON workflow with Step 4 results
